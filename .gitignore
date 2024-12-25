@@ -1,0 +1,49 @@
+# At project root: .gitignore
+# Binaries
+/bin/*
+!/bin/.gitkeep
+
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database
+*.db
+*.db-journal
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Autogenerate go templates
+*_templ.go
+
+# Dependency directories (uncomment if needed)
+# vendor/
+
+# Air hot reload
+tmp/

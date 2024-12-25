@@ -1,0 +1,821 @@
+stories:
+  - id: TH2.2
+    category: TH
+    title: Cool Theme Implementation
+    description: |
+      Implement the "Cool" theme with its ocean-inspired palette:
+      - Primary: #003135 (Deep Ocean)
+      - Secondary: #024950 (Teal)
+      - Tertiary: #964734 (Rust)
+      - Accent: #0FA4AF (Bright Teal)
+      - Highlight: #AFDDE5 (Light Blue)
+    acceptance:
+      - Complete color mapping for all components
+      - Special treatment for calendar states:
+          - Available slots using highlight color with subtle gradient
+          - Pro sessions using accent color with distinctive pattern
+          - Tournament slots using primary with secondary gradient
+          - Maintenance slots using tertiary with diagonal pattern
+      - Custom hover effects using color mix
+      - Specific alert styles:
+          - Success: Mix of accent and highlight
+          - Warning: Mix of tertiary and highlight
+          - Error: Tertiary at full strength
+      - Documentation of special color combinations
+      - Contrast verification for all text combinations
+    implementation: |
+      [Detailed CSS implementation and guidelines for Cool theme]
+
+  - id: TH2.3
+    category: TH
+    title: Cosmic Theme Implementation
+    description: |
+      Implement the "Cosmic" theme with its space-inspired colors:
+      - Primary: #212A31 (Deep Space)
+      - Secondary: #2E3944 (Stellar Gray)
+      - Tertiary: #124E66 (Nebula Blue)
+      - Accent: #748D92 (Star Dust)
+      - Highlight: #D3D9D4 (Cosmic Light)
+    acceptance:
+      - Space-inspired gradients for interactive elements
+      - Subtle star-like patterns in backgrounds
+      - Special effects for calendar states:
+          - Available slots with subtle "stardust" pattern
+          - Pro sessions with "nebula" gradient
+          - Tournament slots with "deep space" gradient
+      - Custom animation for hover states
+      - Documentation of special effects
+    implementation: |
+      [Detailed CSS implementation for Cosmic theme]
+
+  - id: TH3.0
+    category: TH
+    title: Light/Dark Theme Variant System
+    description: |
+      Create a systematic approach to generating and managing light and dark variants 
+      of each theme. This system should allow automatic generation of dark/light 
+      variants while preserving the theme's character and ensuring accessibility.
+
+    acceptance:
+      - Color transformation system that can:
+          - Generate dark variant from light theme
+          - Generate light variant from dark theme
+          - Preserve relative contrast relationships
+          - Maintain theme's character
+          - Ensure WCAG compliance in both variants
+
+      - For each base theme:
+          - Dark variant defined
+          - Light variant defined
+          - Transition handling between variants
+          - Media query support (@prefers-color-scheme)
+          - Manual override capability
+
+      - System must handle:
+          - Background colors and gradients
+          - Text colors and contrast
+          - Border colors
+          - Shadow effects
+          - Alert/status colors
+          - Calendar state colors
+          - Interactive element states
+
+    implementation: |
+      # Variant Generation Rules
+
+      ## Color Transformation Guidelines
+      ```typescript
+      interface ColorTransform {
+        // Takes original color and returns transformed version
+        transformColor(color: string, mode: 'light' | 'dark'): string;
+        
+        // Preserves relative relationships between colors
+        maintainColorRelationships(colors: ThemeColors): ThemeColors;
+        
+        // Ensures sufficient contrast
+        validateContrast(foreground: string, background: string): boolean;
+      }
+
+      // Example implementation
+      class ThemeVariantGenerator {
+        private static readonly LUMINANCE_THRESHOLD = 0.5;
+        
+        static generateVariant(theme: Theme, mode: 'light' | 'dark'): Theme {
+          const transformed = {
+            primary: this.transformColor(theme.primary, mode),
+            secondary: this.transformColor(theme.secondary, mode),
+            tertiary: this.transformColor(theme.tertiary, mode),
+            accent: this.transformColor(theme.accent, mode),
+            highlight: this.transformColor(theme.highlight, mode),
+          };
+          
+          return this.validateAndAdjust(transformed);
+        }
+        
+        static transformColor(color: string, mode: 'light' | 'dark'): string {
+          const hsl = convertToHSL(color);
+          
+          if (mode === 'dark') {
+            // Dark mode transformations
+            hsl.lightness = invertLightness(hsl.lightness);
+            // Adjust saturation to maintain vibrancy
+            hsl.saturation *= 0.9;
+          } else {
+            // Light mode transformations
+            hsl.lightness = invertLightness(hsl.lightness);
+            // Preserve saturation more in light mode
+            hsl.saturation *= 0.95;
+          }
+          
+          return convertToHex(hsl);
+        }
+      }
+      ```
+
+      ## CSS Implementation
+      ```css
+      /* Base theme structure */
+      .theme-{name} {
+        /* Light mode colors (default) */
+        --theme-primary: #original;
+        --theme-secondary: #original;
+        --theme-tertiary: #original;
+        --theme-accent: #original;
+        --theme-highlight: #original;
+        
+        /* Dark mode colors */
+        &.dark, &[data-theme="dark"] {
+          --theme-primary: #transformed;
+          --theme-secondary: #transformed;
+          --theme-tertiary: #transformed;
+          --theme-accent: #transformed;
+          --theme-highlight: #transformed;
+        }
+        
+        /* System preference handling */
+        @media (prefers-color-scheme: dark) {
+          &:not([data-theme="light"]) {
+            /* Dark mode colors */
+          }
+        }
+      }
+      ```
+
+      ## Example: Metal Theme Variants
+      ```css
+      .theme-metal {
+        /* Light mode (default) */
+        --theme-primary: #3D52A0;
+        --theme-secondary: #7091E6;
+        --theme-tertiary: #8697C4;
+        --theme-accent: #ADBBDA;
+        --theme-highlight: #EDE8F5;
+        
+        /* Dark mode */
+        &.dark {
+          --theme-primary: #2A3870;
+          --theme-secondary: #4E65A1;
+          --theme-tertiary: #5F6B8A;
+          --theme-accent: #798398;
+          --theme-highlight: #A6A2AC;
+        }
+      }
+      ```
+
+      ## Transition Handling
+      ```css
+      .theme-{name} {
+        /* Smooth transition between modes */
+        transition: 
+          background-color 0.3s ease,
+          color 0.3s ease,
+          border-color 0.3s ease,
+          box-shadow 0.3s ease;
+      }
+      ```
+
+    labels:
+      - themes
+      - dark-mode
+      - accessibility
+      - design-system
+
+    dependencies: [TH1.0, TH2.0, TH2.1, TH2.2, TH2.3]
+
+  - id: TH3.1
+    category: TH
+    title: Theme Variant Implementation - Initial Set
+    description: |
+      Implement specific light/dark variants for each defined theme, ensuring each variant 
+      maintains the theme's character while providing optimal contrast and accessibility.
+    acceptance:
+      # Simple (Default) Variants
+      - Light variant:
+          - Base: #F5F5F5 with dark text
+          - Maintain cyan accents but lighter
+          - Higher contrast for calendar states
+      - Dark variant:
+          - Base: #0B0C10 with light text
+          - Deeper versions of cyan accents
+          - Adjusted calendar states for dark background
+
+      # Metal Variants
+      - Light variant:
+          - Soften the navy tones
+          - Lighter backgrounds
+          - Maintain professional feel
+      - Dark variant:
+          - Deepen the navy palette
+          - Darker backgrounds
+          - Enhanced contrast for visibility
+
+      # Vintage Variants
+      - Light variant:
+          - Brighten earth tones
+          - Cream backgrounds
+          - Maintain warm feel
+      - Dark variant:
+          - Rich, deep earth tones
+          - Dark wood-like backgrounds
+          - Preserve vintage character
+    implementation: |
+      [Detailed CSS implementations for each theme variant...]
+  - id: TH3.2
+    category: TH
+    title: Theme Transition Animation System
+    description: |
+      Create a smooth, performant animation system for theme transitions that works 
+      across all components and states.
+    acceptance:
+      - Smooth transitions for:
+          - Color changes
+          - Background shifts
+          - Border updates
+          - Shadow modifications
+      - Performance considerations:
+          - Use GPU-accelerated properties
+          - Avoid layout thrashing
+          - Handle large DOM trees efficiently
+      - Accessibility:
+          - Respect reduced-motion preferences
+          - Maintain readability during transition
+          - No flickering or jarring changes
+      - Consistent timing:
+          - Standard duration for all changes
+          - Synchronized component updates
+          - Predictable behavior
+
+    implementation: |
+      ```css
+      /* Base transition system */
+      .theme-transition-root {
+        --theme-transition-duration: 300ms;
+        --theme-transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+
+        transition-property: 
+          background-color,
+          color,
+          border-color,
+          box-shadow,
+          transform;
+        transition-duration: var(--theme-transition-duration);
+        transition-timing-function: var(--theme-transition-timing);
+      }
+
+      /* Reduced motion preferences */
+      @media (prefers-reduced-motion: reduce) {
+        .theme-transition-root {
+          --theme-transition-duration: 0ms;
+        }
+      }
+
+      /* Performance optimizations */
+      .theme-transition-root * {
+        /* Force GPU acceleration */
+        transform: translateZ(0);
+        backface-visibility: hidden;
+        perspective: 1000px;
+      }
+      ```
+
+  - id: TH3.3
+    category: TH
+    title: Theme Preference Management System
+    description: |
+      Create a comprehensive system for managing user theme preferences, including 
+      storage, sync, and default handling.
+    acceptance:
+      - Store preferences for:
+          - Selected theme
+          - Light/dark preference
+          - Color contrast preference
+          - Animation preference
+      - Preference hierarchy:
+          - User explicit settings
+          - System preferences
+          - Facility defaults
+          - System defaults
+      - Storage mechanisms:
+          - Local storage backup
+          - Server-side persistence
+          - Cross-device sync
+      - Default handling:
+          - System preference detection
+          - Fallback chain
+          - Initial load management
+
+    implementation: |
+      ```typescript
+      interface ThemePreferences {
+        themeId: string;
+        variant: 'light' | 'dark' | 'system';
+        contrast: 'normal' | 'high';
+        reducedMotion: boolean;
+        facilityId?: string;
+      }
+
+      class ThemePreferenceManager {
+        async getUserPreferences(userId: string): Promise<ThemePreferences> {
+          // Try server preferences
+          const serverPrefs = await this.loadServerPreferences(userId);
+          if (serverPrefs) return serverPrefs;
+
+          // Try local storage
+          const localPrefs = this.loadLocalPreferences();
+          if (localPrefs) return localPrefs;
+
+          // Fall back to system preferences
+          return this.getSystemPreferences();
+        }
+
+        private getSystemPreferences(): ThemePreferences {
+          return {
+            themeId: 'simple',
+            variant: window.matchMedia('(prefers-color-scheme: dark)').matches 
+              ? 'dark' 
+              : 'light',
+            contrast: window.matchMedia('(prefers-contrast: more)').matches
+              ? 'high'
+              : 'normal',
+            reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          };
+        }
+
+        async syncPreferences(prefs: ThemePreferences): Promise<void> {
+          // Save to server
+          await this.saveServerPreferences(prefs);
+          
+          // Backup to local storage
+          this.saveLocalPreferences(prefs);
+          
+          // Apply preferences
+          this.applyPreferences(prefs);
+        }
+      }
+      ```
+
+    labels:
+      - themes
+      - user-preferences
+      - persistence
+      - sync
+
+    dependencies: [TH3.0, TH3.1, TH3.2]
+
+  - id: "TH1"
+    category: "TH"
+    title: "Theme Manager Core Implementation"
+    description: |
+      Create a comprehensive theme management system that allows facilities to customize their visual identity while maintaining consistency across the application. The system should support multiple themes per facility, user preferences, and live preview capabilities.
+
+      The theme manager should handle:
+      - Color schemes for UI elements
+      - Logo management (main logo, login logo, favicon)
+      - Visual states for calendar events (regular booking, pro sessions, tournaments, maintenance)
+      - Navigation and interactive element styling
+
+      The preview component should demonstrate all theme variations in a single view, allowing immediate visual feedback for any changes.
+
+    acceptance:
+      - "Database schema implemented with tables for themes and user preferences"
+      - "Theme model supports all required attributes from requirements document"
+      - "CRUD API endpoints implemented for theme management"
+      - "Live preview component shows:
+        - Navigation bar with logo
+        - Sample calendar with all event types
+        - Interactive elements (buttons, forms)
+        - Status indicators and alerts"
+      - "Color picker interface supports hex/RGB input with contrast checking"
+      - "Logo upload supports multiple formats with appropriate resize/optimization"
+      - "Theme import/export functionality working"
+      - "Theme switching occurs without page reload"
+      - "All theme changes persist correctly in database"
+      - "Preview updates in real-time using HTMX"
+
+    labels:
+      - "theme"
+      - "frontend"
+      - "database"
+      - "core-feature"
+
+    assignee: "developer"
+
+    dependencies:
+      - "IS1" # Basic server setup
+      - "DB1" # Initial database schema
+
+  - id: "TH2"
+    category: "TH"
+    title: "Localization System Implementation"
+    description: |
+      Implement a comprehensive localization system that enables multi-language support across the entire application. The system should use a gettext-compatible approach for string management and support dynamic language switching without page reloads.
+
+      The localization system needs to handle:
+      - Text content throughout the application
+      - Date/time formatting
+      - Number formatting
+      - Currency display
+      - Right-to-left (RTL) support foundation (though not implemented initially)
+      - Dynamic language switching
+
+      The system should be designed to make future language additions seamless and maintain high performance through effective caching.
+
+    acceptance:
+      - "Localization middleware implemented in Go server"
+      - "String extraction system working with source code scanning"
+      - "Translation files properly organized and loaded"
+      - "Language selection persists per user"
+      - "Date/time formats respect selected locale"
+      - "Number and currency formats respect selected locale"
+      - "UI updates language without full page reload using HTMX"
+      - "Translation management interface implemented:
+        - Shows missing translations
+        - Allows direct editing
+        - Supports import/export of language files"
+      - "Performance testing shows no significant impact from translation layer"
+      - "Documentation covers:
+        - How to add new languages
+        - Translation file format
+        - String extraction process
+        - Best practices for translators"
+
+    labels:
+      - "localization"
+      - "infrastructure"
+      - "i18n"
+
+    assignee: "developer"
+
+    dependencies:
+      - "IS1" # Basic server setup
+      - "DB1" # Initial database schema
+
+  - id: "L1"
+    category: "L"
+    title: "Localization Core Infrastructure Setup"
+    description: |
+      Set up the core localization infrastructure using go-i18n package. This establishes the foundation for all localization features.
+
+      Technical Details:
+      - Use github.com/nicksnyder/go-i18n/v2 for i18n support
+      - Implement fall-through to English for missing translations
+      - Set up directory structure:
+        /locales
+          ├── active.xx.toml    # Active translations
+          ├── default.en.toml   # Default English strings
+          └── manage.go         # Management functions
+
+      Message files will use TOML format for better readability and maintenance.
+
+    acceptance:
+      - "go-i18n package integrated into project"
+      - "Directory structure created and documented"
+      - "Base English message file created"
+      - "Fall-through to English working when translation missing"
+      - "Message loading and caching system implemented"
+      - "Hot reload of translation files working in development"
+
+    labels:
+      - "localization"
+      - "infrastructure"
+
+    dependencies: ["IS1"]
+
+  - id: "L2"
+    category: "L"
+    title: "Message Extraction and Bundle Management"
+    description: |
+      Implement system for extracting messages from source code and managing translation bundles.
+
+      Technical Implementation:
+      - Create goi18n extract/merge workflow
+      - Setup message extraction from:
+        - Go templates
+        - JavaScript files
+        - Template strings
+      - Implement bundle hot-reloading for development
+
+      Directory structure for extracted messages:
+      /locales
+        ├── extract/          # Extracted strings
+        ├── active/           # Active translations
+        └── archive/          # Obsolete translations
+
+    acceptance:
+      - "Message extraction command working"
+      - "Merge command preserves existing translations"
+      - "Duplicate message detection implemented"
+      - "Missing translation reporting working"
+      - "Bundle hot-reloading working in development"
+      - "Documentation for extraction workflow created"
+
+    labels:
+      - "localization"
+      - "tooling"
+
+    dependencies: ["L1"]
+
+  - id: "L3"
+    category: "L"
+    title: "Locale Detection and Switching"
+    description: |
+      Implement locale detection and switching logic with persistence.
+
+      Technical Implementation:
+      - Detect locale from:
+        1. URL parameter
+        2. User preference (if logged in)
+        3. Accept-Language header
+        4. Default to English
+
+      - Store preference in:
+        1. User settings (if logged in)
+        2. Cookie (if anonymous)
+
+    acceptance:
+      - "Locale detection hierarchy implemented"
+      - "Locale switching without page reload working"
+      - "Preference persistence working"
+      - "Locale middleware implemented"
+      - "URL-based locale switching working"
+      - "Tests for locale detection logic"
+
+    labels:
+      - "localization"
+      - "user-experience"
+
+    dependencies: ["L1"]
+
+  - id: "L4"
+    category: "L"
+    title: "Date, Time, and Number Formatting"
+    description: |
+      Implement locale-aware formatting for dates, times, numbers, and currencies.
+
+      Technical Implementation:
+      - Use golang.org/x/text for formatting
+      - Create helper functions for:
+        - Date formatting
+        - Time formatting
+        - Number formatting
+        - Currency formatting
+      - Implement in both Go templates and JavaScript
+
+    acceptance:
+      - "Date formatting respects locale"
+      - "Time formatting respects locale"
+      - "Number formatting respects locale"
+      - "Currency formatting respects locale"
+      - "Helper functions documented"
+      - "Tests for all formatting functions"
+
+    labels:
+      - "localization"
+      - "formatting"
+
+    dependencies: ["L1"]
+
+  - id: "L5"
+    category: "L"
+    title: "Translation Management Interface"
+    description: |
+      Create an admin interface for managing translations.
+
+      Technical Implementation:
+      - Use HTMX for real-time updates
+      - Features:
+        - Show missing translations
+        - Show unused translations
+        - Edit translations inline
+        - Import/export functionality
+        - Search across all translations
+
+    acceptance:
+      - "Translation management UI implemented"
+      - "Missing translations highlighted"
+      - "Unused translations identified"
+      - "Inline editing working"
+      - "Import/export working"
+      - "Search functionality working"
+
+    labels:
+      - "localization"
+      - "admin"
+
+    dependencies: ["L1", "L2"]
+
+  - id: "L6"
+    category: "L"
+    title: "Localization Testing Framework"
+    description: |
+      Implement testing framework for localization.
+
+      Technical Implementation:
+      - Test types:
+        - Unit tests for formatting functions
+        - Integration tests for locale switching
+        - Validation tests for translation files
+        - Performance tests for bundle loading
+        - Missing translation detection
+
+    acceptance:
+      - "Unit tests implemented"
+      - "Integration tests implemented"
+      - "Translation file validation working"
+      - "Performance benchmarks created"
+      - "CI pipeline integration complete"
+
+    labels:
+      - "localization"
+      - "testing"
+
+    dependencies: ["L1", "L2", "L3", "L4"]
+
+  - id: "L7"
+    category: "L"
+    title: "Lazy Loading and Bundle Optimization"
+    description: |
+      Implement sophisticated lazy loading strategy for locale bundles to minimize initial load time while ensuring smooth user experience.
+
+      Technical Implementation:
+      Bundle Structure:
+      /locales
+        ├── core/           # Always loaded (critical UI elements)
+          ├── en.toml
+          ├── es.toml
+        ├── features/       # Lazy loaded by feature
+          ├── calendar/
+            ├── en.toml
+            ├── es.toml
+          ├── booking/
+          ├── admin/
+        └── generated/      # Build-time optimized bundles
+
+      Loading Strategy:
+      1. Core bundle loads with initial page
+      2. Feature bundles load on demand
+      3. Pre-fetch next likely needed bundles
+      4. Cache bundles in localStorage
+      5. Use service worker for offline support
+
+    acceptance:
+      - "Core bundles load with initial page"
+      - "Feature bundles load on demand via HTMX"
+      - "Bundle loading doesn't block UI"
+      - "Cache hit rate > 95% for common paths"
+      - "Bundle size optimized (< 50KB for core)"
+      - "Memory usage stays within bounds"
+      - "Loading metrics implemented"
+
+    labels:
+      - "localization"
+      - "performance"
+      - "optimization"
+
+    dependencies: ["L1", "L2"]
+
+  - id: "L8"
+    category: "L"
+    title: "Translation Bundle Build Pipeline"
+    description: |
+      Create build pipeline for optimizing translation bundles.
+
+      Technical Implementation:
+      1. Bundle Analysis:
+         - Track translation usage frequency
+         - Identify critical path translations
+         - Group by feature area
+
+      2. Build Process:
+         /scripts
+           ├── analyze-translations.go
+           ├── optimize-bundles.go
+           ├── validate-completeness.go
+           └── generate-metadata.go
+
+      3. Optimization Steps:
+         - Remove unused translations
+         - Minify bundle files
+         - Generate loading metadata
+         - Create feature-specific bundles
+
+    acceptance:
+      - "Bundle analysis tooling complete"
+      - "Build pipeline integrated with main build"
+      - "Bundle size reduced by >40%"
+      - "Feature isolation working"
+      - "Loading metadata accurate"
+      - "Build process documented"
+
+    labels:
+      - "localization"
+      - "build"
+      - "optimization"
+
+    dependencies: ["L7"]
+
+  - id: "L9"
+    category: "L"
+    title: "Smart Bundle Prefetching"
+    description: |
+      Implement intelligent prefetching of translation bundles based on user behavior and application flow.
+
+      Technical Implementation:
+      1. Usage Analytics:
+         - Track bundle load patterns
+         - Monitor user navigation paths
+         - Calculate bundle dependencies
+
+      2. Prefetch Strategies:
+         - Route-based prefetching
+         - User-action triggered
+         - Idle-time loading
+         - Connection-aware loading
+
+      3. Metadata Structure:
+         ```go
+         type BundleMetadata struct {
+           Dependencies  []string
+           Size         int
+           Priority     int
+           UsageScore   float64
+           LoadTriggers []string
+         }
+         ```
+
+    acceptance:
+      - "Route-based prefetching working"
+      - "Idle-time loading implemented"
+      - "Connection-aware loading working"
+      - "Bundle hit rate metrics"
+      - "Memory usage within bounds"
+      - "No negative impact on TTI"
+
+    labels:
+      - "localization"
+      - "performance"
+      - "user-experience"
+
+    dependencies: ["L7", "L8"]
+
+  - id: "L10"
+    category: "L"
+    title: "Translation Memory and Caching"
+    description: |
+      Implement sophisticated caching strategy for translations with a Translation Memory system.
+
+      Technical Implementation:
+      1. Cache Layers:
+         ```go
+         type CacheStrategy struct {
+           Memory     -lru.Cache
+           Local      -localStorage
+           ServiceW   -serviceWorker
+           Server     -redis.Client
+         }
+         ```
+
+      2. Translation Memory:
+         - Store frequently used translations
+         - Fuzzy matching for similar strings
+         - Suggestion system for translators
+         
+      3. Cache Invalidation:
+         - Version-based invalidation
+         - Partial bundle updates
+         - Background refresh
+
+    acceptance:
+      - "Multi-layer cache implemented"
+      - "Translation memory working"
+      - "Cache hit rate >98%"
+      - "Fuzzy matching accuracy >90%"
+      - "Memory usage optimized"
+      - "Cache invalidation working"
+
+    labels:
+      - "localization"
+      - "performance"
+      - "caching"
+
+    dependencies: ["L7", "L8", "L9"]

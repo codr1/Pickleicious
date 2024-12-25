@@ -1,0 +1,21 @@
+// internal/templates/components/nav/search.templ
+package nav
+
+templ SearchBar() {
+    <form 
+        class="relative w-full"
+        hx-get="/api/v1/search"
+        hx-trigger="input changed delay:500ms, search"
+        hx-target="#search-results">
+        <input
+            type="search"
+            name="q"
+            placeholder="Search..."
+            class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <div 
+            id="search-results"
+            class="absolute w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg hidden">
+        </div>
+    </form>
+}

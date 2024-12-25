@@ -1,0 +1,14 @@
+/Users/vess/dev/Pickleicious/build/CMakeFiles/generate_templ.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/tailwind.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/server.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/dev.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/watch_templ.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/watch_tailwind.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/dev_watch.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/edit_cache.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/rebuild_cache.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/dbmigrate.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/testdata.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/tools.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/edit_cache.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/rebuild_cache.dir

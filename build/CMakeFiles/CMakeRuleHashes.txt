@@ -1,0 +1,11 @@
+# Hashes of file build rules.
+22cb5deddabb69b24b234121751345e3 CMakeFiles/dev
+d3365214757b5f7d6211d018fbb7a3b2 CMakeFiles/dev_watch
+5716eb8db81f9cd58943c8c0171da80a CMakeFiles/generate_templ
+fcdb38c8b9b8c9b5f85d3d126199ad78 CMakeFiles/server
+5f3bfa7fbedc7245d7dc7898c03d155b CMakeFiles/tailwind
+c38244765e76000a3d56b7f081fddb0d CMakeFiles/watch_tailwind
+26c88fc4de09e82bdcfe4ed5ac42c47d CMakeFiles/watch_templ
+5ef7572acc3f08fdb4c2c46a48eb3154 tools/CMakeFiles/dbmigrate
+db825d99c6458511ebb54e2b3ec2c0aa tools/CMakeFiles/testdata
+0286187806f4f44002fd56db7e2a187b tools/CMakeFiles/tools

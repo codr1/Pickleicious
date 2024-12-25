@@ -1,0 +1,6 @@
+set(APP_NAME "Pickleicious-Dev")
+set(APP_PORT "8080")
+set(DB_PATH ":memory:")
+set(LOG_LEVEL "debug")
+set(ENABLE_PROFILING "true")
+set(ENABLE_DEBUG_TOOLS "true")

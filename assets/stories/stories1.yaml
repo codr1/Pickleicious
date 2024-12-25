@@ -1,0 +1,118 @@
+stories:
+  - id: IS1
+    category: IS
+    title: GitHub Repository Setup
+    description: Configure initial GitHub repository with proper structure and workflows
+    acceptance:
+      - Repository created with README.md containing project overview
+      - .gitignore configured for Go, JS, SQLite
+      - Branch protection rules established
+      - Basic GitHub Actions workflow configured
+      - Project board setup with our Kanban structure
+    labels:
+      - setup
+      - infrastructure
+    dependencies: []
+
+  - id: IS2
+    category: IS
+    title: Development Environment Documentation
+    description: Create comprehensive guide for setting up development environment
+    acceptance:
+      - Required software versions documented (Go, SQLite, etc.)
+      - Step-by-step installation guide
+      - Environment variables documented
+      - Common issues and solutions documented
+    labels:
+      - documentation
+      - setup
+    dependencies: [IS1]
+
+  - id: IS3
+    category: IS
+    title: Project Directory Structure
+    description: Establish base project structure following our architecture
+    acceptance:
+      - cmd/ directory for executables
+      - internal/ directory for private packages
+      - pkg/ directory for public packages
+      - web/ directory for templates and static assets
+      - scripts/ directory for utilities
+      - Base Go modules configured
+    labels:
+      - setup
+      - infrastructure
+    dependencies: [IS1]
+
+  - id: DB1
+    category: DB
+    title: SQLite Schema Design
+    description: Design initial database schema including themes and core entities
+    acceptance:
+      - Core tables defined (users, roles, permissions)
+      - Theme-related tables defined
+      - Indexes defined
+      - Foreign key relationships established
+      - Schema documented in wiki
+    labels:
+      - database
+      - design
+    dependencies: [IS1]
+
+  - id: DB2
+    category: DB
+    title: Database Migration System
+    description: Setup SQLite migration system for version control
+    acceptance:
+      - Migration tool selected and configured
+      - Initial schema migration created
+      - Up/down migrations working
+      - Migration documentation in wiki
+    labels:
+      - database
+      - infrastructure
+    dependencies: [DB1]
+
+  - id: DB3
+    category: DB
+    title: Default Theme Data
+    description: Create migration for inserting default themes
+    acceptance:
+      - All 30+ provided themes inserted
+      - Default theme marked
+      - Theme categories tagged
+      - Color validation
+      - Migration is idempotent
+    labels:
+      - database
+      - themes
+    dependencies: [DB2]
+
+  - id: SV1
+    category: SV
+    title: Basic Go Server Setup
+    description: Initialize basic HTTP server with configuration
+    acceptance:
+      - Server starts/stops cleanly
+      - Configuration via environment variables
+      - Basic routing structure
+      - Health check endpoint
+      - Logging configured
+    labels:
+      - server
+      - infrastructure
+    dependencies: [IS3]
+
+  - id: SV2
+    category: SV
+    title: Hot Reload Development Setup
+    description: Configure development server with hot reload capability
+    acceptance:
+      - Air or similar tool configured
+      - Templates reload automatically
+      - Static assets reload
+      - Clean shutdown/restart
+    labels:
+      - server
+      - development
+    dependencies: [SV1]

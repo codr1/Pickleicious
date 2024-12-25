@@ -1,0 +1,86 @@
+// internal/templates/layouts/base.templ
+package layouts
+
+import "github.com/codr1/Pickleicious/internal/templates/components/nav"
+
+templ Base(content templ.Component) {
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Pickleicious</title>
+        <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+        <link href="/static/css/main.css" rel="stylesheet"/>
+        <script>
+            function closeMenu() {
+                const menu = document.getElementById('nav-menu');
+                const backdrop = document.getElementById('nav-backdrop');
+                menu.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+
+            htmx.on('htmx:afterSwap', (evt) => {
+                const menu = document.getElementById('nav-menu');
+                const backdrop = document.getElementById('nav-backdrop');
+                
+                if (evt.detail.target.id === 'nav-menu' && evt.detail.target.innerHTML !== '') {
+                    // Menu content was loaded, show the menu and backdrop
+                    menu.classList.remove('-translate-x-full');
+                    backdrop.classList.remove('hidden');
+                } else if (evt.detail.target.id === 'nav-menu' && evt.detail.target.innerHTML === '') {
+                    // Menu was closed, hide the menu and backdrop
+                    closeMenu();
+                }
+            });
+
+            // Theme toggle functionality
+            function toggleTheme() {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+            }
+
+            // Check for saved theme preference
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        </script>
+    </head>
+    <body class="min-h-screen bg-gray-50">
+        <!-- Top Navigation -->
+        @nav.TopNav()
+        
+        <!-- Menu Backdrop -->
+        <div 
+            id="nav-backdrop"
+            class="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300 hidden z-40"
+            hx-get="/api/v1/nav/menu/close"
+            hx-target="#nav-menu"
+            hx-swap="innerHTML"
+            hx-push-url="false">
+        </div>
+
+        <!-- Slide-out Menu -->
+        <div 
+            id="nav-menu" 
+            class="fixed inset-y-0 left-0 w-64 transform -translate-x-full transition-transform duration-300 ease-in-out z-50 shadow-lg">
+        </div>
+
+        <!-- Main Content Area -->
+        <main class="pt-16">
+            <div class="container mx-auto px-4 py-6">
+                if content != nil {
+                    @content
+                }
+            </div>
+        </main>
+    </body>
+    </html>
+}

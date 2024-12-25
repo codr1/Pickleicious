@@ -1,0 +1,15 @@
+# ./config/app.yaml.in
+app:
+  name: @APP_NAME@
+  port: @APP_PORT@
+  env: @ENV@
+
+database:
+  path: @DB_PATH@
+
+logging:
+  level: @LOG_LEVEL@
+
+features:
+  profiling: @ENABLE_PROFILING@
+  debug_tools: @ENABLE_DEBUG_TOOLS@

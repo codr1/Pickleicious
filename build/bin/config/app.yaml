@@ -1,0 +1,15 @@
+# ./config/app.yaml.in
+app:
+  name: Pickleicious-Dev
+  port: 8080
+  env: dev
+
+database:
+  path: :memory:
+
+logging:
+  level: debug
+
+features:
+  profiling: true
+  debug_tools: true
