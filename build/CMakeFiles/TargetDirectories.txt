@@ -9,6 +9,10 @@
 /Users/vess/dev/Pickleicious/build/CMakeFiles/rebuild_cache.dir
 /Users/vess/dev/Pickleicious/build/tools/CMakeFiles/dbmigrate.dir
 /Users/vess/dev/Pickleicious/build/tools/CMakeFiles/testdata.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/generate_sqlc.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/db_migrate_up.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/db_migrate_down.dir
+/Users/vess/dev/Pickleicious/build/tools/CMakeFiles/db_reset.dir
 /Users/vess/dev/Pickleicious/build/tools/CMakeFiles/tools.dir
 /Users/vess/dev/Pickleicious/build/tools/CMakeFiles/edit_cache.dir
 /Users/vess/dev/Pickleicious/build/tools/CMakeFiles/rebuild_cache.dir

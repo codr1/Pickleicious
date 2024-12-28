@@ -20,28 +20,36 @@ templ Menu() {
             </button>
         </div>
 
-        <!-- Navigation Links -->
+        // <!-- Navigation Links -->
         <nav class="flex-1 overflow-y-auto p-4">
             <div class="space-y-1">
                 <a href="/dashboard"
                    class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
                    hx-boost="true"
-                   hx-push-url="true"
+                   hx-push-url="false"
                    onclick="closeMenu()">
                     Dashboard
                 </a>
                 <a href="/courts"
                    class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
                    hx-boost="true"
-                   hx-push-url="true"
+                   hx-push-url="false"
                    hx-target="main"
                    onclick="closeMenu()">
                     Courts
                 </a>
+                <a href="/members" 
+                   class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+                   hx-boost="true"
+                   hx-push-url="false"
+                   hx-target="main"
+                   onclick="closeMenu()">
+                    Member Management
+                </a>
             </div>
         </nav>
 
-        <!-- User Section -->
+        // <!-- User Section -->
         <div class="p-4 space-y-4">
             <div class="flex items-center gap-x-4">
                 <div class="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
@@ -55,7 +63,7 @@ templ Menu() {
                 </div>
             </div>
             
-            <!-- Settings Link -->
+            // <!-- Settings Link -->
             <a href="/settings"
                class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 border border-gray-200"
                hx-boost="true"

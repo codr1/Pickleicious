@@ -1,0 +1,151 @@
+// internal/templates/components/members/list.templ
+package members
+
+import "fmt"
+
+templ List() {
+    <div class="flex h-[calc(100vh-4rem)]">
+        <!-- Left side: Member list -->
+        <div class="w-1/2 border-r border-gray-200 flex flex-col">
+            <!-- Search and filters header -->
+            <div class="p-4 border-b border-gray-200 bg-white">
+                <div class="mb-4">
+                    <input
+                        type="search"
+                        name="search"
+                        placeholder="Search members..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        hx-get="/api/v1/members/search"
+                        hx-trigger="keyup changed delay:300ms"
+                        hx-target="#members-list"
+                        hx-indicator="#search-indicator"
+                    />
+                </div>
+                <div class="flex justify-between items-center">
+                    <select
+                        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        hx-get="/api/v1/members"
+                        hx-target="#members-list">
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100">100 per page</option>
+                    </select>
+                    <button
+                        class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600"
+                        hx-get="/api/v1/members/new"
+                        hx-target="#member-detail">
+                        Add Member
+                    </button>
+                </div>
+            </div>
+
+            <!-- Members list -->
+            <div class="flex-1 overflow-y-auto bg-gray-50" id="members-list">
+                @MembersList([]Member{}) // Will be replaced by actual data
+            </div>
+        </div>
+
+        <!-- Right side: Member details -->
+        <div class="w-1/2 bg-white" id="member-detail">
+            <div class="h-full flex items-center justify-center text-gray-500">
+                Select a member to view details
+            </div>
+        </div>
+    </div>
+}
+
+type Member struct {
+    ID          int
+    FirstName   string
+    LastName    string
+    Email       string
+    Phone       string
+    PhotoURL    string
+    Status      string
+    HasPhoto    bool
+}
+
+templ MembersList(members []Member) {
+    for _, member := range members {
+        <div 
+            class="p-4 border-b border-gray-200 hover:bg-white cursor-pointer"
+            hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)}
+            hx-target="#member-detail">
+            <div class="flex items-center">
+                if member.PhotoURL != "" {
+                    <img src={member.PhotoURL} alt={member.FirstName} class="w-10 h-10 rounded-full mr-4"/>
+                } else {
+                    <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-4">
+                        <span class="text-gray-500 font-medium">
+                            {string(member.FirstName[0])}{string(member.LastName[0])}
+                        </span>
+                    </div>
+                }
+                <div>
+                    <h3 class="font-medium text-gray-900">{member.FirstName} {member.LastName}</h3>
+                    <p class="text-sm text-gray-500">{member.Email}</p>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+templ MemberDetail(member Member) {
+    <div class="h-full flex flex-col">
+        <!-- Header -->
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h2 class="text-2xl font-semibold text-gray-900">Member Details</h2>
+                <div class="flex space-x-2">
+                    <button
+                        class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                        hx-get={fmt.Sprintf("/api/v1/members/%d/edit", member.ID)}
+                        hx-target="#member-detail">
+                        Edit
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-6">
+            <!-- Basic Info -->
+            <div class="mb-8">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        if member.PhotoURL != "" {
+                            <img src={member.PhotoURL} alt={member.FirstName} class="w-20 h-20 rounded-full mr-6"/>
+                        } else {
+                            <div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mr-6">
+                                <span class="text-gray-500 text-xl font-medium">
+                                    {string(member.FirstName[0])}{string(member.LastName[0])}
+                                </span>
+                            </div>
+                        }
+                        <div>
+                            <h4 class="font-medium text-gray-900">{member.FirstName} {member.LastName}</h4>
+                            <p class="text-gray-500">{member.Email}</p>
+                            <p class="text-gray-500">{member.Phone}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Billing Section (Collapsed by default) -->
+            <div class="border rounded-lg">
+                <button
+                    class="w-full px-4 py-2 text-left font-medium flex items-center justify-between"
+                    onclick="toggleBilling(this)">
+                    <span>Billing Information</span>
+                    <svg class="w-5 h-5 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div class="hidden px-4 py-3 border-t" id="billing-section">
+                    Loading billing information...
+                </div>
+            </div>
+        </div>
+    </div>
+}

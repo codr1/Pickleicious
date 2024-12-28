@@ -49,5 +49,9 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/dev_watch.dir/DependInfo.cmake"
   "tools/CMakeFiles/dbmigrate.dir/DependInfo.cmake"
   "tools/CMakeFiles/testdata.dir/DependInfo.cmake"
+  "tools/CMakeFiles/generate_sqlc.dir/DependInfo.cmake"
+  "tools/CMakeFiles/db_migrate_up.dir/DependInfo.cmake"
+  "tools/CMakeFiles/db_migrate_down.dir/DependInfo.cmake"
+  "tools/CMakeFiles/db_reset.dir/DependInfo.cmake"
   "tools/CMakeFiles/tools.dir/DependInfo.cmake"
   )

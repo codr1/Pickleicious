@@ -68,7 +68,7 @@ include tools/CMakeFiles/dbmigrate.dir/progress.make
 
 tools/CMakeFiles/dbmigrate:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/vess/dev/Pickleicious/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building dbmigrate"
-	cd /Users/vess/dev/Pickleicious && /opt/homebrew/bin/go build -o /Users/vess/dev/Pickleicious/build/bin/dbmigrate ./tools/dbmigrate
+	cd /Users/vess/dev/Pickleicious && /opt/homebrew/bin/go build -o /Users/vess/dev/Pickleicious/build/bin/dbmigrate ./cmd/tools/dbmigrate
 
 dbmigrate: tools/CMakeFiles/dbmigrate
 dbmigrate: tools/CMakeFiles/dbmigrate.dir/build.make

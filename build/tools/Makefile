@@ -145,6 +145,62 @@ testdata/fast:
 .PHONY : testdata/fast
 
 # Convenience name for target.
+tools/CMakeFiles/generate_sqlc.dir/rule:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/CMakeFiles/generate_sqlc.dir/rule
+.PHONY : tools/CMakeFiles/generate_sqlc.dir/rule
+
+# Convenience name for target.
+generate_sqlc: tools/CMakeFiles/generate_sqlc.dir/rule
+.PHONY : generate_sqlc
+
+# fast build rule for target.
+generate_sqlc/fast:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f tools/CMakeFiles/generate_sqlc.dir/build.make tools/CMakeFiles/generate_sqlc.dir/build
+.PHONY : generate_sqlc/fast
+
+# Convenience name for target.
+tools/CMakeFiles/db_migrate_up.dir/rule:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/CMakeFiles/db_migrate_up.dir/rule
+.PHONY : tools/CMakeFiles/db_migrate_up.dir/rule
+
+# Convenience name for target.
+db_migrate_up: tools/CMakeFiles/db_migrate_up.dir/rule
+.PHONY : db_migrate_up
+
+# fast build rule for target.
+db_migrate_up/fast:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f tools/CMakeFiles/db_migrate_up.dir/build.make tools/CMakeFiles/db_migrate_up.dir/build
+.PHONY : db_migrate_up/fast
+
+# Convenience name for target.
+tools/CMakeFiles/db_migrate_down.dir/rule:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/CMakeFiles/db_migrate_down.dir/rule
+.PHONY : tools/CMakeFiles/db_migrate_down.dir/rule
+
+# Convenience name for target.
+db_migrate_down: tools/CMakeFiles/db_migrate_down.dir/rule
+.PHONY : db_migrate_down
+
+# fast build rule for target.
+db_migrate_down/fast:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f tools/CMakeFiles/db_migrate_down.dir/build.make tools/CMakeFiles/db_migrate_down.dir/build
+.PHONY : db_migrate_down/fast
+
+# Convenience name for target.
+tools/CMakeFiles/db_reset.dir/rule:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/CMakeFiles/db_reset.dir/rule
+.PHONY : tools/CMakeFiles/db_reset.dir/rule
+
+# Convenience name for target.
+db_reset: tools/CMakeFiles/db_reset.dir/rule
+.PHONY : db_reset
+
+# fast build rule for target.
+db_reset/fast:
+	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f tools/CMakeFiles/db_reset.dir/build.make tools/CMakeFiles/db_reset.dir/build
+.PHONY : db_reset/fast
+
+# Convenience name for target.
 tools/CMakeFiles/tools.dir/rule:
 	cd /Users/vess/dev/Pickleicious/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/CMakeFiles/tools.dir/rule
 .PHONY : tools/CMakeFiles/tools.dir/rule
@@ -166,7 +222,11 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... db_migrate_down"
+	@echo "... db_migrate_up"
+	@echo "... db_reset"
 	@echo "... dbmigrate"
+	@echo "... generate_sqlc"
 	@echo "... testdata"
 	@echo "... tools"
 .PHONY : help

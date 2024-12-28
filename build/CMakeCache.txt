@@ -83,6 +83,9 @@ Pickleicious_IS_TOP_LEVEL:STATIC=ON
 //Value Computed by CMake
 Pickleicious_SOURCE_DIR:STATIC=/Users/vess/dev/Pickleicious
 
+//Path to a program.
+SQLC_EXECUTABLE:FILEPATH=/Users/vess/go/bin/sqlc
+
 
 ########################
 # INTERNAL cache entries

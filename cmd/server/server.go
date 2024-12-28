@@ -10,6 +10,7 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/courts"
+	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
@@ -59,6 +60,13 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/nav/menu", nav.HandleMenu)
 	mux.HandleFunc("/api/v1/nav/menu/close", nav.HandleMenuClose)
 	mux.HandleFunc("/api/v1/nav/search", nav.HandleSearch)
+
+	// Member routes
+	mux.HandleFunc("/members", members.HandleMembersPage)
+	mux.HandleFunc("/api/v1/members", members.HandleMembersList)
+	mux.HandleFunc("/api/v1/members/search", members.HandleMemberSearch)
+	mux.HandleFunc("/api/v1/members/", members.HandleMemberDetail)
+	mux.HandleFunc("/api/v1/members/billing", members.HandleMemberBilling)
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)

@@ -234,6 +234,58 @@ testdata/fast:
 .PHONY : testdata/fast
 
 #=============================================================================
+# Target rules for targets named generate_sqlc
+
+# Build rule for target.
+generate_sqlc: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 generate_sqlc
+.PHONY : generate_sqlc
+
+# fast build rule for target.
+generate_sqlc/fast:
+	$(MAKE) $(MAKESILENT) -f tools/CMakeFiles/generate_sqlc.dir/build.make tools/CMakeFiles/generate_sqlc.dir/build
+.PHONY : generate_sqlc/fast
+
+#=============================================================================
+# Target rules for targets named db_migrate_up
+
+# Build rule for target.
+db_migrate_up: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 db_migrate_up
+.PHONY : db_migrate_up
+
+# fast build rule for target.
+db_migrate_up/fast:
+	$(MAKE) $(MAKESILENT) -f tools/CMakeFiles/db_migrate_up.dir/build.make tools/CMakeFiles/db_migrate_up.dir/build
+.PHONY : db_migrate_up/fast
+
+#=============================================================================
+# Target rules for targets named db_migrate_down
+
+# Build rule for target.
+db_migrate_down: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 db_migrate_down
+.PHONY : db_migrate_down
+
+# fast build rule for target.
+db_migrate_down/fast:
+	$(MAKE) $(MAKESILENT) -f tools/CMakeFiles/db_migrate_down.dir/build.make tools/CMakeFiles/db_migrate_down.dir/build
+.PHONY : db_migrate_down/fast
+
+#=============================================================================
+# Target rules for targets named db_reset
+
+# Build rule for target.
+db_reset: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 db_reset
+.PHONY : db_reset
+
+# fast build rule for target.
+db_reset/fast:
+	$(MAKE) $(MAKESILENT) -f tools/CMakeFiles/db_reset.dir/build.make tools/CMakeFiles/db_reset.dir/build
+.PHONY : db_reset/fast
+
+#=============================================================================
 # Target rules for targets named tools
 
 # Build rule for target.
@@ -254,9 +306,13 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... db_migrate_down"
+	@echo "... db_migrate_up"
+	@echo "... db_reset"
 	@echo "... dbmigrate"
 	@echo "... dev"
 	@echo "... dev_watch"
+	@echo "... generate_sqlc"
 	@echo "... generate_templ"
 	@echo "... server"
 	@echo "... tailwind"

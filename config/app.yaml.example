@@ -1,0 +1,17 @@
+# config/app.yaml.example
+app:
+  name: Pickleicious
+  environment: development  # development, staging, production
+  port: 8080
+  base_url: http://localhost:8080
+
+database:
+  driver: sqlite  # sqlite, turso
+  filename: ./data/pickleicious.db
+  # For Turso (commented out for now)
+  # url: https://<your-db>.turso.io
+  
+features:
+  enable_metrics: false
+  enable_tracing: false
+  enable_debug: true

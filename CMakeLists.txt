@@ -12,6 +12,16 @@ if(NOT ENV IN_LIST ENV_OPTIONS)
     message(FATAL_ERROR "ENV must be one of: ${ENV_OPTIONS}")
 endif()
 
+if(ENV STREQUAL "prod")
+    add_definitions(-DPRODUCTION_BUILD)
+    set(TAILWIND_FLAGS "--minify")
+    # Other production-specific settings
+else()
+    set(TAILWIND_FLAGS "")
+    # Development defaults
+endif()
+
+
 # Load environment-specific configuration
 include(cmake/env/${ENV}.cmake)
 
