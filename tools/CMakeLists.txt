@@ -36,8 +36,8 @@ add_custom_target(generate_sqlc
 # Database migration targets
 add_custom_target(db_migrate_up
     COMMAND ${BINARY_DIR}/dbmigrate 
-        -db ${CMAKE_BINARY_DIR}/data/pickleicious.db 
-        -migrations ${CMAKE_SOURCE_DIR}/internal/db/migrations 
+        -db "${PROJECT_DB_DIR}/pickleicious.db"
+        -migrations "${CMAKE_SOURCE_DIR}/internal/db/migrations" 
         -command up
     DEPENDS dbmigrate
     COMMENT "Running database migrations up"
@@ -45,8 +45,8 @@ add_custom_target(db_migrate_up
 
 add_custom_target(db_migrate_down
     COMMAND ${BINARY_DIR}/dbmigrate 
-        -db ${CMAKE_BINARY_DIR}/data/pickleicious.db 
-        -migrations ${CMAKE_SOURCE_DIR}/internal/db/migrations 
+        -db "${PROJECT_DB_DIR}/pickleicious.db"
+        -migrations "${CMAKE_SOURCE_DIR}/internal/db/migrations" 
         -command down
     DEPENDS dbmigrate
     COMMENT "Running database migrations down"
@@ -54,7 +54,7 @@ add_custom_target(db_migrate_down
 
 # Database reset target
 add_custom_target(db_reset
-    COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/data/pickleicious.db
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${PROJECT_DB_DIR}/pickleicious.db
     COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target db_migrate_up
     COMMENT "Resetting database"
 )

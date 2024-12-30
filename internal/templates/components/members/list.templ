@@ -40,8 +40,15 @@ templ List() {
             </div>
 
             <!-- Members list -->
-            <div class="flex-1 overflow-y-auto bg-gray-50" id="members-list">
-                @MembersList([]Member{}) // Will be replaced by actual data
+            <div 
+                class="flex-1 overflow-y-auto bg-gray-50" 
+                id="members-list"
+                hx-get="/api/v1/members"
+                hx-trigger="load"
+            >
+                <div class="flex items-center justify-center p-4 text-gray-500">
+                    Loading members...
+                </div>
             </div>
         </div>
 
@@ -55,14 +62,22 @@ templ List() {
 }
 
 type Member struct {
-    ID          int
-    FirstName   string
-    LastName    string
-    Email       string
-    Phone       string
-    PhotoURL    string
-    Status      string
-    HasPhoto    bool
+    ID            int
+    FirstName     string
+    LastName      string
+    Email         string
+    Phone         string
+    PhotoURL      string
+    Status        string
+    HasPhoto      bool
+    StreetAddress string
+    City          string
+    State         string
+    PostalCode    string
+    DateOfBirth   string
+    WaiverSigned  bool
+    CardLastFour  string
+    CardType      string
 }
 
 templ MembersList(members []Member) {
@@ -91,7 +106,7 @@ templ MembersList(members []Member) {
 }
 
 templ MemberDetail(member Member) {
-    <div class="h-full flex flex-col">
+    <div class="h-full flex flex-col bg-white">
         <!-- Header -->
         <div class="p-6 border-b border-gray-200">
             <div class="flex items-center justify-between">
@@ -112,40 +127,70 @@ templ MemberDetail(member Member) {
             <!-- Basic Info -->
             <div class="mb-8">
                 <h3 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
-                <div class="space-y-4">
-                    <div class="flex items-center">
-                        if member.PhotoURL != "" {
-                            <img src={member.PhotoURL} alt={member.FirstName} class="w-20 h-20 rounded-full mr-6"/>
-                        } else {
-                            <div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mr-6">
-                                <span class="text-gray-500 text-xl font-medium">
-                                    {string(member.FirstName[0])}{string(member.LastName[0])}
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="col-span-2">
+                        <div class="flex items-center">
+                            if member.PhotoURL != "" {
+                                <img src={member.PhotoURL} alt={member.FirstName} class="w-20 h-20 rounded-full mr-6"/>
+                            } else {
+                                <div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mr-6">
+                                    <span class="text-gray-500 text-xl font-medium">
+                                        {string(member.FirstName[0])}{string(member.LastName[0])}
+                                    </span>
+                                </div>
+                            }
+                            <div>
+                                <h4 class="font-medium text-gray-900 text-xl">{member.FirstName} {member.LastName}</h4>
+                                <p class="text-gray-600">{member.Email}</p>
+                                <p class="text-gray-600">{member.Phone}</p>
+                                <span class={templ.Classes(
+                                    "px-2 py-1 text-sm rounded-full",
+                                    templ.KV("bg-green-100 text-green-800", member.Status == "active"),
+                                    templ.KV("bg-red-100 text-red-800", member.Status == "inactive"))}>
+                                    {member.Status}
                                 </span>
                             </div>
-                        }
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
                         <div>
-                            <h4 class="font-medium text-gray-900">{member.FirstName} {member.LastName}</h4>
-                            <p class="text-gray-500">{member.Email}</p>
-                            <p class="text-gray-500">{member.Phone}</p>
+                            <h4 class="font-medium text-gray-700">Address</h4>
+                            <p class="text-gray-600">{member.StreetAddress}</p>
+                            <p class="text-gray-600">{member.City}, {member.State} {member.PostalCode}</p>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-700">Date of Birth</h4>
+                            <p class="text-gray-600">{member.DateOfBirth}</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <h4 class="font-medium text-gray-700">Membership Status</h4>
+                            <p class="text-gray-600">
+                                if member.WaiverSigned {
+                                    <span class="text-green-600">Waiver Signed</span>
+                                } else {
+                                    <span class="text-red-600">Waiver Not Signed</span>
+                                }
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Billing Section (Collapsed by default) -->
-            <div class="border rounded-lg">
-                <button
-                    class="w-full px-4 py-2 text-left font-medium flex items-center justify-between"
-                    onclick="toggleBilling(this)">
-                    <span>Billing Information</span>
-                    <svg class="w-5 h-5 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div class="hidden px-4 py-3 border-t" id="billing-section">
-                    Loading billing information...
+            if member.CardType != "" {
+                <!-- Payment Information -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Payment Information</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-gray-600">
+                            {member.CardType} ending in {member.CardLastFour}
+                        </p>
+                    </div>
                 </div>
-            </div>
+            }
         </div>
     </div>
 }

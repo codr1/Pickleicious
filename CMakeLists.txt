@@ -21,7 +21,6 @@ else()
     # Development defaults
 endif()
 
-
 # Load environment-specific configuration
 include(cmake/env/${ENV}.cmake)
 
@@ -33,11 +32,13 @@ set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE})
 set(BINARY_DIR ${CMAKE_BINARY_DIR}/bin)
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 set(CONFIG_DIR ${BINARY_DIR}/config)
+set(PROJECT_DB_DIR ${CMAKE_BINARY_DIR}/db)
 
 # Create necessary directories
 file(MAKE_DIRECTORY ${BINARY_DIR})
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 file(MAKE_DIRECTORY ${CONFIG_DIR})
+file(MAKE_DIRECTORY ${PROJECT_DB_DIR})
 
 # Configure environment files
 configure_file(
@@ -85,7 +86,7 @@ add_custom_target(dev
     COMMAND ${CMAKE_COMMAND} -E env 
         APP_ENV=${ENV}
         CONFIG_PATH=${CONFIG_DIR}/app.yaml
-        ${GO_EXECUTABLE} run ./cmd/server
+        ${GO_EXECUTABLE} run ./cmd/server/...
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     DEPENDS generate_templ tailwind
     COMMENT "Running development server in ${ENV} environment"

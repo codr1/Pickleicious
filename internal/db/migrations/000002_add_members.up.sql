@@ -10,6 +10,8 @@ CREATE TABLE members (
     city TEXT,
     state TEXT,
     postal_code TEXT,
+    date_of_birth TEXT NOT NULL,
+    waiver_signed INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

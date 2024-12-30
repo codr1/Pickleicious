@@ -85,11 +85,13 @@ generate-sqlc: $(BUILD_DIR)/Makefile   # Generates type-safe DB code from SQL
 	@cmake --build $(BUILD_DIR) --target generate_sqlc
 
 # Development server with database setup
-dev: $(BUILD_DIR)/Makefile db-setup  # Runs with hot reload, debug logging, local SQLite
+.PHONY: dev-server
+dev-server: $(BUILD_DIR)/Makefile db-setup generate-sqlc  # Runs with hot reload, debug logging, local SQLite
 	@echo "${GREEN}Starting development server...${RESET}"
-	@cmake --build $(BUILD_DIR) --target dev
+	@cmake --build $(BUILD_DIR) --target dev_watch
 
-# Development server with database setup
+# Production server with database setup
+.PHONY: prod
 prod: $(BUILD_DIR)/Makefile db-migrate  # No hot reload, optimized, proper DB config, etc
 	@echo "${GREEN}Starting production server...${RESET}"
 	@ENV=prod cmake --build $(BUILD_DIR) --target server

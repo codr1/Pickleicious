@@ -57,11 +57,13 @@ temp/
 /bin/
 /dist/
 
-# CMake
+# CMake specific
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
+*.cmake
+!CMakeLists.txt
 
 # Configuration
 /config/app.yaml
@@ -75,3 +77,7 @@ debug.test
 # Test coverage
 coverage.out
 coverage.html
+
+# Keep certain directories with .gitkeep
+!/internal/db/generated/.gitkeep
+!/build/.gitkeep

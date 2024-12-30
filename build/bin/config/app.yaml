@@ -5,7 +5,8 @@ app:
   env: dev
 
 database:
-  path: :memory:
+  driver: "sqlite"
+  filename: "/Users/vess/dev/Pickleicious/build/db/pickleicious.db"
 
 logging:
   level: debug

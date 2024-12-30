@@ -68,7 +68,7 @@ include CMakeFiles/dev.dir/progress.make
 
 CMakeFiles/dev:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/vess/dev/Pickleicious/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Running development server in dev environment"
-	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E env APP_ENV=dev CONFIG_PATH=/Users/vess/dev/Pickleicious/build/bin/config/app.yaml /opt/homebrew/bin/go run ./cmd/server
+	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E env APP_ENV=dev CONFIG_PATH=/Users/vess/dev/Pickleicious/build/bin/config/app.yaml /opt/homebrew/bin/go run ./cmd/server/...
 
 dev: CMakeFiles/dev
 dev: CMakeFiles/dev.dir/build.make

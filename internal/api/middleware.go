@@ -27,7 +27,6 @@ func WithLogging(next http.Handler) http.Handler {
 		wrapped := wrapResponseWriter(w)
 
 		next.ServeHTTP(wrapped, r)
-
 		log.Info().
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
@@ -56,7 +55,14 @@ func WithRecovery(next http.Handler) http.Handler {
 func WithRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := uuid.New().String()
+
+		// Create a logger with the request ID
+		logger := log.With().Str("request_id", requestID).Logger()
+
+		// Add both the request ID and logger to context
 		ctx := context.WithValue(r.Context(), "request_id", requestID)
+		ctx = logger.WithContext(ctx)
+
 		w.Header().Set("X-Request-ID", requestID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

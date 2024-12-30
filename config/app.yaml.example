@@ -7,7 +7,7 @@ app:
 
 database:
   driver: sqlite  # sqlite, turso
-  filename: ./data/pickleicious.db
+  filename: ./db/pickleicious.db
   # For Turso (commented out for now)
   # url: https://<your-db>.turso.io
   

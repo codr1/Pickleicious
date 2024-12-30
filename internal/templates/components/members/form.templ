@@ -1,0 +1,190 @@
+// internal/templates/components/members/form.templ
+package members
+
+templ MemberForm() {
+    <style>
+        .htmx-indicator{
+            display: none;
+        }
+        .htmx-request .htmx-indicator{
+            display: block;
+        }
+        .htmx-request.htmx-indicator{
+            display: block;
+        }
+    </style>
+    <script>
+        document.addEventListener('htmx:beforeRequest', function(evt) {
+            display: none;
+        }
+        .htmx-request .htmx-indicator{
+            display: block;
+        }
+        .htmx-request.htmx-indicator{
+            display: block;
+        }
+    </style>
+    <script>
+        document.addEventListener('htmx:beforeRequest', function(evt) {
+            console.log('Sending request...', evt.detail);
+        });
+        document.addEventListener('htmx:afterRequest', function(evt) {
+            console.log('Request complete', evt.detail);
+        });
+        document.addEventListener('htmx:error', function(evt) {
+            console.error('Request error:', evt.detail);
+        });
+    </script>
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div id="submit-indicator" class="htmx-indicator">
+            <div class="flex items-center justify-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span class="ml-2">Submitting...</span>
+            </div>
+        </div>
+        <h2 class="text-xl font-semibold mb-6">Add New Member</h2>
+        <form
+            hx-post="/api/v1/members"
+            hx-target="#member-detail"
+            hx-indicator="#submit-indicator"
+            hx-swap="outerHTML"
+            hx-on::before-request="console.log('Sending request...')"
+            class="space-y-6">
+            
+            <!-- Name Fields -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                    <input 
+                        type="text" 
+                        id="first_name" 
+                        name="first_name" 
+                        required 
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                </div>
+                <div>
+                    <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                    <input 
+                        type="text" 
+                        id="last_name" 
+                        name="last_name" 
+                        required 
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                </div>
+            </div>
+
+            <!-- Contact Info -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        required 
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                </div>
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                    <input 
+                        type="tel" 
+                        id="phone" 
+                        name="phone" 
+                        required 
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                </div>
+            </div>
+
+            <!-- Date of Birth -->
+            <div>
+                <label for="date_of_birth" class="block text-sm font-medium text-gray-700">Date of Birth</label>
+                <input 
+                    type="date" 
+                    id="date_of_birth" 
+                    name="date_of_birth" 
+                    required 
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                />
+            </div>
+
+            <!-- Address Fields -->
+            <div class="space-y-4">
+                <div>
+                    <label for="street_address" class="block text-sm font-medium text-gray-700">Street Address</label>
+                    <input 
+                        type="text" 
+                        id="street_address" 
+                        name="street_address" 
+                        required 
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label for="city" class="block text-sm font-medium text-gray-700">City</label>
+                        <input 
+                            type="text" 
+                            id="city" 
+                            name="city" 
+                            required 
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label for="state" class="block text-sm font-medium text-gray-700">State</label>
+                        <input 
+                            type="text" 
+                            id="state" 
+                            name="state" 
+                            required 
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label for="postal_code" class="block text-sm font-medium text-gray-700">Postal Code</label>
+                        <input 
+                            type="text" 
+                            id="postal_code" 
+                            name="postal_code" 
+                            required 
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waiver -->
+            <div class="flex items-center space-x-2">
+                <input 
+                    type="checkbox" 
+                    id="waiver_signed" 
+                    name="waiver_signed" 
+                    required 
+                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label for="waiver_signed" class="text-sm font-medium text-gray-700">
+                    I confirm that the member has signed the waiver
+                </label>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="flex justify-end space-x-3">
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+                    onclick="clearForm()">
+                    Cancel
+                </button>
+                <button
+                    type="submit"
+                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700">
+                    Add Member
+                </button>
+            </div>
+        </form>
+    </div>
+}

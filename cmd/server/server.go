@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -12,10 +13,11 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
+	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
-func newServer(config *Config) *http.Server {
+func newServer(config *config.Config) *http.Server {
 	router := http.NewServeMux()
 
 	// Setup middleware chain
@@ -31,7 +33,7 @@ func newServer(config *Config) *http.Server {
 	registerRoutes(router)
 
 	return &http.Server{
-		Addr:         ":" + config.Port,
+		Addr:         fmt.Sprintf(":%d", config.App.Port),
 		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -63,9 +65,19 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Member routes
 	mux.HandleFunc("/members", members.HandleMembersPage)
-	mux.HandleFunc("/api/v1/members", members.HandleMembersList)
+	mux.HandleFunc("/api/v1/members", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			members.HandleMembersList(w, r)
+		case http.MethodPost:
+			members.HandleCreateMember(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/api/v1/members/search", members.HandleMemberSearch)
 	mux.HandleFunc("/api/v1/members/", members.HandleMemberDetail)
+	mux.HandleFunc("/api/v1/members/new", members.HandleNewMemberForm)
 	mux.HandleFunc("/api/v1/members/billing", members.HandleMemberBilling)
 
 	// Court routes

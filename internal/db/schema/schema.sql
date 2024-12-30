@@ -38,10 +38,13 @@ CREATE TABLE members (
     last_name TEXT NOT NULL,
     email TEXT UNIQUE,
     phone TEXT,
+    photo_url TEXT,
     street_address TEXT,
     city TEXT,
     state TEXT,
     postal_code TEXT,
+    date_of_birth DATE NOT NULL,
+    waiver_signed BOOLEAN NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

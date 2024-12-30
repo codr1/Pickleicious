@@ -14,7 +14,7 @@ where NNNNNN is a 6-digit sequence number (e.g., 000001).
 Migrations can be run using the dbmigrate tool:
 
 ```bash
-go run cmd/tools/dbmigrate/main.go -db ./data/pickleicious.db -migrations ./internal/db/migrations -command up
+go run cmd/tools/dbmigrate/main.go -db ./db/pickleicious.db -migrations ./internal/db/migrations -command up
 
 # Database Management
 
@@ -53,14 +53,29 @@ go run cmd/tools/dbmigrate/main.go create -name description_of_change
 ## Running Migrations
 ```
 # Apply all pending migrations
-go run cmd/tools/dbmigrate/main.go -db ./data/pickleicious.db -migrations ./internal/db/migrations -command up
+make db-migrate
+
+# Reset database to initial state
+make db-migrate-reset
+
+# Initial setup and run migrations
+make db-setup
+```
+
+or
+
+```
+# Apply all pending migrations
+go run cmd/tools/dbmigrate/main.go -db ${PROJECT_ROOT}/db/pickleicious.db -migrations ./internal/db/migrations -command up
 
 # Rollback last migration
-go run cmd/tools/dbmigrate/main.go -db ./data/pickleicious.db -migrations ./internal/db/migrations -command down
+go run cmd/tools/dbmigrate/main.go -db ${PROJECT_ROOT}/db/pickleicious.db -migrations ./internal/db/migrations -command down
 
 # Check current version
-go run cmd/tools/dbmigrate/main.go -db ./data/pickleicious.db -migrations ./internal/db/migrations -command version
+go run cmd/tools/dbmigrate/main.go -db ${PROJECT_ROOT}/db/pickleicious.db -migrations ./internal/db/migrations -command version
 ```
+
+
 ## Best Practices
 ### Migration Guidelines
 
