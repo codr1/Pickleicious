@@ -80,19 +80,12 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/members/new", members.HandleNewMemberForm)
 	mux.HandleFunc("/api/v1/members/billing", members.HandleMemberBilling)
 
-	// Add photo endpoint
+	// Photo endpoint
 	mux.HandleFunc("/api/v1/members/photo/", members.HandleMemberPhoto)
 
-	// Member detail routes with different HTTP methods
+	// Member detail routes
 	mux.HandleFunc("/api/v1/members/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimSuffix(r.URL.Path, "/")
-
-		// Log the incoming request for debugging
-		log.Debug().
-			Str("method", r.Method).
-			Str("path", path).
-			Msg("Member detail request")
-
 		switch r.Method {
 		case http.MethodGet:
 			if strings.HasSuffix(path, "/edit") {

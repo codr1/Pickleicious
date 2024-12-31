@@ -128,7 +128,6 @@ ON CONFLICT(member_id) DO UPDATE SET
     billing_postal_code = excluded.billing_postal_code,
     updated_at = CURRENT_TIMESTAMP
 RETURNING *;
-
 -- name: CreatePhoto :one
 INSERT INTO member_photos (member_id, data, content_type, size)
 VALUES (@member_id, @data, @content_type, @size)
@@ -142,3 +141,10 @@ WHERE id = @id;
 -- name: DeletePhoto :exec
 DELETE FROM member_photos
 WHERE id = @id;
+
+-- name: UpdateMemberPhotoID :exec
+UPDATE members
+SET photo_url = @photo_url,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id;
+

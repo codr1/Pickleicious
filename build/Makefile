@@ -208,6 +208,19 @@ dev_watch/fast:
 .PHONY : dev_watch/fast
 
 #=============================================================================
+# Target rules for targets named static-assets
+
+# Build rule for target.
+static-assets: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 static-assets
+.PHONY : static-assets
+
+# fast build rule for target.
+static-assets/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/static-assets.dir/build.make CMakeFiles/static-assets.dir/build
+.PHONY : static-assets/fast
+
+#=============================================================================
 # Target rules for targets named dbmigrate
 
 # Build rule for target.
@@ -315,6 +328,7 @@ help:
 	@echo "... generate_sqlc"
 	@echo "... generate_templ"
 	@echo "... server"
+	@echo "... static-assets"
 	@echo "... tailwind"
 	@echo "... testdata"
 	@echo "... tools"

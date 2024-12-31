@@ -12,7 +12,7 @@ RESET  := $(shell tput sgr0)
 
 
 # TODO: START HERE !
-.PHONY: all build clean dev test tools help db-setup db-migrate db-reset generate-sqlc
+.PHONY: all build clean dev test tools help db-setup db-migrate db-reset generate-sqlc static-assets
 
 # Default target
 all: build
@@ -29,7 +29,7 @@ build: $(BUILD_DIR)/Makefile
 	@cmake --build $(BUILD_DIR) --target server
 
 # Run the development server
-dev: $(BUILD_DIR)/Makefile
+dev: $(BUILD_DIR)/Makefile static-assets
 	@echo "$(GREEN)Starting development server...$(RESET)"
 	@cmake --build $(BUILD_DIR) --target dev
 
@@ -113,6 +113,12 @@ db-migrate-up:
 		-db $(DB_PATH) \
 		-migrations $(MIGRATIONS_DIR)
 
+# Copy static assets to build directory
+static-assets:
+	@echo "$(GREEN)Copying static assets...$(RESET)"
+	@mkdir -p $(BUILD_DIR)/bin/static/js
+	@cp -r internal/static/* $(BUILD_DIR)/bin/static/
+
 # Help target
 help:
 	@echo "Available targets:"
@@ -134,3 +140,4 @@ help:
 	@echo ""
 	@echo "Example usage:"
 	@echo "  make dev ENV=staging    - Run development server with staging config"
+

@@ -78,6 +78,7 @@ clean: CMakeFiles/dev.dir/clean
 clean: CMakeFiles/watch_templ.dir/clean
 clean: CMakeFiles/watch_tailwind.dir/clean
 clean: CMakeFiles/dev_watch.dir/clean
+clean: CMakeFiles/static-assets.dir/clean
 clean: tools/clean
 .PHONY : clean
 
@@ -160,6 +161,7 @@ CMakeFiles/tailwind.dir/clean:
 # All Build rule for target.
 CMakeFiles/server.dir/all: CMakeFiles/generate_templ.dir/all
 CMakeFiles/server.dir/all: CMakeFiles/tailwind.dir/all
+CMakeFiles/server.dir/all: CMakeFiles/static-assets.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/vess/dev/Pickleicious/build/CMakeFiles --progress-num=9 "Built target server"
@@ -187,6 +189,7 @@ CMakeFiles/server.dir/clean:
 # All Build rule for target.
 CMakeFiles/dev.dir/all: CMakeFiles/generate_templ.dir/all
 CMakeFiles/dev.dir/all: CMakeFiles/tailwind.dir/all
+CMakeFiles/dev.dir/all: CMakeFiles/static-assets.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dev.dir/build.make CMakeFiles/dev.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dev.dir/build.make CMakeFiles/dev.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/vess/dev/Pickleicious/build/CMakeFiles --progress-num=5 "Built target dev"
@@ -286,6 +289,32 @@ dev_watch: CMakeFiles/dev_watch.dir/rule
 CMakeFiles/dev_watch.dir/clean:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dev_watch.dir/build.make CMakeFiles/dev_watch.dir/clean
 .PHONY : CMakeFiles/dev_watch.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/static-assets.dir
+
+# All Build rule for target.
+CMakeFiles/static-assets.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/static-assets.dir/build.make CMakeFiles/static-assets.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/static-assets.dir/build.make CMakeFiles/static-assets.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/vess/dev/Pickleicious/build/CMakeFiles --progress-num= "Built target static-assets"
+.PHONY : CMakeFiles/static-assets.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/static-assets.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/vess/dev/Pickleicious/build/CMakeFiles 0
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/static-assets.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/vess/dev/Pickleicious/build/CMakeFiles 0
+.PHONY : CMakeFiles/static-assets.dir/rule
+
+# Convenience name for target.
+static-assets: CMakeFiles/static-assets.dir/rule
+.PHONY : static-assets
+
+# clean rule for target.
+CMakeFiles/static-assets.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/static-assets.dir/build.make CMakeFiles/static-assets.dir/clean
+.PHONY : CMakeFiles/static-assets.dir/clean
 
 #=============================================================================
 # Target rules for target tools/CMakeFiles/dbmigrate.dir

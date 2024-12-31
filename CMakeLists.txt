@@ -123,3 +123,14 @@ add_custom_target(dev_watch
     DEPENDS generate_templ tailwind
     COMMENT "Running development server with file watching"
 )
+
+add_custom_target(static-assets
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/static/js
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/internal/static/js
+        ${CMAKE_BINARY_DIR}/static/js
+)
+
+# Make sure static assets are copied before server builds
+add_dependencies(server static-assets)
+add_dependencies(dev static-assets)

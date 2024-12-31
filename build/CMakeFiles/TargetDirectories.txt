@@ -5,6 +5,7 @@
 /Users/vess/dev/Pickleicious/build/CMakeFiles/watch_templ.dir
 /Users/vess/dev/Pickleicious/build/CMakeFiles/watch_tailwind.dir
 /Users/vess/dev/Pickleicious/build/CMakeFiles/dev_watch.dir
+/Users/vess/dev/Pickleicious/build/CMakeFiles/static-assets.dir
 /Users/vess/dev/Pickleicious/build/CMakeFiles/edit_cache.dir
 /Users/vess/dev/Pickleicious/build/CMakeFiles/rebuild_cache.dir
 /Users/vess/dev/Pickleicious/build/tools/CMakeFiles/dbmigrate.dir

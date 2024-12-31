@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -79,6 +80,7 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 			Email:     m.Email.String,
 			Phone:     m.Phone.String,
 			HasPhoto:  m.PhotoID.Valid,
+			PhotoURL:  getPhotoURL(m.ID, m.PhotoID.Valid),
 			Status:    m.Status,
 		}
 	}
@@ -130,6 +132,7 @@ func HandleMembersList(w http.ResponseWriter, r *http.Request) {
 			Email:     m.Email.String,
 			Phone:     m.Phone.String,
 			HasPhoto:  m.PhotoID.Valid,
+			PhotoURL:  getPhotoURL(m.ID, m.PhotoID.Valid),
 			Status:    m.Status,
 		}
 	}
@@ -349,6 +352,46 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Process photo if present
+	photoData := r.FormValue("photo_data")
+	if photoData != "" {
+		// Remove data URL prefix
+		photoBytes := photoData[strings.IndexByte(photoData, ',')+1:]
+		decoded, err := base64.StdEncoding.DecodeString(photoBytes)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to decode photo data")
+			http.Error(w, "Invalid photo data", http.StatusBadRequest)
+			return
+		}
+
+		// Store photo in database
+		_, err = queries.SaveMemberPhoto(r.Context(), dbgen.SaveMemberPhotoParams{
+			MemberID:    member.ID,
+			Data:        decoded,
+			ContentType: "image/jpeg",
+			Size:        int64(len(decoded)),
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to store photo")
+			http.Error(w, "Failed to store photo", http.StatusInternalServerError)
+			return
+		}
+
+		// Update member's photo ID in the members table
+		err = queries.UpdateMemberPhotoID(r.Context(), dbgen.UpdateMemberPhotoIDParams{
+			ID:       member.ID,
+			PhotoUrl: sql.NullString{String: getPhotoURL(member.ID, true), Valid: true},
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to update member's photo ID")
+			http.Error(w, "Failed to update member's photo ID", http.StatusInternalServerError)
+			return
+		}
+
+		// Update member's photo URL
+		member.PhotoUrl = sql.NullString{String: getPhotoURL(member.ID, true), Valid: true}
+	}
+
 	// Convert to template Member struct and render detail view
 	templMember := membertempl.Member{
 		ID:            int(member.ID),
@@ -363,6 +406,8 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		DateOfBirth:   member.DateOfBirth,
 		WaiverSigned:  member.WaiverSigned,
 		Status:        member.Status,
+		HasPhoto:      member.PhotoUrl.Valid,
+		PhotoURL:      member.PhotoUrl.String,
 	}
 
 	component := membertempl.MemberDetail(templMember)
@@ -399,10 +444,11 @@ func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Debug().
-		Str("path", r.URL.Path).
-		Str("target", r.Header.Get("HX-Target")).
-		Msg("Member detail request")
+	// Generate photo URL if member has a photo
+	photoURL := ""
+	if member.PhotoID.Valid {
+		photoURL = fmt.Sprintf("/api/v1/members/photo/%d", member.ID)
+	}
 
 	component := membertempl.MemberDetail(membertempl.Member{
 		ID:            int(member.ID),
@@ -411,6 +457,7 @@ func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 		Email:         member.Email.String,
 		Phone:         member.Phone.String,
 		HasPhoto:      member.PhotoID.Valid,
+		PhotoURL:      photoURL,
 		Status:        member.Status,
 		StreetAddress: member.StreetAddress.String,
 		City:          member.City.String,
@@ -448,7 +495,7 @@ func HandleMemberBilling(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
-	component := membertempl.MemberForm()
+	component := membertempl.MemberForm(membertempl.Member{})
 	component.Render(r.Context(), w)
 }
 
@@ -560,6 +607,20 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to store photo", http.StatusInternalServerError)
 			return
 		}
+
+		// Update member's photo ID in the members table
+		err = queries.UpdateMemberPhotoID(r.Context(), dbgen.UpdateMemberPhotoIDParams{
+			ID:       member.ID,
+			PhotoUrl: sql.NullString{String: getPhotoURL(member.ID, true), Valid: true},
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to update member's photo ID")
+			http.Error(w, "Failed to update member's photo ID", http.StatusInternalServerError)
+			return
+		}
+
+		// Update member's photo URL
+		member.PhotoUrl = sql.NullString{String: getPhotoURL(member.ID, true), Valid: true}
 	}
 
 	log.Info().Interface("member", member).Msg("Member created successfully")
@@ -572,6 +633,8 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		Email:         member.Email.String,
 		Phone:         member.Phone.String,
 		Status:        member.Status,
+		HasPhoto:      member.PhotoUrl.Valid,
+		PhotoURL:      member.PhotoUrl.String,
 		StreetAddress: member.StreetAddress.String,
 		City:          member.City.String,
 		State:         member.State.String,
@@ -596,9 +659,9 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleMemberPhoto(w http.ResponseWriter, r *http.Request) {
-	// Extract photo ID from URL
+	// Extract member ID from URL path: /api/v1/members/photo/{id}
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
+	if len(parts) < 5 { // ["", "api", "v1", "members", "photo", "{id}"]
 		http.Error(w, "Invalid photo URL", http.StatusBadRequest)
 		return
 	}
@@ -612,11 +675,22 @@ func HandleMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	// Fetch photo from database
 	photo, err := queries.GetMemberPhoto(r.Context(), memberID)
 	if err != nil {
-		http.Error(w, "Photo not found", http.StatusNotFound)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Photo not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to fetch photo", http.StatusInternalServerError)
 		return
 	}
 
 	// Set content type and serve photo
 	w.Header().Set("Content-Type", photo.ContentType)
 	w.Write(photo.Data)
+}
+
+func getPhotoURL(id int64, hasPhoto bool) string {
+	if hasPhoto {
+		return fmt.Sprintf("/api/v1/members/photo/%d", id)
+	}
+	return ""
 }
