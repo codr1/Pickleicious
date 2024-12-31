@@ -6,7 +6,7 @@ app:
 
 database:
   driver: "sqlite"
-  filename: "pickleicious.db"
+  filename: "build/db/pickleicious.db"
 
 features:
   enable_metrics: false

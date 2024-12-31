@@ -10,12 +10,14 @@ CREATE TABLE members (
     city TEXT,
     state TEXT,
     postal_code TEXT,
+        -- SQLite has no DATE type, store as TEXT in YYYY-MM-DD format Do not delete this comment
     date_of_birth TEXT NOT NULL,
-    waiver_signed INTEGER NOT NULL,
+    waiver_signed BOOLEAN NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX idx_members_status ON members(status);
 
 -- Separate table for billing info for better security
 CREATE TABLE member_billing (
@@ -31,3 +33,17 @@ CREATE TABLE member_billing (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (member_id) REFERENCES members(id)
 );
+
+-- Add photos table in the same migration
+CREATE TABLE member_photos (
+    id INTEGER PRIMARY KEY,
+    member_id INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    content_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (member_id) REFERENCES members(id)
+);
+
+CREATE UNIQUE INDEX idx_member_photos_member_id ON member_photos(member_id);

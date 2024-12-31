@@ -1,12 +1,15 @@
 // internal/templates/components/members/list.templ
 package members
 
-import "fmt"
+import (
+    "fmt"
+    "strings"
+)
 
-templ List() {
+templ MebersLayout() {
     <div class="flex h-[calc(100vh-4rem)]">
         <!-- Left side: Member list -->
-        <div class="w-1/2 border-r border-gray-200 flex flex-col">
+        <div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
             <!-- Search and filters header -->
             <div class="p-4 border-b border-gray-200 bg-white">
                 <div class="mb-4">
@@ -31,7 +34,7 @@ templ List() {
                         <option value="100">100 per page</option>
                     </select>
                     <button
-                        class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
                         hx-get="/api/v1/members/new"
                         hx-target="#member-detail">
                         Add Member
@@ -44,7 +47,7 @@ templ List() {
                 class="flex-1 overflow-y-auto bg-gray-50" 
                 id="members-list"
                 hx-get="/api/v1/members"
-                hx-trigger="load"
+                hx-trigger="load, refreshMembersList from:body"
             >
                 <div class="flex items-center justify-center p-4 text-gray-500">
                     Loading members...
@@ -53,8 +56,8 @@ templ List() {
         </div>
 
         <!-- Right side: Member details -->
-        <div class="w-1/2 bg-white" id="member-detail">
-            <div class="h-full flex items-center justify-center text-gray-500">
+        <div class="w-1/2 h-full min-w-[50%]" id="member-detail">
+            <div class="h-full w-full flex items-center justify-center text-gray-500">
                 Select a member to view details
             </div>
         </div>
@@ -74,7 +77,7 @@ type Member struct {
     City          string
     State         string
     PostalCode    string
-    DateOfBirth   string
+    DateOfBirth   string    // Store as YYYY-MM-DD format
     WaiverSigned  bool
     CardLastFour  string
     CardType      string
@@ -106,11 +109,28 @@ templ MembersList(members []Member) {
 }
 
 templ MemberDetail(member Member) {
-    <div class="h-full flex flex-col bg-white">
+    <div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
+        <script>
+            function confirmDelete(id, name) {
+                if (confirm("Are you sure you want to delete " + name + "?")) {
+                    htmx.ajax('DELETE', `/api/v1/members/${id}`, {
+                        target: '#member-detail',
+                        swap: 'innerHTML'
+                    });
+                    
+                    // Separately refresh the members list
+                    htmx.ajax('GET', '/api/v1/members', {
+                        target: '#members-list',
+                        swap: 'innerHTML'
+                    });
+                }
+            }
+        </script>
+        
         <!-- Header -->
         <div class="p-6 border-b border-gray-200">
             <div class="flex items-center justify-between">
-                <h2 class="text-2xl font-semibold text-gray-900">Member Details</h2>
+                <h2 class="text-xl font-bold text-gray-900">Member Details</h2>
                 <div class="flex space-x-2">
                     <button
                         class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
@@ -118,6 +138,7 @@ templ MemberDetail(member Member) {
                         hx-target="#member-detail">
                         Edit
                     </button>
+                    @DeleteButton(member)
                 </div>
             </div>
         </div>
@@ -126,7 +147,7 @@ templ MemberDetail(member Member) {
         <div class="flex-1 overflow-y-auto p-6">
             <!-- Basic Info -->
             <div class="mb-8">
-                <h3 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Basic Information</h3>
                 <div class="grid grid-cols-2 gap-6">
                     <div class="col-span-2">
                         <div class="flex items-center">
@@ -140,34 +161,37 @@ templ MemberDetail(member Member) {
                                 </div>
                             }
                             <div>
-                                <h4 class="font-medium text-gray-900 text-xl">{member.FirstName} {member.LastName}</h4>
+                                <h4 class="font-bold text-gray-900 text-xl">{member.FirstName} {member.LastName}</h4>
                                 <p class="text-gray-600">{member.Email}</p>
                                 <p class="text-gray-600">{member.Phone}</p>
-                                <span class={templ.Classes(
-                                    "px-2 py-1 text-sm rounded-full",
-                                    templ.KV("bg-green-100 text-green-800", member.Status == "active"),
-                                    templ.KV("bg-red-100 text-red-800", member.Status == "inactive"))}>
-                                    {member.Status}
-                                </span>
                             </div>
                         </div>
                     </div>
                     
                     <div class="space-y-4">
                         <div>
-                            <h4 class="font-medium text-gray-700">Address</h4>
-                            <p class="text-gray-600">{member.StreetAddress}</p>
-                            <p class="text-gray-600">{member.City}, {member.State} {member.PostalCode}</p>
+                            <h4 class="font-bold text-gray-900">Date of Birth</h4>
+                            <p class="text-gray-600">{member.DateOfBirth[:10]}</p>
                         </div>
                         <div>
-                            <h4 class="font-medium text-gray-700">Date of Birth</h4>
-                            <p class="text-gray-600">{member.DateOfBirth}</p>
+                            <h4 class="font-bold text-gray-900">Address</h4>
+                            <p class="text-gray-600">{member.StreetAddress}</p>
+                            <p class="text-gray-600">{member.City}, {member.State} {member.PostalCode}</p>
                         </div>
                     </div>
 
                     <div class="space-y-4">
                         <div>
-                            <h4 class="font-medium text-gray-700">Membership Status</h4>
+                            <h4 class="font-bold text-gray-900">Status</h4>
+                            <span class={templ.Classes(
+                                "px-2 py-1 text-sm rounded-full",
+                                templ.KV("bg-green-100 text-green-800", member.Status == "active"),
+                                templ.KV("bg-red-100 text-red-800", member.Status == "inactive"))}>
+                                {member.Status}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-900">Waiver Status</h4>
                             <p class="text-gray-600">
                                 if member.WaiverSigned {
                                     <span class="text-green-600">Waiver Signed</span>
@@ -176,6 +200,10 @@ templ MemberDetail(member Member) {
                                 }
                             </p>
                         </div>
+                        <div>
+                            <h4 class="font-bold text-gray-900">Member ID</h4>
+                            <p class="text-gray-600">{fmt.Sprintf("%d", member.ID)}</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -183,7 +211,7 @@ templ MemberDetail(member Member) {
             if member.CardType != "" {
                 <!-- Payment Information -->
                 <div class="mb-8">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Payment Information</h3>
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">Payment Information</h3>
                     <div class="bg-gray-50 p-4 rounded-lg">
                         <p class="text-gray-600">
                             {member.CardType} ending in {member.CardLastFour}
@@ -193,4 +221,12 @@ templ MemberDetail(member Member) {
             }
         </div>
     </div>
+}
+
+templ DeleteButton(member Member) {
+    <button
+        class="px-4 py-2 bg-red-50 border border-red-300 text-red-700 rounded-lg text-sm hover:bg-red-100"
+        hx-on={ fmt.Sprintf("click: confirmDelete(%d, '%s')", member.ID, strings.ReplaceAll(member.FirstName + " " + member.LastName, "'", "\\'")) }>
+        Delete
+    </button>
 }

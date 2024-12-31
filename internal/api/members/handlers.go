@@ -3,6 +3,7 @@ package members
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -29,16 +30,16 @@ type MemberView struct {
 
 // Add this struct for form handling
 type CreateMemberRequest struct {
-	FirstName     string `json:"first_name"`
-	LastName      string `json:"last_name"`
-	Email         string `json:"email"`
-	Phone         string `json:"phone"`
-	StreetAddress string `json:"street_address"`
-	City          string `json:"city"`
-	State         string `json:"state"`
-	PostalCode    string `json:"postal_code"`
-	DateOfBirth   string `json:"date_of_birth"` // Format: YYYY-MM-DD
-	WaiverSigned  bool   `json:"waiver_signed"`
+	FirstName     string    `json:"first_name"`
+	LastName      string    `json:"last_name"`
+	Email         string    `json:"email"`
+	Phone         string    `json:"phone"`
+	StreetAddress string    `json:"street_address"`
+	City          string    `json:"city"`
+	State         string    `json:"state"`
+	PostalCode    string    `json:"postal_code"`
+	DateOfBirth   time.Time `json:"date_of_birth"` // Format: YYYY-MM-DD
+	WaiverSigned  bool      `json:"waiver_signed"`
 }
 
 var queries *dbgen.Queries
@@ -82,9 +83,14 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Render the list template with initial data
-	component := membertempl.List()
-	component.Render(r.Context(), w)
+	// Render the layout template
+	component := membertempl.MebersLayout()
+	err = component.Render(r.Context(), w)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to render members layout")
+		http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		return
+	}
 }
 
 func HandleMembersList(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +185,190 @@ func HandleMemberSearch(w http.ResponseWriter, r *http.Request) {
 	component.Render(r.Context(), w)
 }
 
+func HandleDeleteMember(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	// Extract ID from URL path
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+
+	logger.Debug().
+		Str("path", path).
+		Strs("parts", parts).
+		Msg("Delete request received")
+
+	if len(parts) < 4 {
+		logger.Error().Msg("Invalid path format")
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+	if err != nil {
+		logger.Error().Err(err).Str("id_str", parts[len(parts)-1]).Msg("Invalid member ID")
+		http.Error(w, "Invalid member ID", http.StatusBadRequest)
+		return
+	}
+
+	// Delete the member
+	err = queries.DeleteMember(r.Context(), id)
+	if err != nil {
+		logger.Error().Err(err).Int64("id", id).Msg("Failed to delete member")
+		http.Error(w, "Failed to delete member", http.StatusInternalServerError)
+		return
+	}
+
+	// Return success message with HX-Trigger to refresh the list
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("HX-Trigger", "refreshMembersList")
+	w.Write([]byte(`
+		<div class="h-full flex items-center justify-center text-gray-500">
+			<p>Member successfully deleted</p>
+		</div>
+	`))
+}
+
+func HandleEditMemberForm(w http.ResponseWriter, r *http.Request) {
+	//log.Info().Str("original_url", r.URL.String()).Str("path", r.URL.Path).Msg("Edit member form request received")
+
+	// Extract ID from URL path
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+
+	//log.Info().Str("path", path).Strs("parts", parts).Msg("URL parts")
+
+	// The path should be like /api/v1/members/{id}/edit
+	// So we want the second-to-last part
+	if len(parts) < 4 {
+		log.Error().
+			Str("path", r.URL.Path).
+			Strs("parts", parts).
+			Msg("Invalid path format")
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	idStr := parts[len(parts)-2]
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("id_str", idStr).
+			Msg("Invalid member ID format")
+		http.Error(w, "Invalid member ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get the member details
+	member, err := queries.GetMemberByID(r.Context(), id)
+	if err != nil {
+		log.Error().Err(err).Int64("id", id).Msg("Failed to fetch member for edit")
+		http.Error(w, "Failed to fetch member", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to template Member struct
+	templMember := membertempl.Member{
+		ID:            int(member.ID),
+		FirstName:     member.FirstName,
+		LastName:      member.LastName,
+		Email:         member.Email.String,
+		Phone:         member.Phone.String,
+		StreetAddress: member.StreetAddress.String,
+		City:          member.City.String,
+		State:         member.State.String,
+		PostalCode:    member.PostalCode.String,
+		DateOfBirth:   member.DateOfBirth,
+		WaiverSigned:  member.WaiverSigned,
+		Status:        member.Status,
+	}
+
+	// Render the edit form
+	component := membertempl.EditMemberForm(templMember)
+	component.Render(r.Context(), w)
+}
+
+func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	// Parse form data
+	if err := r.ParseForm(); err != nil {
+		logger.Error().Err(err).Msg("Failed to parse form")
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	// Extract ID from URL path
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	idStr := parts[len(parts)-1]
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid member ID", http.StatusBadRequest)
+		return
+	}
+
+	// Parse date of birth
+	dobStr := r.FormValue("date_of_birth")
+	dob, err := time.Parse("2006-01-02", dobStr)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("dob_input", dobStr).
+			Msg("Failed to parse date of birth")
+		http.Error(w, "Invalid date format", http.StatusBadRequest)
+		return
+	}
+
+	// Create update params
+	updateParams := dbgen.UpdateMemberParams{
+		ID:            id,
+		FirstName:     r.FormValue("first_name"),
+		LastName:      r.FormValue("last_name"),
+		Email:         sql.NullString{String: r.FormValue("email"), Valid: true},
+		Phone:         sql.NullString{String: r.FormValue("phone"), Valid: true},
+		StreetAddress: sql.NullString{String: r.FormValue("street_address"), Valid: true},
+		City:          sql.NullString{String: r.FormValue("city"), Valid: true},
+		State:         sql.NullString{String: r.FormValue("state"), Valid: true},
+		PostalCode:    sql.NullString{String: r.FormValue("postal_code"), Valid: true},
+		Status:        "active",
+		DateOfBirth:   dob,
+		WaiverSigned:  r.FormValue("waiver_signed") == "on",
+	}
+
+	// Update the member
+	member, err := queries.UpdateMember(r.Context(), updateParams)
+	if err != nil {
+		logger.Error().Err(err).Interface("params", updateParams).Msg("Failed to update member")
+		http.Error(w, "Failed to update member", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to template Member struct and render detail view
+	templMember := membertempl.Member{
+		ID:            int(member.ID),
+		FirstName:     member.FirstName,
+		LastName:      member.LastName,
+		Email:         member.Email.String,
+		Phone:         member.Phone.String,
+		StreetAddress: member.StreetAddress.String,
+		City:          member.City.String,
+		State:         member.State.String,
+		PostalCode:    member.PostalCode.String,
+		DateOfBirth:   member.DateOfBirth,
+		WaiverSigned:  member.WaiverSigned,
+		Status:        member.Status,
+	}
+
+	component := membertempl.MemberDetail(templMember)
+	component.Render(r.Context(), w)
+}
+
 func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 	// Trim any trailing slash and split
 	path := strings.TrimSuffix(r.URL.Path, "/")
@@ -208,6 +398,11 @@ func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	log.Debug().
+		Str("path", r.URL.Path).
+		Str("target", r.Header.Get("HX-Target")).
+		Msg("Member detail request")
 
 	component := membertempl.MemberDetail(membertempl.Member{
 		ID:            int(member.ID),
@@ -257,6 +452,13 @@ func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
 	component.Render(r.Context(), w)
 }
 
+// HandleCreateMember handles new member creation
+// Date handling:
+// 1. Input comes as YYYY-MM-DD string from form
+// 2. Parsed into time.Time for validation
+// 3. Passed to SQL as time.Time
+// 4. SQL converts to YYYY-MM-DD string for storage
+// 5. SQLite (which is our main engine at present) does not have a DATE type, so it's stored as TEXT
 func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 	requestID := r.Context().Value("request_id").(string)
@@ -296,22 +498,23 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		Str("waiver_signed", r.FormValue("waiver_signed")).
 		Msg("Received form data")
 
-	// Parse form data
-	dob, err := time.Parse("2006-01-02", r.FormValue("date_of_birth"))
+	// Parse date of birth from YYYY-MM-DD format
+	dobStr := r.FormValue("date_of_birth")
+	dob, err := time.Parse("2006-01-02", dobStr)
 	if err != nil {
-		log.Error().Err(err).Msg("Invalid date format")
-		http.Error(w, "Invalid date format", http.StatusBadRequest)
+		log.Error().Err(err).Str("dob", dobStr).Msg("Invalid date format")
+		http.Error(w, "Invalid date format: must be YYYY-MM-DD", http.StatusBadRequest)
 		return
 	}
 
 	// Validate age
-	age := time.Now().Sub(dob).Hours() / 24 / 365.25
+	age := time.Since(dob).Hours() / 24 / 365.25
 	if age < 0 || age > 100 {
 		http.Error(w, "Invalid age: must be between 0 and 100 years", http.StatusBadRequest)
 		return
 	}
 
-	// Log the create member params
+	// Create member first
 	createParams := dbgen.CreateMemberParams{
 		FirstName:     r.FormValue("first_name"),
 		LastName:      r.FormValue("last_name"),
@@ -326,25 +529,94 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		WaiverSigned:  r.FormValue("waiver_signed") == "on",
 	}
 
-	log.Info().Interface("params", createParams).Msg("Creating member")
-
 	member, err := queries.CreateMember(r.Context(), createParams)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create member")
+		logger.Error().Err(err).Msg("Failed to create member")
 		http.Error(w, "Failed to create member", http.StatusInternalServerError)
 		return
 	}
 
+	// Then process photo if present
+	photoData := r.FormValue("photo_data")
+	if photoData != "" {
+		// Remove data URL prefix
+		photoBytes := photoData[strings.IndexByte(photoData, ',')+1:]
+		decoded, err := base64.StdEncoding.DecodeString(photoBytes)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to decode photo data")
+			http.Error(w, "Invalid photo data", http.StatusBadRequest)
+			return
+		}
+
+		// Store photo in database
+		_, err = queries.SaveMemberPhoto(r.Context(), dbgen.SaveMemberPhotoParams{
+			MemberID:    member.ID,
+			Data:        decoded,
+			ContentType: "image/jpeg",
+			Size:        int64(len(decoded)),
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to store photo")
+			http.Error(w, "Failed to store photo", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	log.Info().Interface("member", member).Msg("Member created successfully")
 
+	// Convert to template Member struct
+	templMember := membertempl.Member{
+		ID:            int(member.ID),
+		FirstName:     member.FirstName,
+		LastName:      member.LastName,
+		Email:         member.Email.String,
+		Phone:         member.Phone.String,
+		Status:        member.Status,
+		StreetAddress: member.StreetAddress.String,
+		City:          member.City.String,
+		State:         member.State.String,
+		PostalCode:    member.PostalCode.String,
+		DateOfBirth:   member.DateOfBirth,
+		WaiverSigned:  member.WaiverSigned,
+	}
+
+	// Set headers before writing response
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("HX-Trigger", "refreshMembersList")
+	w.Header().Set("HX-Retarget", "#member-detail")
+	w.Header().Set("HX-Reswap", "innerHTML")
+
 	// Render the member detail view
-	component := membertempl.MemberDetail(membertempl.Member{
-		ID:        int(member.ID),
-		FirstName: member.FirstName,
-		LastName:  member.LastName,
-		Email:     member.Email.String,
-		Phone:     member.Phone.String,
-		Status:    member.Status,
-	})
-	component.Render(r.Context(), w)
+	err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render member detail")
+		http.Error(w, "Failed to render response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleMemberPhoto(w http.ResponseWriter, r *http.Request) {
+	// Extract photo ID from URL
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Invalid photo URL", http.StatusBadRequest)
+		return
+	}
+
+	memberID, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid member ID", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch photo from database
+	photo, err := queries.GetMemberPhoto(r.Context(), memberID)
+	if err != nil {
+		http.Error(w, "Photo not found", http.StatusNotFound)
+		return
+	}
+
+	// Set content type and serve photo
+	w.Header().Set("Content-Type", photo.ContentType)
+	w.Write(photo.Data)
 }

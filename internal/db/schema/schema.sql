@@ -43,7 +43,9 @@ CREATE TABLE members (
     city TEXT,
     state TEXT,
     postal_code TEXT,
-    date_of_birth DATE NOT NULL,
+    -- SQLite has no DATE type, we use TEXT in YYYY-MM-DD format
+    -- This comment helps maintain consistency across the codebase
+    date_of_birth TEXT NOT NULL,
     waiver_signed BOOLEAN NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

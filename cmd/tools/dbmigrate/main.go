@@ -50,6 +50,18 @@ func main() {
 		log.Fatalf("Failed to create database directory: %v", err)
 	}
 
+	// Make db path absolute relative to project root
+	if !filepath.IsAbs(*dbPath) {
+		// Get project root (directory containing go.mod)
+		projectRoot, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("Failed to get working directory: %v", err)
+		}
+
+		// Make db path absolute relative to project root
+		*dbPath = filepath.Join(projectRoot, "build", "db", filepath.Base(*dbPath))
+	}
+
 	// Create migration instance
 	sourceURL := fmt.Sprintf("file://%s", absMigrations)
 	databaseURL := fmt.Sprintf("sqlite3://%s", absDB)

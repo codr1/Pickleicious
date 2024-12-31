@@ -77,7 +77,9 @@ db-migrate: $(BUILD_DIR)/Makefile
 # Wipes database and runs all migrations fresh
 db-reset: $(BUILD_DIR)/Makefile
 	@echo "${GREEN}Resetting database...${RESET}"
-	@cmake --build $(BUILD_DIR) --target db_reset
+	@rm -f "$(DB_PATH)"
+	@mkdir -p "$$(dirname "$(DB_PATH)")"
+	@$(MAKE) db-migrate-up
 
 # Generates Go code from SQL queries using sqlc
 generate-sqlc: $(BUILD_DIR)/Makefile   # Generates type-safe DB code from SQL
@@ -96,6 +98,20 @@ prod: $(BUILD_DIR)/Makefile db-migrate  # No hot reload, optimized, proper DB co
 	@echo "${GREEN}Starting production server...${RESET}"
 	@ENV=prod cmake --build $(BUILD_DIR) --target server
 
+# Default database path if config.yaml is not found
+DB_PATH ?= build/db/pickleicious.db
+MIGRATIONS_DIR := ./internal/db/migrations
+
+# Database tasks
+.PHONY: db-migrate-up
+db-migrate-up:
+	@echo "${GREEN}Running database migrations...${RESET}"
+	@echo "DB_PATH: $(DB_PATH)"
+	@echo "MIGRATIONS_DIR: $(MIGRATIONS_DIR)"
+	@go run cmd/tools/dbmigrate/main.go \
+		-command up \
+		-db $(DB_PATH) \
+		-migrations $(MIGRATIONS_DIR)
 
 # Help target
 help:

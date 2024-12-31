@@ -3,27 +3,14 @@ package members
 
 templ MemberForm() {
     <style>
-        .htmx-indicator{
+        .htmx-indicator {
             display: none;
         }
-        .htmx-request .htmx-indicator{
-            display: block;
-        }
-        .htmx-request.htmx-indicator{
+        .htmx-request .htmx-indicator {
             display: block;
         }
     </style>
-    <script>
-        document.addEventListener('htmx:beforeRequest', function(evt) {
-            display: none;
-        }
-        .htmx-request .htmx-indicator{
-            display: block;
-        }
-        .htmx-request.htmx-indicator{
-            display: block;
-        }
-    </style>
+
     <script>
         document.addEventListener('htmx:beforeRequest', function(evt) {
             console.log('Sending request...', evt.detail);
@@ -34,7 +21,80 @@ templ MemberForm() {
         document.addEventListener('htmx:error', function(evt) {
             console.error('Request error:', evt.detail);
         });
+
+        // Camera handling functions
+        let mediaStream = null;
+
+        async function startCamera() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const preview = document.getElementById('camera-preview');
+                const video = document.createElement('video');
+                video.srcObject = mediaStream;
+                video.autoplay = true;
+                video.classList.add('rounded-full', 'w-32', 'h-32', 'object-cover');
+                
+                // Replace the "No photo" placeholder with the video
+                preview.innerHTML = '';
+                preview.appendChild(video);
+                
+                // Show capture button, hide start and retake buttons
+                document.getElementById('start-camera').classList.add('hidden');
+                document.getElementById('retake-photo').classList.add('hidden');
+                document.getElementById('capture-photo').classList.remove('hidden');
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Could not access camera. Please make sure you have granted camera permissions.');
+            }
+        }
+
+        function capturePhoto() {
+            if (!mediaStream) return;
+            
+            const video = document.querySelector('#camera-preview video');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw the video frame to canvas
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Convert to base64 and store in hidden input
+            const photoData = canvas.toDataURL('image/jpeg');
+            document.getElementById('photo-data').value = photoData;
+            
+            // Display the captured photo
+            const img = document.createElement('img');
+            img.src = photoData;
+            img.classList.add('rounded-full', 'w-32', 'h-32', 'object-cover');
+            
+            const preview = document.getElementById('camera-preview');
+            preview.innerHTML = '';
+            preview.appendChild(img);
+            
+            // Stop the camera stream
+            stopCamera();
+            
+            // Hide capture button, show retake button
+            document.getElementById('capture-photo').classList.add('hidden');
+            document.getElementById('retake-photo').classList.remove('hidden');
+        }
+
+        function stopCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+        }
+
+        // Clean up camera when form is unloaded
+        document.addEventListener('htmx:beforeCleanupElement', function(evt) {
+            if (evt.target.matches('form')) {
+                stopCamera();
+            }
+        });
     </script>
+
     <div class="bg-white p-6 rounded-lg shadow">
         <div id="submit-indicator" class="htmx-indicator">
             <div class="flex items-center justify-center">
@@ -51,6 +111,40 @@ templ MemberForm() {
             hx-on::before-request="console.log('Sending request...')"
             class="space-y-6">
             
+            <!-- Photo capture section -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Photo</label>
+                <div class="flex items-start space-x-4">
+                    <div id="camera-preview" class="w-32 h-32 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-gray-400">No photo</span>
+                    </div>
+                    <div class="flex flex-col space-y-2">
+                        <button
+                            id="start-camera"
+                            type="button"
+                            onclick="startCamera()"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Start Camera
+                        </button>
+                        <button
+                            id="capture-photo"
+                            type="button"
+                            onclick="capturePhoto()"
+                            class="hidden px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            Take Photo
+                        </button>
+                        <button
+                            id="retake-photo"
+                            type="button"
+                            onclick="startCamera()"
+                            class="hidden px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
+                            Retake Photo
+                        </button>
+                        <input type="hidden" id="photo-data" name="photo_data">
+                    </div>
+                </div>
+            </div>
+
             <!-- Name Fields -->
             <div class="grid grid-cols-2 gap-4">
                 <div>

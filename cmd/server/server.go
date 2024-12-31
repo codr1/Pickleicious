@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -76,9 +77,37 @@ func registerRoutes(mux *http.ServeMux) {
 		}
 	})
 	mux.HandleFunc("/api/v1/members/search", members.HandleMemberSearch)
-	mux.HandleFunc("/api/v1/members/", members.HandleMemberDetail)
 	mux.HandleFunc("/api/v1/members/new", members.HandleNewMemberForm)
 	mux.HandleFunc("/api/v1/members/billing", members.HandleMemberBilling)
+
+	// Add photo endpoint
+	mux.HandleFunc("/api/v1/members/photo/", members.HandleMemberPhoto)
+
+	// Member detail routes with different HTTP methods
+	mux.HandleFunc("/api/v1/members/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimSuffix(r.URL.Path, "/")
+
+		// Log the incoming request for debugging
+		log.Debug().
+			Str("method", r.Method).
+			Str("path", path).
+			Msg("Member detail request")
+
+		switch r.Method {
+		case http.MethodGet:
+			if strings.HasSuffix(path, "/edit") {
+				members.HandleEditMemberForm(w, r)
+			} else {
+				members.HandleMemberDetail(w, r)
+			}
+		case http.MethodPut:
+			members.HandleUpdateMember(w, r)
+		case http.MethodDelete:
+			members.HandleDeleteMember(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)
