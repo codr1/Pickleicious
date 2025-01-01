@@ -6,7 +6,7 @@ import (
     "strings"
 )
 
-templ MebersLayout() {
+templ MembersLayout() {
     <div class="flex h-[calc(100vh-4rem)]">
         <!-- Left side: Member list -->
         <div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
@@ -64,25 +64,6 @@ templ MebersLayout() {
     </div>
 }
 
-type Member struct {
-    ID            int
-    FirstName     string
-    LastName      string
-    Email         string
-    Phone         string
-    PhotoURL      string
-    Status        string
-    HasPhoto      bool
-    StreetAddress string
-    City          string
-    State         string
-    PostalCode    string
-    DateOfBirth   string    // Store as YYYY-MM-DD format
-    WaiverSigned  bool
-    CardLastFour  string
-    CardType      string
-}
-
 templ MembersList(members []Member) {
     for _, member := range members {
         <div 
@@ -90,23 +71,9 @@ templ MembersList(members []Member) {
             hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)}
             hx-target="#member-detail">
             <div class="flex items-center">
-                if member.PhotoURL != "" {
-                    <div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 mr-4">
-                        <img 
-                            src={member.PhotoURL} 
-                            alt={member.FirstName} 
-                            class="w-full h-full object-cover rounded-full"
-                        />
-                    </div>
-                } else {
-                    <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-4">
-                        <span class="text-gray-500 font-medium">
-                            {string(member.FirstName[0])}{string(member.LastName[0])}
-                        </span>
-                    </div>
-                }
+                @MemberPhoto(member, "w-10 h-10 mr-3")
                 <div>
-                    <h3 class="font-medium text-gray-900">{member.FirstName} {member.LastName}</h3>
+                    <p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
                     <p class="text-sm text-gray-500">{member.Email}</p>
                 </div>
             </div>
@@ -157,21 +124,7 @@ templ MemberDetail(member Member) {
                 <div class="grid grid-cols-2 gap-6">
                     <div class="col-span-2">
                         <div class="flex items-center">
-                            if member.PhotoURL != "" {
-                                <div class="w-20 h-20 rounded-full overflow-hidden flex-shrink-0 mr-6">
-                                    <img 
-                                        src={member.PhotoURL} 
-                                        alt={member.FirstName} 
-                                        class="w-full h-full object-cover rounded-full"
-                                    />
-                                </div>
-                            } else {
-                                <div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mr-6">
-                                    <span class="text-gray-500 text-xl font-medium">
-                                        {string(member.FirstName[0])}{string(member.LastName[0])}
-                                    </span>
-                                </div>
-                            }
+                            @MemberPhoto(member, "w-20 h-20 mr-6")
                             <div>
                                 <h4 class="font-bold text-gray-900 text-xl">{member.FirstName} {member.LastName}</h4>
                                 <p class="text-gray-600">{member.Email}</p>

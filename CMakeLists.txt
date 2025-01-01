@@ -77,7 +77,7 @@ add_custom_target(server
         CONFIG_PATH=${CONFIG_DIR}/app.yaml
         ${GO_EXECUTABLE} build -o ${BINARY_DIR}/server ./cmd/server
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    DEPENDS generate_templ tailwind
+    DEPENDS generate_templ tailwind static_assets
     COMMENT "Building server binary for ${ENV} environment"
 )
 
@@ -88,24 +88,8 @@ add_custom_target(dev
         CONFIG_PATH=${CONFIG_DIR}/app.yaml
         ${GO_EXECUTABLE} run ./cmd/server/...
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    DEPENDS generate_templ tailwind
+    DEPENDS generate_templ tailwind static_assets db_migrate_up generate_sqlc
     COMMENT "Running development server in ${ENV} environment"
-)
-
-# Watch mode targets
-add_custom_target(watch_templ
-    COMMAND templ generate --watch
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Watching and generating Templ templates"
-)
-
-add_custom_target(watch_tailwind
-    COMMAND tailwindcss 
-        -i ./web/styles/main.css 
-        -o ${BINARY_DIR}/static/css/main.css 
-        --watch
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Watching and building Tailwind CSS"
 )
 
 # Development target that runs everything in parallel
@@ -113,24 +97,29 @@ add_custom_target(dev_watch
     COMMAND ${CMAKE_COMMAND} -E env 
         APP_ENV=${ENV}
         CONFIG_PATH=${CONFIG_DIR}/app.yaml
-        ${CMAKE_COMMAND} -E copy_directory 
-        ${CMAKE_SOURCE_DIR}/web/static 
+        ${CMAKE_COMMAND} -E make_directory ${BINARY_DIR}/static/css
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+        ${CMAKE_SOURCE_DIR}/web/static
         ${BINARY_DIR}/static
-    COMMAND ${CMAKE_COMMAND} -E echo "Starting development server with file watching..."
-    COMMAND ${CMAKE_COMMAND} -E echo "Use Ctrl+C to stop all processes"
-    COMMAND ${CMAKE_SOURCE_DIR}/scripts/dev_watch.sh
+    # Start Tailwind watcher
+    COMMAND tailwindcss 
+        -i ${CMAKE_SOURCE_DIR}/web/styles/input.css 
+        -o ${BINARY_DIR}/static/css/main.css 
+        --watch &
+    # Start Templ watcher
+    COMMAND templ generate --watch &
+    # Start Air for Go hot reloading
+    COMMAND ${GO_EXECUTABLE} run github.com/air-verse/air@latest -c ${CMAKE_SOURCE_DIR}/.air.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    DEPENDS generate_templ tailwind
+    DEPENDS generate_templ tailwind static_assets db_migrate_up generate_sqlc
     COMMENT "Running development server with file watching"
 )
 
-add_custom_target(static-assets
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/static/js
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/internal/static/js
-        ${CMAKE_BINARY_DIR}/static/js
+# Add this after the existing directory creation
+add_custom_target(static_assets
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${BINARY_DIR}/static
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+        ${CMAKE_SOURCE_DIR}/web/static
+        ${BINARY_DIR}/static
+    COMMENT "Copying static assets"
 )
-
-# Make sure static assets are copied before server builds
-add_dependencies(server static-assets)
-add_dependencies(dev static-assets)

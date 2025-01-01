@@ -148,3 +148,23 @@ SET photo_url = @photo_url,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id;
 
+-- name: GetMemberByEmail :one
+SELECT * FROM members 
+WHERE email = @email 
+  AND email IS NOT NULL 
+LIMIT 1;
+
+-- name: RestoreMember :one
+UPDATE members
+SET status = 'active',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+RETURNING *;
+
+-- name: UpdateMemberEmail :one
+UPDATE members
+SET email = @email,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+RETURNING *;
+

@@ -169,32 +169,6 @@ dev/fast:
 .PHONY : dev/fast
 
 #=============================================================================
-# Target rules for targets named watch_templ
-
-# Build rule for target.
-watch_templ: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 watch_templ
-.PHONY : watch_templ
-
-# fast build rule for target.
-watch_templ/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/watch_templ.dir/build.make CMakeFiles/watch_templ.dir/build
-.PHONY : watch_templ/fast
-
-#=============================================================================
-# Target rules for targets named watch_tailwind
-
-# Build rule for target.
-watch_tailwind: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 watch_tailwind
-.PHONY : watch_tailwind
-
-# fast build rule for target.
-watch_tailwind/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/watch_tailwind.dir/build.make CMakeFiles/watch_tailwind.dir/build
-.PHONY : watch_tailwind/fast
-
-#=============================================================================
 # Target rules for targets named dev_watch
 
 # Build rule for target.
@@ -208,17 +182,17 @@ dev_watch/fast:
 .PHONY : dev_watch/fast
 
 #=============================================================================
-# Target rules for targets named static-assets
+# Target rules for targets named static_assets
 
 # Build rule for target.
-static-assets: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 static-assets
-.PHONY : static-assets
+static_assets: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 static_assets
+.PHONY : static_assets
 
 # fast build rule for target.
-static-assets/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/static-assets.dir/build.make CMakeFiles/static-assets.dir/build
-.PHONY : static-assets/fast
+static_assets/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/static_assets.dir/build.make CMakeFiles/static_assets.dir/build
+.PHONY : static_assets/fast
 
 #=============================================================================
 # Target rules for targets named dbmigrate
@@ -328,12 +302,10 @@ help:
 	@echo "... generate_sqlc"
 	@echo "... generate_templ"
 	@echo "... server"
-	@echo "... static-assets"
+	@echo "... static_assets"
 	@echo "... tailwind"
 	@echo "... testdata"
 	@echo "... tools"
-	@echo "... watch_tailwind"
-	@echo "... watch_templ"
 .PHONY : help
 
 

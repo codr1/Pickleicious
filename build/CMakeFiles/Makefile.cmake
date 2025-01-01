@@ -12,10 +12,13 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/Users/vess/dev/Pickleicious/cmake/env/dev.cmake"
   "/Users/vess/dev/Pickleicious/config/app.yaml.in"
   "/Users/vess/dev/Pickleicious/tools/CMakeLists.txt"
+  "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeDetermineSystem.cmake"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeGenericSystem.cmake"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeInitializeConfigs.cmake"
+  "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeSystem.cmake.in"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeSystemSpecificInformation.cmake"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeSystemSpecificInitialize.cmake"
+  "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/CMakeUnixFindMake.cmake"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/Platform/Darwin-Initialize.cmake"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/Platform/Darwin.cmake"
   "/opt/homebrew/Cellar/cmake/3.30.2/share/cmake/Modules/Platform/UnixPaths.cmake"
@@ -29,6 +32,7 @@ set(CMAKE_MAKEFILE_OUTPUTS
 
 # Byproducts of CMake generate step:
 set(CMAKE_MAKEFILE_PRODUCTS
+  "CMakeFiles/3.30.2/CMakeSystem.cmake"
   "bin/config/app.yaml"
   "CMakeFiles/CMakeDirectoryInformation.cmake"
   "tools/CMakeFiles/CMakeDirectoryInformation.cmake"
@@ -40,10 +44,8 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/tailwind.dir/DependInfo.cmake"
   "CMakeFiles/server.dir/DependInfo.cmake"
   "CMakeFiles/dev.dir/DependInfo.cmake"
-  "CMakeFiles/watch_templ.dir/DependInfo.cmake"
-  "CMakeFiles/watch_tailwind.dir/DependInfo.cmake"
   "CMakeFiles/dev_watch.dir/DependInfo.cmake"
-  "CMakeFiles/static-assets.dir/DependInfo.cmake"
+  "CMakeFiles/static_assets.dir/DependInfo.cmake"
   "tools/CMakeFiles/dbmigrate.dir/DependInfo.cmake"
   "tools/CMakeFiles/testdata.dir/DependInfo.cmake"
   "tools/CMakeFiles/generate_sqlc.dir/DependInfo.cmake"

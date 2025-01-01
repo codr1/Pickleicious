@@ -1,0 +1,42 @@
+package members
+
+import (
+    "fmt"
+    "net/url"
+)
+
+templ RestorePrompt(member Member, newData url.Values) {
+    <div class="bg-white p-6 rounded-lg shadow">
+        <h2 class="text-xl font-semibold mb-4">Existing Member Found</h2>
+        <p class="mb-4">
+            A deleted member account exists with this email address. Would you like to:
+        </p>
+        <div class="space-y-4">
+            <button
+                class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg"
+                hx-post="/api/v1/members/restore"
+                hx-target="#member-detail"
+                hx-swap="innerHTML"
+                hx-vals={`{"restore": "true", "old_id": "` + fmt.Sprint(member.ID) + `"}`}>
+                Restore Previous Account
+            </button>
+            <button
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                hx-post="/api/v1/members/restore"
+                hx-target="#member-detail"
+                hx-vals={`{
+                    "restore": "false", 
+                    "old_id": "` + fmt.Sprint(member.ID) + `",
+                    "old_email": "` + member.Email + `"
+                }`}>
+                Create New Account
+            </button>
+            <button
+                class="w-full px-4 py-2 mt-4 text-gray-700 hover:bg-gray-100 rounded-lg"
+                hx-get="/api/v1/members/new"
+                hx-target="#member-detail">
+                Cancel
+            </button>
+        </div>
+    </div>
+} 

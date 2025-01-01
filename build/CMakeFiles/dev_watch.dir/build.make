@@ -68,10 +68,11 @@ include CMakeFiles/dev_watch.dir/progress.make
 
 CMakeFiles/dev_watch:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/vess/dev/Pickleicious/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Running development server with file watching"
-	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E env APP_ENV=dev CONFIG_PATH=/Users/vess/dev/Pickleicious/build/bin/config/app.yaml /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E copy_directory /Users/vess/dev/Pickleicious/web/static /Users/vess/dev/Pickleicious/build/bin/static
-	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E echo Starting\ development\ server\ with\ file\ watching...
-	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E echo Use\ Ctrl+C\ to\ stop\ all\ processes
-	cd /Users/vess/dev/Pickleicious && /Users/vess/dev/Pickleicious/scripts/dev_watch.sh
+	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E env APP_ENV=dev CONFIG_PATH=/Users/vess/dev/Pickleicious/build/bin/config/app.yaml /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E make_directory /Users/vess/dev/Pickleicious/build/bin/static/css
+	cd /Users/vess/dev/Pickleicious && /opt/homebrew/Cellar/cmake/3.30.2/bin/cmake -E copy_directory /Users/vess/dev/Pickleicious/web/static /Users/vess/dev/Pickleicious/build/bin/static
+	cd /Users/vess/dev/Pickleicious && tailwindcss -i /Users/vess/dev/Pickleicious/web/styles/input.css -o /Users/vess/dev/Pickleicious/build/bin/static/css/main.css --watch &
+	cd /Users/vess/dev/Pickleicious && templ generate --watch &
+	cd /Users/vess/dev/Pickleicious && /opt/homebrew/bin/go run github.com/air-verse/air@latest -c /Users/vess/dev/Pickleicious/.air.toml
 
 dev_watch: CMakeFiles/dev_watch
 dev_watch: CMakeFiles/dev_watch.dir/build.make

@@ -10,9 +10,22 @@ GREEN  := $(shell tput setaf 2)
 YELLOW := $(shell tput setaf 3)
 RESET  := $(shell tput sgr0)
 
+# Add to top of Makefile
+REQUIRED_TOOLS := air templ tailwindcss sqlc
+
+.PHONY: install-tools
+install-tools:
+	@echo "$(GREEN)Installing required development tools...$(RESET)"
+	@go install github.com/air-verse/air@latest
+	@go install github.com/a-h/templ/cmd/templ@latest
+	@go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	@if ! command -v tailwindcss >/dev/null 2>&1; then \
+		echo "Installing tailwindcss..."; \
+		npm install -g tailwindcss; \
+	fi
 
 # TODO: START HERE !
-.PHONY: all build clean dev test tools help db-setup db-migrate db-reset generate-sqlc static-assets
+.PHONY: all build clean dev test tools help db-setup db-migrate db-reset generate-sqlc static-assets dev_watch
 
 # Default target
 all: build
@@ -50,8 +63,9 @@ tools: $(BUILD_DIR)/Makefile
 	@cmake --build $(BUILD_DIR) --target tools
 
 # Development with file watching
-watch: $(BUILD_DIR)/Makefile
+dev_watch: $(BUILD_DIR)/Makefile
 	@echo "$(GREEN)Starting development server with file watching...$(RESET)"
+	@cmake --build $(BUILD_DIR) --target db_migrate_up generate_sqlc
 	@cmake --build $(BUILD_DIR) --target dev_watch
 
 # Generate templates only
@@ -113,11 +127,15 @@ db-migrate-up:
 		-db $(DB_PATH) \
 		-migrations $(MIGRATIONS_DIR)
 
-# Copy static assets to build directory
-static-assets:
+# Add new target
+static-assets: $(BUILD_DIR)/Makefile
 	@echo "$(GREEN)Copying static assets...$(RESET)"
-	@mkdir -p $(BUILD_DIR)/bin/static/js
-	@cp -r internal/static/* $(BUILD_DIR)/bin/static/
+	@cmake --build $(BUILD_DIR) --target static_assets
+
+# Add new target
+dev-watch: $(BUILD_DIR)/Makefile
+	@echo "$(GREEN)Starting development server with file watching...$(RESET)"
+	@cmake --build $(BUILD_DIR) --target dev_watch
 
 # Help target
 help:
@@ -132,6 +150,7 @@ help:
 	@echo "  make db-reset      - Wipes database and runs all migrations fresh"
 	@echo "  make generate_sqlc - Generates Go code from SQL queries using sqlc"
 	@echo "  make clean         - Clean build artifacts"
+	@echo "  make dev-watch     - Run development server with file watching"
 	@echo ""
 	@echo "Configuration:"
 	@echo "  make ENV=prod      - Build for production"

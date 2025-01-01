@@ -123,4 +123,14 @@ func registerRoutes(mux *http.ServeMux) {
 			Msg("Static file request")
 		http.StripPrefix("/static/", fs).ServeHTTP(w, r)
 	}))
+
+	// Add this new route for member restoration
+	mux.HandleFunc("/api/v1/members/restore", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			members.HandleRestoreDecision(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 }

@@ -17,19 +17,7 @@ import (
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/members"
 )
 
-// MemberView represents a member for template rendering
-type MemberView struct {
-	ID        int
-	FirstName string
-	LastName  string
-	Email     string
-	Phone     string
-	HasPhoto  bool
-	PhotoURL  string
-	Status    string
-}
-
-// Add this struct for form handling
+// Remove the CreateMemberRequest struct if you want to use Member for both
 type CreateMemberRequest struct {
 	FirstName     string    `json:"first_name"`
 	LastName      string    `json:"last_name"`
@@ -80,13 +68,13 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 			Email:     m.Email.String,
 			Phone:     m.Phone.String,
 			HasPhoto:  m.PhotoID.Valid,
-			PhotoURL:  getPhotoURL(m.ID, m.PhotoID.Valid),
+			PhotoUrl:  getPhotoURL(m.ID, m.PhotoID.Valid),
 			Status:    m.Status,
 		}
 	}
 
 	// Render the layout template
-	component := membertempl.MebersLayout()
+	component := membertempl.MembersLayout()
 	err = component.Render(r.Context(), w)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to render members layout")
@@ -132,7 +120,7 @@ func HandleMembersList(w http.ResponseWriter, r *http.Request) {
 			Email:     m.Email.String,
 			Phone:     m.Phone.String,
 			HasPhoto:  m.PhotoID.Valid,
-			PhotoURL:  getPhotoURL(m.ID, m.PhotoID.Valid),
+			PhotoUrl:  getPhotoURL(m.ID, m.PhotoID.Valid),
 			Status:    m.Status,
 		}
 	}
@@ -158,9 +146,9 @@ func HandleMemberSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templateMembers := make([]MemberView, len(searchResults))
+	templateMembers := make([]membertempl.Member, len(searchResults))
 	for i, m := range searchResults {
-		templateMembers[i] = MemberView{
+		templateMembers[i] = membertempl.Member{
 			ID:        int(m.ID),
 			FirstName: m.FirstName,
 			LastName:  m.LastName,
@@ -180,7 +168,7 @@ func HandleMemberSearch(w http.ResponseWriter, r *http.Request) {
 			Email:     m.Email,
 			Phone:     m.Phone,
 			HasPhoto:  m.HasPhoto,
-			PhotoURL:  m.PhotoURL,
+			PhotoUrl:  m.PhotoUrl,
 			Status:    m.Status,
 		}
 	}
@@ -407,7 +395,7 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		WaiverSigned:  member.WaiverSigned,
 		Status:        member.Status,
 		HasPhoto:      member.PhotoUrl.Valid,
-		PhotoURL:      member.PhotoUrl.String,
+		PhotoUrl:      member.PhotoUrl.String,
 	}
 
 	component := membertempl.MemberDetail(templMember)
@@ -440,9 +428,26 @@ func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 
 	member, err := queries.GetMemberByID(r.Context(), int64(id))
 	if err != nil {
+		logger := log.Ctx(r.Context())
+		logger.Error().Err(err).Int("id", id).Msg("Failed to fetch member")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Add debug logging
+	logger := log.Ctx(r.Context())
+	logger.Debug().
+		Interface("db_member", member).
+		Msg("Raw database member data")
+
+	// Log each field conversion
+	templMember := membertempl.Member{
+		ID: int(member.ID),
+	}
+	logger.Debug().
+		Int("template_id", templMember.ID).
+		Int64("db_id", member.ID).
+		Msg("Converting member ID")
 
 	// Generate photo URL if member has a photo
 	photoURL := ""
@@ -457,7 +462,7 @@ func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 		Email:         member.Email.String,
 		Phone:         member.Phone.String,
 		HasPhoto:      member.PhotoID.Valid,
-		PhotoURL:      photoURL,
+		PhotoUrl:      photoURL,
 		Status:        member.Status,
 		StreetAddress: member.StreetAddress.String,
 		City:          member.City.String,
@@ -508,6 +513,28 @@ func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
 // 5. SQLite (which is our main engine at present) does not have a DATE type, so it's stored as TEXT
 func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+
+	email := r.FormValue("email")
+	existingMember, err := queries.GetMemberByEmail(r.Context(), sql.NullString{String: email, Valid: true})
+
+	if err == nil && existingMember.Status == "deleted" {
+		// Convert db member to template member
+		templMember := membertempl.Member{
+			ID:        int(existingMember.ID),
+			FirstName: existingMember.FirstName,
+			LastName:  existingMember.LastName,
+			Email:     existingMember.Email.String,
+			Phone:     existingMember.Phone.String,
+			Status:    existingMember.Status,
+			HasPhoto:  existingMember.PhotoUrl.Valid,
+			PhotoUrl:  existingMember.PhotoUrl.String,
+		}
+		// Found deleted member with same email
+		component := membertempl.RestorePrompt(templMember, r.Form)
+		component.Render(r.Context(), w)
+		return
+	}
+
 	requestID := r.Context().Value("request_id").(string)
 
 	logger.Info().
@@ -634,7 +661,7 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		Phone:         member.Phone.String,
 		Status:        member.Status,
 		HasPhoto:      member.PhotoUrl.Valid,
-		PhotoURL:      member.PhotoUrl.String,
+		PhotoUrl:      member.PhotoUrl.String,
 		StreetAddress: member.StreetAddress.String,
 		City:          member.City.String,
 		State:         member.State.String,
@@ -693,4 +720,64 @@ func getPhotoURL(id int64, hasPhoto bool) string {
 		return fmt.Sprintf("/api/v1/members/photo/%d", id)
 	}
 	return ""
+}
+
+func HandleRestoreDecision(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	restore := r.FormValue("restore") == "true"
+	oldID, _ := strconv.ParseInt(r.FormValue("old_id"), 10, 64)
+
+	if restore {
+		// Restore the old account
+		member, err := queries.RestoreMember(r.Context(), oldID)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to restore member")
+			http.Error(w, "Failed to restore member", http.StatusInternalServerError)
+			return
+		}
+
+		// Set the HX-Trigger header to refresh the members list
+		w.Header().Set("HX-Trigger", "refreshMembersList")
+
+		// Convert to template Member struct and render...
+		templMember := membertempl.Member{
+			ID:            int(member.ID),
+			FirstName:     member.FirstName,
+			LastName:      member.LastName,
+			Email:         member.Email.String,
+			Phone:         member.Phone.String,
+			StreetAddress: member.StreetAddress.String,
+			City:          member.City.String,
+			State:         member.State.String,
+			PostalCode:    member.PostalCode.String,
+			DateOfBirth:   member.DateOfBirth,
+			WaiverSigned:  member.WaiverSigned,
+			Status:        member.Status,
+			HasPhoto:      member.PhotoUrl.Valid,
+			PhotoUrl:      member.PhotoUrl.String,
+		}
+
+		// Render the detail view
+		component := membertempl.MemberDetail(templMember)
+		component.Render(r.Context(), w)
+		return
+	} else {
+		// Update old account email and create new one
+		oldEmail := r.FormValue("old_email")
+		newEmail := fmt.Sprintf("%d___%s", oldID, oldEmail)
+
+		_, err := queries.UpdateMemberEmail(r.Context(), dbgen.UpdateMemberEmailParams{
+			ID:    oldID,
+			Email: sql.NullString{String: newEmail, Valid: true},
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to update old member email")
+			http.Error(w, "Failed to update old member email", http.StatusInternalServerError)
+			return
+		}
+
+		// Continue with creating new member...
+		// [Your existing creation code]
+	}
 }

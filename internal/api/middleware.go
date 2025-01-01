@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,10 +42,14 @@ func WithRecovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Error().
+				logger := log.Ctx(r.Context())
+				// Log the full stack trace
+				stack := debug.Stack()
+				logger.Error().
 					Interface("error", err).
-					Str("request_id", r.Context().Value("request_id").(string)).
+					Str("stack", string(stack)).
 					Msg("Panic recovered")
+
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()

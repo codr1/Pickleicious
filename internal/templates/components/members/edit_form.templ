@@ -45,22 +45,7 @@ templ EditMemberForm(member Member) {
         <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">Photo</label>
             <div class="flex items-start space-x-4">
-                <div id="camera-preview" class="w-32 h-32 bg-gray-100 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
-                    if member.ID > 0 && member.HasPhoto {
-                        <img 
-                            src={fmt.Sprintf("/api/v1/members/photo/%d", member.ID)}
-                            alt={member.FirstName} 
-                            class="w-full h-full object-cover"
-                            id="existing-photo"
-                        />
-                    } else {
-                        <div class="w-full h-full rounded-full bg-gray-200 flex items-center justify-center">
-                            <span class="text-gray-500 text-xl font-medium">
-                                {string(member.FirstName[0])}{string(member.LastName[0])}
-                            </span>
-                        </div>
-                    }
-                </div>
+                @MemberPhotoEdit(member)
                 <div class="flex flex-col space-y-2">
                     <button
                         id="start-camera"
