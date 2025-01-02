@@ -45,6 +45,7 @@ logs/
 
 # Generated code
 *_templ.go
+*_templ.txt
 /internal/db/generated/
 /web/static/css/main.css
 

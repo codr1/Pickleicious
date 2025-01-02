@@ -23,4 +23,5 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 )

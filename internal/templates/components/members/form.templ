@@ -46,8 +46,8 @@ templ MemberForm(member Member) {
                             type="button"
                             onclick="startCamera()"
                             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                            if member.PhotoUrl != "" {
-                                Change Photo
+                            if member.HasPhoto() {
+                                <img src={member.PhotoUrl()} class="w-32 h-32 object-cover rounded-full"/>
                             } else {
                                 Add Photo
                             }

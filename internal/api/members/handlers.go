@@ -4,37 +4,31 @@ package members
 import (
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/time/rate"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/members"
 )
 
-// Remove the CreateMemberRequest struct if you want to use Member for both
-type CreateMemberRequest struct {
-	FirstName     string    `json:"first_name"`
-	LastName      string    `json:"last_name"`
-	Email         string    `json:"email"`
-	Phone         string    `json:"phone"`
-	StreetAddress string    `json:"street_address"`
-	City          string    `json:"city"`
-	State         string    `json:"state"`
-	PostalCode    string    `json:"postal_code"`
-	DateOfBirth   time.Time `json:"date_of_birth"` // Format: YYYY-MM-DD
-	WaiverSigned  bool      `json:"waiver_signed"`
-}
-
 var queries *dbgen.Queries
+
+var (
+	limiter      *rate.Limiter
+	ipLimiters   = make(map[string]*rate.Limiter)
+	ipLimitersMu sync.Mutex
+)
 
 func InitHandlers(q *dbgen.Queries) {
 	queries = q
+	limiter = rate.NewLimiter(rate.Limit(10000), 1000)
 }
 
 func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
@@ -54,27 +48,16 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch initial members list")
-		http.Error(w, "Failed to fetch members", http.StatusInternalServerError)
+		http.Error(w, "An error occurred", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert database members to template members
-	templMembers := make([]membertempl.Member, len(members))
-	for i, m := range members {
-		templMembers[i] = membertempl.Member{
-			ID:        int(m.ID),
-			FirstName: m.FirstName,
-			LastName:  m.LastName,
-			Email:     m.Email.String,
-			Phone:     m.Phone.String,
-			HasPhoto:  m.PhotoID.Valid,
-			PhotoUrl:  getPhotoURL(m.ID, m.PhotoID.Valid),
-			Status:    m.Status,
-		}
-	}
+	// Convert to template Members
+	templateMembers := membertempl.NewMembers(members)
 
-	// Render the layout template
-	component := membertempl.MembersLayout()
+	// Render the layout template with members
+	component := membertempl.MembersLayout(templateMembers)
+
 	err = component.Render(r.Context(), w)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to render members layout")
@@ -86,94 +69,78 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 func HandleMembersList(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
-	if queries == nil {
-		logger.Error().Msg("Database queries not initialized")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	// Parse pagination parameters
+	limit, err := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+	if err != nil || limit <= 0 {
+		limit = 25 // default limit
 	}
 
-	limit := 25 // Default limit
-	offset := 0
-
-	logger.Debug().
-		Int("limit", limit).
-		Int("offset", offset).
-		Msg("Fetching members list")
+	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
+	if err != nil {
+		offset = 0 // default offset
+	}
 
 	members, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
-		Limit:      int64(limit),
-		Offset:     int64(offset),
-		SearchTerm: "", // Empty search string
+		Limit:      limit,
+		Offset:     offset,
+		SearchTerm: sql.NullString{String: "", Valid: false},
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logger.Error().Err(err).Msg("Failed to fetch members")
+		http.Error(w, "Failed to fetch members", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert database members directly to template members
-	templMembers := make([]membertempl.Member, len(members))
-	for i, m := range members {
-		templMembers[i] = membertempl.Member{
-			ID:        int(m.ID),
-			FirstName: m.FirstName,
-			LastName:  m.LastName,
-			Email:     m.Email.String,
-			Phone:     m.Phone.String,
-			HasPhoto:  m.PhotoID.Valid,
-			PhotoUrl:  getPhotoURL(m.ID, m.PhotoID.Valid),
-			Status:    m.Status,
-		}
-	}
+	// Convert to template Members
+	templateMembers := membertempl.NewMembers(members)
 
-	component := membertempl.MembersList(templMembers)
-	component.Render(r.Context(), w)
+	// Render the members list
+	component := membertempl.MembersList(templateMembers)
+	err = component.Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render members list")
+		http.Error(w, "Failed to render members list", http.StatusInternalServerError)
+		return
+	}
 }
 
 func HandleMemberSearch(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("search")
-	if len(query) < 3 {
-		HandleMembersList(w, r)
-		return
+	logger := log.Ctx(r.Context())
+	searchTerm := r.URL.Query().Get("q")
+
+	// Parse pagination parameters
+	limit, err := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+	if err != nil || limit <= 0 {
+		limit = 25 // default limit
 	}
 
-	searchResults, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
-		Limit:      int64(25),
-		Offset:     0,
-		SearchTerm: query,
+	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
+	if err != nil {
+		offset = 0 // default offset
+	}
+
+	members, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
+		Limit:      limit,
+		Offset:     offset,
+		SearchTerm: sql.NullString{String: searchTerm, Valid: true},
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logger.Error().Err(err).Msg("Failed to search members")
+		http.Error(w, "Failed to search members", http.StatusInternalServerError)
 		return
 	}
 
-	templateMembers := make([]membertempl.Member, len(searchResults))
-	for i, m := range searchResults {
-		templateMembers[i] = membertempl.Member{
-			ID:        int(m.ID),
-			FirstName: m.FirstName,
-			LastName:  m.LastName,
-			Email:     m.Email.String,
-			Phone:     m.Phone.String,
-			HasPhoto:  m.PhotoID.Valid,
-		}
-	}
+	// Convert to template Members
+	templateMembers := membertempl.NewMembers(members)
 
-	// Convert MemberView to members.Member
-	templMembers := make([]membertempl.Member, len(templateMembers))
-	for i, m := range templateMembers {
-		templMembers[i] = membertempl.Member{
-			ID:        m.ID,
-			FirstName: m.FirstName,
-			LastName:  m.LastName,
-			Email:     m.Email,
-			Phone:     m.Phone,
-			HasPhoto:  m.HasPhoto,
-			PhotoUrl:  m.PhotoUrl,
-			Status:    m.Status,
-		}
+	// Render the members list
+	component := membertempl.MembersList(templateMembers)
+	err = component.Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render members list")
+		http.Error(w, "Failed to render members list", http.StatusInternalServerError)
+		return
 	}
-	component := membertempl.MembersList(templMembers)
-	component.Render(r.Context(), w)
 }
 
 func HandleDeleteMember(w http.ResponseWriter, r *http.Request) {
@@ -258,23 +225,10 @@ func HandleEditMemberForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to template Member struct
-	templMember := membertempl.Member{
-		ID:            int(member.ID),
-		FirstName:     member.FirstName,
-		LastName:      member.LastName,
-		Email:         member.Email.String,
-		Phone:         member.Phone.String,
-		StreetAddress: member.StreetAddress.String,
-		City:          member.City.String,
-		State:         member.State.String,
-		PostalCode:    member.PostalCode.String,
-		DateOfBirth:   member.DateOfBirth,
-		WaiverSigned:  member.WaiverSigned,
-		Status:        member.Status,
-	}
+	// Convert to template Member
+	templMember := membertempl.NewMember(toListMembersRow(member))
 
-	// Render the edit form
+	// Render the edit form instead of detail view
 	component := membertempl.EditMemberForm(templMember)
 	component.Render(r.Context(), w)
 }
@@ -282,42 +236,24 @@ func HandleEditMemberForm(w http.ResponseWriter, r *http.Request) {
 func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
-	// Parse form data
-	if err := r.ParseForm(); err != nil {
-		logger.Error().Err(err).Msg("Failed to parse form")
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
-		return
-	}
-
-	// Extract ID from URL path
-	path := strings.TrimSuffix(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) == 0 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-
-	idStr := parts[len(parts)-1]
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	// Get the member ID from the URL
+	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
+	id, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid member ID", http.StatusBadRequest)
 		return
 	}
 
-	// Parse date of birth
-	dobStr := r.FormValue("date_of_birth")
-	dob, err := time.Parse("2006-01-02", dobStr)
+	// Get the existing member first
+	existingMember, err := queries.GetMemberByID(r.Context(), id)
 	if err != nil {
-		logger.Error().
-			Err(err).
-			Str("dob_input", dobStr).
-			Msg("Failed to parse date of birth")
-		http.Error(w, "Invalid date format", http.StatusBadRequest)
+		logger.Error().Err(err).Msg("Failed to fetch existing member")
+		http.Error(w, "Failed to fetch existing member", http.StatusInternalServerError)
 		return
 	}
 
-	// Create update params
-	updateParams := dbgen.UpdateMemberParams{
+	// Update only the fields that were provided
+	member, err := queries.UpdateMember(r.Context(), dbgen.UpdateMemberParams{
 		ID:            id,
 		FirstName:     r.FormValue("first_name"),
 		LastName:      r.FormValue("last_name"),
@@ -327,48 +263,45 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		City:          sql.NullString{String: r.FormValue("city"), Valid: true},
 		State:         sql.NullString{String: r.FormValue("state"), Valid: true},
 		PostalCode:    sql.NullString{String: r.FormValue("postal_code"), Valid: true},
-		Status:        "active",
-		DateOfBirth:   dob,
-		WaiverSigned:  r.FormValue("waiver_signed") == "on",
-	}
-
-	// Update the member
-	member, err := queries.UpdateMember(r.Context(), updateParams)
+		Status:        existingMember.Status,
+		DateOfBirth:   existingMember.DateOfBirth,
+		WaiverSigned:  existingMember.WaiverSigned,
+	})
 	if err != nil {
-		logger.Error().Err(err).Interface("params", updateParams).Msg("Failed to update member")
+		logger.Error().Err(err).Msg("Failed to update member")
 		http.Error(w, "Failed to update member", http.StatusInternalServerError)
 		return
 	}
 
 	// Process photo if present
-	photoData := r.FormValue("photo_data")
-	if photoData != "" {
-		// Remove data URL prefix
-		photoBytes := photoData[strings.IndexByte(photoData, ',')+1:]
-		decoded, err := base64.StdEncoding.DecodeString(photoBytes)
+	if photoData := r.FormValue("photo_data"); photoData != "" {
+		// Decode base64 photo data
+		photoBytes, err := base64.StdEncoding.DecodeString(strings.Split(photoData, ",")[1])
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to decode photo data")
-			http.Error(w, "Invalid photo data", http.StatusBadRequest)
+			http.Error(w, "Failed to process photo", http.StatusInternalServerError)
 			return
 		}
 
-		// Store photo in database
+		// Get the member ID from our existing member
+		memberRow := toListMembersRow(member)
+
 		_, err = queries.SaveMemberPhoto(r.Context(), dbgen.SaveMemberPhotoParams{
-			MemberID:    member.ID,
-			Data:        decoded,
+			MemberID:    memberRow.ID,
+			Data:        photoBytes,
 			ContentType: "image/jpeg",
-			Size:        int64(len(decoded)),
+			Size:        int64(len(photoBytes)),
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to store photo")
-			http.Error(w, "Failed to store photo", http.StatusInternalServerError)
+			logger.Error().Err(err).Msg("Failed to save photo")
+			http.Error(w, "Failed to save photo", http.StatusInternalServerError)
 			return
 		}
 
-		// Update member's photo ID in the members table
+		// Update the photo URL in the member record
 		err = queries.UpdateMemberPhotoID(r.Context(), dbgen.UpdateMemberPhotoIDParams{
-			ID:       member.ID,
-			PhotoUrl: sql.NullString{String: getPhotoURL(member.ID, true), Valid: true},
+			ID:       memberRow.ID,
+			PhotoUrl: sql.NullString{String: getPhotoURL(memberRow.ID, true), Valid: true},
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to update member's photo ID")
@@ -376,30 +309,30 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update member's photo URL
-		member.PhotoUrl = sql.NullString{String: getPhotoURL(member.ID, true), Valid: true}
-	}
+		// Fetch the updated member to get all fields
+		memberResult, err := queries.GetMemberByID(r.Context(), memberRow.ID)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch updated member")
+			http.Error(w, "Failed to fetch updated member", http.StatusInternalServerError)
+			return
+		}
+		listMemberRow := toListMembersRow(memberResult)
+		templMember := membertempl.NewMember(listMemberRow)
 
-	// Convert to template Member struct and render detail view
-	templMember := membertempl.Member{
-		ID:            int(member.ID),
-		FirstName:     member.FirstName,
-		LastName:      member.LastName,
-		Email:         member.Email.String,
-		Phone:         member.Phone.String,
-		StreetAddress: member.StreetAddress.String,
-		City:          member.City.String,
-		State:         member.State.String,
-		PostalCode:    member.PostalCode.String,
-		DateOfBirth:   member.DateOfBirth,
-		WaiverSigned:  member.WaiverSigned,
-		Status:        member.Status,
-		HasPhoto:      member.PhotoUrl.Valid,
-		PhotoUrl:      member.PhotoUrl.String,
-	}
+		// Set headers for HTMX
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("HX-Trigger", "refreshMembersList")
+		w.Header().Set("HX-Retarget", "#member-detail")
+		w.Header().Set("HX-Reswap", "innerHTML")
 
-	component := membertempl.MemberDetail(templMember)
-	component.Render(r.Context(), w)
+		// Render response
+		err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to render member detail")
+			http.Error(w, "Failed to render response", http.StatusInternalServerError)
+			return
+		}
+	}
 }
 
 func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
@@ -420,88 +353,90 @@ func HandleMemberDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := parts[len(parts)-1]
-	id, err := strconv.Atoi(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid member ID", http.StatusBadRequest)
 		return
 	}
 
-	member, err := queries.GetMemberByID(r.Context(), int64(id))
+	member, err := queries.GetMemberByID(r.Context(), id)
 	if err != nil {
 		logger := log.Ctx(r.Context())
-		logger.Error().Err(err).Int("id", id).Msg("Failed to fetch member")
+		logger.Error().Err(err).Int64("id", id).Msg("Failed to fetch member")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Add debug logging
-	logger := log.Ctx(r.Context())
-	logger.Debug().
-		Interface("db_member", member).
-		Msg("Raw database member data")
+	// No conversion needed as GetMemberByID now returns ListMembersRow
+	templMember := membertempl.NewMember(toListMembersRow(member))
 
-	// Log each field conversion
-	templMember := membertempl.Member{
-		ID: int(member.ID),
-	}
-	logger.Debug().
-		Int("template_id", templMember.ID).
-		Int64("db_id", member.ID).
-		Msg("Converting member ID")
-
-	// Generate photo URL if member has a photo
-	photoURL := ""
-	if member.PhotoID.Valid {
-		photoURL = fmt.Sprintf("/api/v1/members/photo/%d", member.ID)
-	}
-
-	component := membertempl.MemberDetail(membertempl.Member{
-		ID:            int(member.ID),
-		FirstName:     member.FirstName,
-		LastName:      member.LastName,
-		Email:         member.Email.String,
-		Phone:         member.Phone.String,
-		HasPhoto:      member.PhotoID.Valid,
-		PhotoUrl:      photoURL,
-		Status:        member.Status,
-		StreetAddress: member.StreetAddress.String,
-		City:          member.City.String,
-		State:         member.State.String,
-		PostalCode:    member.PostalCode.String,
-		DateOfBirth:   member.DateOfBirth,
-		WaiverSigned:  member.WaiverSigned,
-		CardLastFour:  member.CardLastFour.String,
-		CardType:      member.CardType.String,
-	})
+	// Render the detail view
+	component := membertempl.MemberDetail(templMember)
 	component.Render(r.Context(), w)
 }
 
 func HandleMemberBilling(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(strings.Split(r.URL.Path, "/")[3])
+	logger := log.Ctx(r.Context())
+
+	// Extract member ID from URL path
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 5 {
+		http.Error(w, "Invalid billing URL", http.StatusBadRequest)
+		return
+	}
+
+	memberID, err := strconv.ParseInt(parts[len(parts)-2], 10, 64) // Use len-2 to skip "billing"
 	if err != nil {
 		http.Error(w, "Invalid member ID", http.StatusBadRequest)
 		return
 	}
 
-	member, err := queries.GetMemberByID(r.Context(), int64(id))
+	// Fetch billing info
+	billing, err := queries.GetMemberBilling(r.Context(), memberID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err == sql.ErrNoRows {
+			// No billing info is not an error
+			return
+		}
+		logger.Error().Err(err).Int64("member_id", memberID).Msg("Failed to fetch billing info")
+		http.Error(w, "Failed to fetch billing info", http.StatusInternalServerError)
 		return
 	}
 
-	// TODO: Create billing info template component
-	billing := map[string]interface{}{
-		"cardType": member.CardType.String,
-		"lastFour": member.CardLastFour.String,
+	// Render the billing component
+	err = membertempl.BillingInfo(billing).Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render billing info")
+		http.Error(w, "Failed to render billing info", http.StatusInternalServerError)
+		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(billing)
 }
 
 func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
 	component := membertempl.MemberForm(membertempl.Member{})
 	component.Render(r.Context(), w)
+}
+
+// validateMemberInput checks for basic input validation and sanitization
+func validateMemberInput(r *http.Request) error {
+	email := r.FormValue("email")
+	if !strings.Contains(email, "@") || len(email) > 254 {
+		return fmt.Errorf("invalid email format")
+	}
+
+	// Basic phone validation
+	phone := r.FormValue("phone")
+	if len(phone) < 10 || len(phone) > 20 {
+		return fmt.Errorf("invalid phone format")
+	}
+
+	// Validate postal code
+	postalCode := r.FormValue("postal_code")
+	if len(postalCode) < 5 || len(postalCode) > 10 {
+		return fmt.Errorf("invalid postal code")
+	}
+
+	return nil
 }
 
 // HandleCreateMember handles new member creation
@@ -514,69 +449,17 @@ func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
 func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
-	email := r.FormValue("email")
-	existingMember, err := queries.GetMemberByEmail(r.Context(), sql.NullString{String: email, Valid: true})
-
-	if err == nil && existingMember.Status == "deleted" {
-		// Convert db member to template member
-		templMember := membertempl.Member{
-			ID:        int(existingMember.ID),
-			FirstName: existingMember.FirstName,
-			LastName:  existingMember.LastName,
-			Email:     existingMember.Email.String,
-			Phone:     existingMember.Phone.String,
-			Status:    existingMember.Status,
-			HasPhoto:  existingMember.PhotoUrl.Valid,
-			PhotoUrl:  existingMember.PhotoUrl.String,
-		}
-		// Found deleted member with same email
-		component := membertempl.RestorePrompt(templMember, r.Form)
-		component.Render(r.Context(), w)
+	if err := validateMemberInput(r); err != nil {
+		logger.Error().Err(err).Msg("Invalid input data")
+		http.Error(w, "Invalid input data", http.StatusBadRequest)
 		return
 	}
 
-	requestID := r.Context().Value("request_id").(string)
-
-	logger.Info().
-		Str("request_id", requestID).
-		Str("method", r.Method).
-		Str("content_type", r.Header.Get("Content-Type")).
-		Msg("Member creation request received")
-
-	if err := r.ParseForm(); err != nil {
-		logger.Error().Err(err).Msg("Failed to parse form")
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
-		return
-	}
-
-	// Log all form values
-	formData := make(map[string]string)
-	for key, values := range r.Form {
-		if len(values) > 0 {
-			formData[key] = values[0]
-		}
-	}
-
-	logger.Info().
-		Str("request_id", requestID).
-		Interface("form_data", formData).
-		Msg("Processing member creation")
-
-	// Log the form values
-	log.Info().
-		Str("request_id", requestID).
-		Str("first_name", r.FormValue("first_name")).
-		Str("last_name", r.FormValue("last_name")).
-		Str("email", r.FormValue("email")).
-		Str("date_of_birth", r.FormValue("date_of_birth")).
-		Str("waiver_signed", r.FormValue("waiver_signed")).
-		Msg("Received form data")
-
-	// Parse date of birth from YYYY-MM-DD format
+	// Parse date of birth
 	dobStr := r.FormValue("date_of_birth")
 	dob, err := time.Parse("2006-01-02", dobStr)
 	if err != nil {
-		log.Error().Err(err).Str("dob", dobStr).Msg("Invalid date format")
+		logger.Error().Err(err).Str("dob", dobStr).Msg("Invalid date format")
 		http.Error(w, "Invalid date format: must be YYYY-MM-DD", http.StatusBadRequest)
 		return
 	}
@@ -588,8 +471,8 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create member first
-	createParams := dbgen.CreateMemberParams{
+	// Create member and get ID
+	memberID, err := queries.CreateMember(r.Context(), dbgen.CreateMemberParams{
 		FirstName:     r.FormValue("first_name"),
 		LastName:      r.FormValue("last_name"),
 		Email:         sql.NullString{String: r.FormValue("email"), Valid: true},
@@ -601,18 +484,23 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		Status:        "active",
 		DateOfBirth:   dob,
 		WaiverSigned:  r.FormValue("waiver_signed") == "on",
-	}
-
-	member, err := queries.CreateMember(r.Context(), createParams)
+	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create member")
 		http.Error(w, "Failed to create member", http.StatusInternalServerError)
 		return
 	}
 
-	// Then process photo if present
-	photoData := r.FormValue("photo_data")
-	if photoData != "" {
+	// Fetch the complete member record
+	member, err := queries.GetMemberByID(r.Context(), memberID)
+	if err != nil {
+		logger.Error().Err(err).Int64("id", memberID).Msg("Failed to fetch created member")
+		http.Error(w, "Failed to fetch created member", http.StatusInternalServerError)
+		return
+	}
+
+	// Process photo if present
+	if photoData := r.FormValue("photo_data"); photoData != "" {
 		// Remove data URL prefix
 		photoBytes := photoData[strings.IndexByte(photoData, ',')+1:]
 		decoded, err := base64.StdEncoding.DecodeString(photoBytes)
@@ -623,8 +511,9 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Store photo in database
+		memberRow := toListMembersRow(member)
 		_, err = queries.SaveMemberPhoto(r.Context(), dbgen.SaveMemberPhotoParams{
-			MemberID:    member.ID,
+			MemberID:    memberRow.ID,
 			Data:        decoded,
 			ContentType: "image/jpeg",
 			Size:        int64(len(decoded)),
@@ -635,10 +524,10 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update member's photo ID in the members table
+		// Update member's photo ID
 		err = queries.UpdateMemberPhotoID(r.Context(), dbgen.UpdateMemberPhotoIDParams{
-			ID:       member.ID,
-			PhotoUrl: sql.NullString{String: getPhotoURL(member.ID, true), Valid: true},
+			ID:       memberRow.ID,
+			PhotoUrl: sql.NullString{String: getPhotoURL(memberRow.ID, true), Valid: true},
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to update member's photo ID")
@@ -646,42 +535,29 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update member's photo URL
-		member.PhotoUrl = sql.NullString{String: getPhotoURL(member.ID, true), Valid: true}
-	}
+		// Fetch the updated member to get all fields
+		memberResult, err := queries.GetMemberByID(r.Context(), memberRow.ID)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch updated member")
+			http.Error(w, "Failed to fetch updated member", http.StatusInternalServerError)
+			return
+		}
+		listMemberRow := toListMembersRow(memberResult)
+		templMember := membertempl.NewMember(listMemberRow)
 
-	log.Info().Interface("member", member).Msg("Member created successfully")
+		// Set headers
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("HX-Trigger", "refreshMembersList")
+		w.Header().Set("HX-Retarget", "#member-detail")
+		w.Header().Set("HX-Reswap", "innerHTML")
 
-	// Convert to template Member struct
-	templMember := membertempl.Member{
-		ID:            int(member.ID),
-		FirstName:     member.FirstName,
-		LastName:      member.LastName,
-		Email:         member.Email.String,
-		Phone:         member.Phone.String,
-		Status:        member.Status,
-		HasPhoto:      member.PhotoUrl.Valid,
-		PhotoUrl:      member.PhotoUrl.String,
-		StreetAddress: member.StreetAddress.String,
-		City:          member.City.String,
-		State:         member.State.String,
-		PostalCode:    member.PostalCode.String,
-		DateOfBirth:   member.DateOfBirth,
-		WaiverSigned:  member.WaiverSigned,
-	}
-
-	// Set headers before writing response
-	w.Header().Set("Content-Type", "text/html")
-	w.Header().Set("HX-Trigger", "refreshMembersList")
-	w.Header().Set("HX-Retarget", "#member-detail")
-	w.Header().Set("HX-Reswap", "innerHTML")
-
-	// Render the member detail view
-	err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to render member detail")
-		http.Error(w, "Failed to render response", http.StatusInternalServerError)
-		return
+		// Render response
+		err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to render member detail")
+			http.Error(w, "Failed to render response", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -729,36 +605,28 @@ func HandleRestoreDecision(w http.ResponseWriter, r *http.Request) {
 	oldID, _ := strconv.ParseInt(r.FormValue("old_id"), 10, 64)
 
 	if restore {
-		// Restore the old account
-		member, err := queries.RestoreMember(r.Context(), oldID)
+		// First restore the member
+		err := queries.RestoreMember(r.Context(), oldID)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to restore member")
 			http.Error(w, "Failed to restore member", http.StatusInternalServerError)
 			return
 		}
 
-		// Set the HX-Trigger header to refresh the members list
-		w.Header().Set("HX-Trigger", "refreshMembersList")
-
-		// Convert to template Member struct and render...
-		templMember := membertempl.Member{
-			ID:            int(member.ID),
-			FirstName:     member.FirstName,
-			LastName:      member.LastName,
-			Email:         member.Email.String,
-			Phone:         member.Phone.String,
-			StreetAddress: member.StreetAddress.String,
-			City:          member.City.String,
-			State:         member.State.String,
-			PostalCode:    member.PostalCode.String,
-			DateOfBirth:   member.DateOfBirth,
-			WaiverSigned:  member.WaiverSigned,
-			Status:        member.Status,
-			HasPhoto:      member.PhotoUrl.Valid,
-			PhotoUrl:      member.PhotoUrl.String,
+		// Then fetch the restored member
+		member, err := queries.GetRestoredMember(r.Context(), oldID)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch restored member")
+			http.Error(w, "Failed to fetch restored member", http.StatusInternalServerError)
+			return
 		}
 
-		// Render the detail view
+		// Set HTMX headers for UI updates
+		w.Header().Set("HX-Trigger", "refreshMembersList")
+		w.Header().Set("HX-Retarget", "#member-detail")
+		w.Header().Set("HX-Reswap", "innerHTML")
+
+		templMember := membertempl.NewMember(toListMembersRow(member))
 		component := membertempl.MemberDetail(templMember)
 		component.Render(r.Context(), w)
 		return
@@ -779,5 +647,34 @@ func HandleRestoreDecision(w http.ResponseWriter, r *http.Request) {
 
 		// Continue with creating new member...
 		// [Your existing creation code]
+	}
+}
+
+// toListMembersRow converts any member-like struct to ListMembersRow
+func toListMembersRow(member interface{}) dbgen.ListMembersRow {
+	switch m := member.(type) {
+	case dbgen.ListMembersRow:
+		return m
+	case dbgen.GetMemberByIDRow:
+		// Explicit field mapping since direct conversion isn't allowed
+		return dbgen.ListMembersRow{
+			ID:            m.ID,
+			FirstName:     m.FirstName,
+			LastName:      m.LastName,
+			Email:         m.Email,
+			Phone:         m.Phone,
+			StreetAddress: m.StreetAddress,
+			City:          m.City,
+			State:         m.State,
+			PostalCode:    m.PostalCode,
+			Status:        m.Status,
+			DateOfBirth:   m.DateOfBirth,
+			WaiverSigned:  m.WaiverSigned,
+			CreatedAt:     m.CreatedAt,
+			UpdatedAt:     m.UpdatedAt,
+			PhotoID:       m.PhotoID,
+		}
+	default:
+		panic(fmt.Sprintf("unsupported member type: %T", member))
 	}
 }

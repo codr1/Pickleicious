@@ -24,11 +24,11 @@ templ RestorePrompt(member Member, newData url.Values) {
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg"
                 hx-post="/api/v1/members/restore"
                 hx-target="#member-detail"
-                hx-vals={`{
-                    "restore": "false", 
-                    "old_id": "` + fmt.Sprint(member.ID) + `",
-                    "old_email": "` + member.Email + `"
-                }`}>
+                hx-vals={ fmt.Sprintf(`{
+                    "restore": "false",
+                    "old_id": "%d",
+                    "old_email": "%s"
+                }`, member.ID, member.EmailStr()) }>
                 Create New Account
             </button>
             <button

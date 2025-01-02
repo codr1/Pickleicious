@@ -86,6 +86,14 @@ func registerRoutes(mux *http.ServeMux) {
 	// Member detail routes
 	mux.HandleFunc("/api/v1/members/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimSuffix(r.URL.Path, "/")
+
+		// Check for billing path first
+		if strings.HasSuffix(path, "/billing") {
+			members.HandleMemberBilling(w, r)
+			return
+		}
+
+		// Handle other member routes
 		switch r.Method {
 		case http.MethodGet:
 			if strings.HasSuffix(path, "/edit") {

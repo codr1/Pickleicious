@@ -1,10 +1,10 @@
 package members
 
 templ MemberPhoto(member Member, size string) {
-	if member.PhotoUrl != "" {
+	if member.PhotoUrl() != "" {
 		<div class={size + " rounded-full overflow-hidden flex-shrink-0"}>
 			<img 
-				src={member.PhotoUrl} 
+				src={member.PhotoUrl()} 
 				alt={member.FirstName} 
 				class="w-full h-full object-cover rounded-full"
 			/>

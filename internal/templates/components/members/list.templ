@@ -6,7 +6,7 @@ import (
     "strings"
 )
 
-templ MembersLayout() {
+templ MembersLayout(members []Member) {
     <div class="flex h-[calc(100vh-4rem)]">
         <!-- Left side: Member list -->
         <div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
@@ -74,7 +74,7 @@ templ MembersList(members []Member) {
                 @MemberPhoto(member, "w-10 h-10 mr-3")
                 <div>
                     <p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
-                    <p class="text-sm text-gray-500">{member.Email}</p>
+                    <p class="text-sm text-gray-500">{member.EmailStr()}</p>
                 </div>
             </div>
         </div>
@@ -127,8 +127,8 @@ templ MemberDetail(member Member) {
                             @MemberPhoto(member, "w-20 h-20 mr-6")
                             <div>
                                 <h4 class="font-bold text-gray-900 text-xl">{member.FirstName} {member.LastName}</h4>
-                                <p class="text-gray-600">{member.Email}</p>
-                                <p class="text-gray-600">{member.Phone}</p>
+                                <p class="text-gray-600">{member.EmailStr()}</p>
+                                <p class="text-gray-600">{member.PhoneStr()}</p>
                             </div>
                         </div>
                     </div>
@@ -140,8 +140,8 @@ templ MemberDetail(member Member) {
                         </div>
                         <div>
                             <h4 class="font-bold text-gray-900">Address</h4>
-                            <p class="text-gray-600">{member.StreetAddress}</p>
-                            <p class="text-gray-600">{member.City}, {member.State} {member.PostalCode}</p>
+                            <p class="text-gray-600">{member.AddressStr()}</p>
+                            <p class="text-gray-600">{member.CityStr()}, {member.StateStr()} {member.PostalCodeStr()}</p>
                         </div>
                     </div>
 
@@ -173,17 +173,14 @@ templ MemberDetail(member Member) {
                 </div>
             </div>
 
-            if member.CardType != "" {
-                <!-- Payment Information -->
-                <div class="mb-8">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">Payment Information</h3>
-                    <div class="bg-gray-50 p-4 rounded-lg">
-                        <p class="text-gray-600">
-                            {member.CardType} ending in {member.CardLastFour}
-                        </p>
-                    </div>
+            <div 
+                id="billing-info" 
+                hx-get={fmt.Sprintf("/api/v1/members/%d/billing", member.ID)}
+                hx-trigger="load">
+                <div class="htmx-indicator">
+                    Loading billing information...
                 </div>
-            }
+            </div>
         </div>
     </div>
 }

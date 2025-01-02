@@ -77,6 +77,8 @@ templ EditMemberForm(member Member) {
             hx-put={fmt.Sprintf("/api/v1/members/%d", member.ID)}
             hx-target="#member-detail"
             hx-indicator="#submit-indicator"
+            hx-trigger="submit"
+            hx-on::after-request="htmx.trigger('#members-list', 'refreshMembersList')"
             class="space-y-6">
             
             <!-- Name Fields -->
@@ -119,7 +121,7 @@ templ EditMemberForm(member Member) {
                             id="email" 
                             name="email" 
                             required 
-                            value={member.Email}
+                            value={member.EmailStr()}
                             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
@@ -130,7 +132,7 @@ templ EditMemberForm(member Member) {
                             id="phone" 
                             name="phone" 
                             required 
-                            value={member.Phone}
+                            value={member.PhoneStr()}
                             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
@@ -195,7 +197,7 @@ templ EditMemberForm(member Member) {
                         id="street_address" 
                         name="street_address" 
                         required 
-                        value={member.StreetAddress}
+                        value={member.AddressStr()}
                         class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                 </div>
@@ -207,7 +209,7 @@ templ EditMemberForm(member Member) {
                             id="city" 
                             name="city" 
                             required 
-                            value={member.City}
+                            value={member.CityStr()}
                             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
@@ -218,7 +220,7 @@ templ EditMemberForm(member Member) {
                             id="state" 
                             name="state" 
                             required 
-                            value={member.State}
+                            value={member.StateStr()}
                             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
@@ -229,7 +231,7 @@ templ EditMemberForm(member Member) {
                             id="postal_code" 
                             name="postal_code" 
                             required 
-                            value={member.PostalCode}
+                            value={member.PostalCodeStr()}
                             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
