@@ -187,13 +187,10 @@ func HandleDeleteMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleEditMemberForm(w http.ResponseWriter, r *http.Request) {
-	//log.Info().Str("original_url", r.URL.String()).Str("path", r.URL.Path).Msg("Edit member form request received")
 
 	// Extract ID from URL path
 	path := r.URL.Path
 	parts := strings.Split(path, "/")
-
-	//log.Info().Str("path", path).Strs("parts", parts).Msg("URL parts")
 
 	// The path should be like /api/v1/members/{id}/edit
 	// So we want the second-to-last part
@@ -236,24 +233,33 @@ func HandleEditMemberForm(w http.ResponseWriter, r *http.Request) {
 func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
-	// Get the member ID from the URL
-	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
+	// Parse member ID from URL
+	parts := strings.Split(r.URL.Path, "/")
 	id, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
 	if err != nil {
+		logger.Error().Err(err).Msg("Invalid member ID")
 		http.Error(w, "Invalid member ID", http.StatusBadRequest)
 		return
 	}
 
-	// Get the existing member first
-	existingMember, err := queries.GetMemberByID(r.Context(), id)
+	// Process form data
+	err = r.ParseForm()
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch existing member")
-		http.Error(w, "Failed to fetch existing member", http.StatusInternalServerError)
+		logger.Error().Err(err).Msg("Failed to parse form")
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
-	// Update only the fields that were provided
-	member, err := queries.UpdateMember(r.Context(), dbgen.UpdateMemberParams{
+	// Debug form data
+	logger.Debug().
+		Str("first_name", r.FormValue("first_name")).
+		Str("last_name", r.FormValue("last_name")).
+		Str("photo_data_exists", fmt.Sprintf("%v", r.FormValue("photo_data") != "")).
+		Int("photo_data_length", len(r.FormValue("photo_data"))).
+		Msg("Form data received")
+
+	// First update the member details
+	err = queries.UpdateMember(r.Context(), dbgen.UpdateMemberParams{
 		ID:            id,
 		FirstName:     r.FormValue("first_name"),
 		LastName:      r.FormValue("last_name"),
@@ -263,9 +269,9 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		City:          sql.NullString{String: r.FormValue("city"), Valid: true},
 		State:         sql.NullString{String: r.FormValue("state"), Valid: true},
 		PostalCode:    sql.NullString{String: r.FormValue("postal_code"), Valid: true},
-		Status:        existingMember.Status,
-		DateOfBirth:   existingMember.DateOfBirth,
-		WaiverSigned:  existingMember.WaiverSigned,
+		Status:        r.FormValue("status"),
+		DateOfBirth:   r.FormValue("date_of_birth"),
+		WaiverSigned:  r.FormValue("waiver_signed") == "on",
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to update member")
@@ -275,63 +281,54 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 
 	// Process photo if present
 	if photoData := r.FormValue("photo_data"); photoData != "" {
-		// Decode base64 photo data
+		// Remove data URL prefix and decode
 		photoBytes, err := base64.StdEncoding.DecodeString(strings.Split(photoData, ",")[1])
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to decode photo data")
-			http.Error(w, "Failed to process photo", http.StatusInternalServerError)
+			http.Error(w, "Invalid photo data", http.StatusBadRequest)
 			return
 		}
 
-		// Get the member ID from our existing member
-		memberRow := toListMembersRow(member)
-
-		_, err = queries.SaveMemberPhoto(r.Context(), dbgen.SaveMemberPhotoParams{
-			MemberID:    memberRow.ID,
+		// Save/Update the photo and get its ID
+		photo, err := queries.UpsertPhoto(r.Context(), dbgen.UpsertPhotoParams{
+			MemberID:    id,
 			Data:        photoBytes,
 			ContentType: "image/jpeg",
 			Size:        int64(len(photoBytes)),
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to save photo")
+			logger.Error().
+				Err(err).
+				Int64("member_id", id).
+				Msg("Failed to save photo")
 			http.Error(w, "Failed to save photo", http.StatusInternalServerError)
 			return
 		}
 
-		// Update the photo URL in the member record
-		err = queries.UpdateMemberPhotoID(r.Context(), dbgen.UpdateMemberPhotoIDParams{
-			ID:       memberRow.ID,
-			PhotoUrl: sql.NullString{String: getPhotoURL(memberRow.ID, true), Valid: true},
-		})
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to update member's photo ID")
-			http.Error(w, "Failed to update member's photo ID", http.StatusInternalServerError)
-			return
-		}
+		logger.Info().Int64("photo_Vid", photo.ID).Msg("Photo saved successfully")
+	}
 
-		// Fetch the updated member to get all fields
-		memberResult, err := queries.GetMemberByID(r.Context(), memberRow.ID)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to fetch updated member")
-			http.Error(w, "Failed to fetch updated member", http.StatusInternalServerError)
-			return
-		}
-		listMemberRow := toListMembersRow(memberResult)
-		templMember := membertempl.NewMember(listMemberRow)
+	// Get the updated member with photo info
+	member, err := queries.GetMemberByID(r.Context(), id)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch updated member")
+		http.Error(w, "Failed to fetch updated member", http.StatusInternalServerError)
+		return
+	}
 
-		// Set headers for HTMX
-		w.Header().Set("Content-Type", "text/html")
-		w.Header().Set("HX-Trigger", "refreshMembersList")
-		w.Header().Set("HX-Retarget", "#member-detail")
-		w.Header().Set("HX-Reswap", "innerHTML")
+	// Set headers and render response
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("HX-Trigger", "refreshMembersList")
+	w.Header().Set("HX-Retarget", "#member-detail")
+	w.Header().Set("HX-Reswap", "innerHTML")
 
-		// Render response
-		err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to render member detail")
-			http.Error(w, "Failed to render response", http.StatusInternalServerError)
-			return
-		}
+	templMember := membertempl.NewMember(toListMembersRow(member))
+	// Render response
+	err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render member detail")
+		http.Error(w, "Failed to render response", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -450,7 +447,7 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
 	if err := validateMemberInput(r); err != nil {
-		logger.Error().Err(err).Msg("Invalid input data")
+		log.Error().Err(err).Msg("Invalid input data")
 		http.Error(w, "Invalid input data", http.StatusBadRequest)
 		return
 	}
@@ -502,8 +499,7 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 	// Process photo if present
 	if photoData := r.FormValue("photo_data"); photoData != "" {
 		// Remove data URL prefix
-		photoBytes := photoData[strings.IndexByte(photoData, ',')+1:]
-		decoded, err := base64.StdEncoding.DecodeString(photoBytes)
+		photoBytes, err := base64.StdEncoding.DecodeString(strings.Split(photoData, ",")[1])
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to decode photo data")
 			http.Error(w, "Invalid photo data", http.StatusBadRequest)
@@ -511,53 +507,46 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Store photo in database
-		memberRow := toListMembersRow(member)
-		_, err = queries.SaveMemberPhoto(r.Context(), dbgen.SaveMemberPhotoParams{
-			MemberID:    memberRow.ID,
-			Data:        decoded,
+		photo, err := queries.UpsertPhoto(r.Context(), dbgen.UpsertPhotoParams{
+
+			MemberID:    member.ID,
+			Data:        photoBytes,
 			ContentType: "image/jpeg",
-			Size:        int64(len(decoded)),
+			Size:        int64(len(photoBytes)),
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to store photo")
-			http.Error(w, "Failed to store photo", http.StatusInternalServerError)
+			logger.Error().
+				Err(err).
+				Int64("member_id", memberID).
+				Msg("Failed to save photo")
+			http.Error(w, "Failed to save photo", http.StatusInternalServerError)
 			return
 		}
 
-		// Update member's photo ID
-		err = queries.UpdateMemberPhotoID(r.Context(), dbgen.UpdateMemberPhotoIDParams{
-			ID:       memberRow.ID,
-			PhotoUrl: sql.NullString{String: getPhotoURL(memberRow.ID, true), Valid: true},
-		})
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to update member's photo ID")
-			http.Error(w, "Failed to update member's photo ID", http.StatusInternalServerError)
-			return
-		}
+		logger.Info().Int64("photo_Vid", photo.ID).Msg("Photo saved successfully")
+	}
 
-		// Fetch the updated member to get all fields
-		memberResult, err := queries.GetMemberByID(r.Context(), memberRow.ID)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to fetch updated member")
-			http.Error(w, "Failed to fetch updated member", http.StatusInternalServerError)
-			return
-		}
-		listMemberRow := toListMembersRow(memberResult)
-		templMember := membertempl.NewMember(listMemberRow)
+	// Get the updated member with photo info
+	memberResult, err := queries.GetMemberByID(r.Context(), member.ID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch updated member")
+		http.Error(w, "Failed to fetch updated member", http.StatusInternalServerError)
+		return
+	}
 
-		// Set headers
-		w.Header().Set("Content-Type", "text/html")
-		w.Header().Set("HX-Trigger", "refreshMembersList")
-		w.Header().Set("HX-Retarget", "#member-detail")
-		w.Header().Set("HX-Reswap", "innerHTML")
+	// Set headers and render response
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("HX-Trigger", "refreshMembersList")
+	w.Header().Set("HX-Retarget", "#member-detail")
+	w.Header().Set("HX-Reswap", "innerHTML")
 
-		// Render response
-		err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to render member detail")
-			http.Error(w, "Failed to render response", http.StatusInternalServerError)
-			return
-		}
+	templMember := membertempl.NewMember(toListMembersRow(memberResult))
+	// Render response
+	err = membertempl.MemberDetail(templMember).Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render member detail")
+		http.Error(w, "Failed to render response", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -589,13 +578,6 @@ func HandleMemberPhoto(w http.ResponseWriter, r *http.Request) {
 	// Set content type and serve photo
 	w.Header().Set("Content-Type", photo.ContentType)
 	w.Write(photo.Data)
-}
-
-func getPhotoURL(id int64, hasPhoto bool) string {
-	if hasPhoto {
-		return fmt.Sprintf("/api/v1/members/photo/%d", id)
-	}
-	return ""
 }
 
 func HandleRestoreDecision(w http.ResponseWriter, r *http.Request) {

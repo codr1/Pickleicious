@@ -81,7 +81,7 @@ SET status = 'deleted',
 WHERE id = @id;
 
 
--- name: UpdateMember :one
+-- name: UpdateMember :exec
 UPDATE members
 SET first_name = @first_name,
     last_name = @last_name,
@@ -95,10 +95,9 @@ SET first_name = @first_name,
     date_of_birth = strftime('%Y-%m-%d', @date_of_birth),
     waiver_signed = @waiver_signed,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = @id
-RETURNING *;
+WHERE id = @id;
 
--- Get the full member data after update
+-- name: GetUpdatedMember :one
 SELECT 
     m.*,
     p.id as photo_id,
@@ -113,15 +112,7 @@ LEFT JOIN member_photos p ON p.member_id = m.id
 LEFT JOIN member_billing mb ON mb.member_id = m.id
 WHERE m.id = @id;
 
--- name: SaveMemberPhoto :one
-INSERT INTO member_photos (member_id, data, content_type, size)
-VALUES (@member_id, @data, @content_type, @size)
-ON CONFLICT(member_id) DO UPDATE SET
-    data = excluded.data,
-    content_type = excluded.content_type,
-    size = excluded.size,
-    updated_at = CURRENT_TIMESTAMP
-RETURNING id;
+
 
 -- name: GetMemberPhoto :one
 SELECT data, content_type 
@@ -157,12 +148,6 @@ WHERE id = @id;
 
 -- name: DeletePhoto :exec
 DELETE FROM member_photos
-WHERE id = @id;
-
--- name: UpdateMemberPhotoID :exec
-UPDATE members
-SET photo_url = @photo_url,
-    updated_at = CURRENT_TIMESTAMP
 WHERE id = @id;
 
 -- name: GetMemberByEmail :one
@@ -225,11 +210,11 @@ FROM member_billing
 WHERE member_id = @member_id;
 
 -- name: UpsertPhoto :one
-INSERT INTO member_photos (member_id, data, content_type)
-VALUES (@member_id, @data, @content_type)
+INSERT INTO member_photos (member_id, data, content_type, size)
+VALUES (@member_id, @data, @content_type, @size)
 ON CONFLICT(member_id) DO UPDATE SET
     data = excluded.data,
     content_type = excluded.content_type,
+    size = excluded.size,
     updated_at = CURRENT_TIMESTAMP
 RETURNING *;
-
