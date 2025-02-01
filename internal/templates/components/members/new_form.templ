@@ -1,11 +1,11 @@
-// internal/templates/components/members/form.templ
+// internal/templates/components/members/add_form.templ
 package members
 
 import (
     "fmt"
 )
 
-templ MemberForm(member Member) {
+templ NewMemberForm(member Member) {
     <style>
         .htmx-indicator {
             display: none;
@@ -16,6 +16,7 @@ templ MemberForm(member Member) {
     </style>
 
     <script src="/static/js/camera.js"></script>
+    <script src="/static/js/members.js"></script>
 
     <div class="bg-white p-6 rounded-lg shadow">
         <div id="submit-indicator" class="htmx-indicator">
@@ -33,6 +34,22 @@ templ MemberForm(member Member) {
             }
             hx-target="#member-detail"
             hx-indicator="#submit-indicator"
+            hx-swap="none"
+            hx-on::before-request="alert('Sending Waiver')"
+            hx-on::response-error="
+                if(event.detail.xhr.status === 409) {
+                    event.detail.shouldSwap = false;
+                    handleDuplicateEmail(event.detail.xhr.response);
+                    return false;
+                } else {
+                  console.log('Error occurred on Save', event.detail);
+                }"
+            hx-on::after-response="
+                if(event.detail.xhr.status === 200) {
+                  htmx.trigger('#members-list', 'refreshMembersList');
+                } else {
+                  console.log('Did we successfully fail?', event.detail);
+                }"
             class="space-y-6">
             
             <!-- Photo capture section -->
@@ -176,26 +193,12 @@ templ MemberForm(member Member) {
                 </div>
             </div>
 
-            <!-- Waiver -->
-            <div class="flex items-center space-x-2">
-                <input 
-                    type="checkbox" 
-                    id="waiver_signed" 
-                    name="waiver_signed" 
-                    required 
-                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label for="waiver_signed" class="text-sm font-medium text-gray-700">
-                    I confirm that the member has signed the waiver
-                </label>
-            </div>
-
             <!-- Submit Button -->
             <div class="flex justify-end space-x-3">
                 <button
                     type="button"
                     class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-                    onclick="clearForm()">
+                    hx-get="/api/v1/members">
                     Cancel
                 </button>
                 <button

@@ -46,6 +46,18 @@ FROM members m
 LEFT JOIN member_photos mp ON mp.member_id = m.id
 WHERE m.id = @id AND m.status != 'deleted';
 
+
+-- name: GetMemberByEmail :one
+SELECT * FROM members 
+WHERE email = @email AND deleted_at IS NULL
+LIMIT 1;
+
+-- name: GetMemberByEmailIncludeDeleted :one
+SELECT * FROM members 
+WHERE email = @email 
+  AND email IS NOT NULL 
+LIMIT 1;
+
 -- name: CreateMember :execlastid
 INSERT INTO members (
     first_name, last_name, email, phone,
@@ -149,12 +161,6 @@ WHERE id = @id;
 -- name: DeletePhoto :exec
 DELETE FROM member_photos
 WHERE id = @id;
-
--- name: GetMemberByEmail :one
-SELECT * FROM members 
-WHERE email = @email 
-  AND email IS NOT NULL 
-LIMIT 1;
 
 -- name: RestoreMember :exec
 UPDATE members

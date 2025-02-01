@@ -166,6 +166,21 @@ templ MemberDetail(member Member) {
                             </p>
                         </div>
                         <div>
+                            <h4 class="font-bold text-gray-900">Membership Level</h4>
+                            <p class="text-gray-600">
+                                switch member.MembershipLevel {
+                                    case 0:
+                                        <span>Unverified Guest</span>
+                                    case 1:
+                                        <span>Verified Guest</span>
+                                    case 2:
+                                        <span>Member</span>
+                                    default:
+                                        <span>Member+</span>
+                                }
+                            </p>
+                        </div>
+                        <div>
                             <h4 class="font-bold text-gray-900">Member ID</h4>
                             <p class="text-gray-600">{fmt.Sprintf("%d", member.ID)}</p>
                         </div>

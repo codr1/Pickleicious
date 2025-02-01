@@ -700,12 +700,20 @@ video {
   margin-top: 0.25rem;
 }
 
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
 .mt-4 {
   margin-top: 1rem;
 }
 
 .block {
   display: block;
+}
+
+.inline-block {
+  display: inline-block;
 }
 
 .flex {
@@ -738,10 +746,6 @@ video {
 
 .h-32 {
   height: 8rem;
-}
-
-.h-4 {
-  height: 1rem;
 }
 
 .h-5 {
@@ -786,10 +790,6 @@ video {
 
 .w-32 {
   width: 8rem;
-}
-
-.w-4 {
-  width: 1rem;
 }
 
 .w-5 {
@@ -1191,11 +1191,6 @@ video {
 
 .font-semibold {
   font-weight: 600;
-}
-
-.text-blue-600 {
-  --tw-text-opacity: 1;
-  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
 }
 
 .text-gray-400 {

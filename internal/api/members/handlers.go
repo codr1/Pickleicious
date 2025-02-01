@@ -4,6 +4,7 @@ package members
 import (
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -31,6 +32,7 @@ func InitHandlers(q *dbgen.Queries) {
 	limiter = rate.NewLimiter(rate.Limit(10000), 1000)
 }
 
+// /members
 func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -43,7 +45,7 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 	// Fetch initial members list
 	members, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
 		Limit:      25, // Default limit
-		Offset:     0,
+		Offset:     0,  // This should be passed in...
 		SearchTerm: "", // Empty search string
 	})
 	if err != nil {
@@ -271,7 +273,6 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		PostalCode:    sql.NullString{String: r.FormValue("postal_code"), Valid: true},
 		Status:        r.FormValue("status"),
 		DateOfBirth:   r.FormValue("date_of_birth"),
-		WaiverSigned:  r.FormValue("waiver_signed") == "on",
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to update member")
@@ -410,7 +411,7 @@ func HandleMemberBilling(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
-	component := membertempl.MemberForm(membertempl.Member{})
+	component := membertempl.NewMemberForm(membertempl.Member{})
 	component.Render(r.Context(), w)
 }
 
@@ -449,6 +450,23 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 	if err := validateMemberInput(r); err != nil {
 		log.Error().Err(err).Msg("Invalid input data")
 		http.Error(w, "Invalid input data", http.StatusBadRequest)
+		return
+	}
+
+	// Check if email already exists
+	email := r.FormValue("email")
+	existingMember, err := queries.GetMemberByEmailIncludeDeleted(r.Context(), sql.NullString{String: email, Valid: true})
+	if err == nil { // Member found with this email
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict) // 409 Conflict
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":     "duplicate_email",
+			"member_id": existingMember.ID,
+		})
+		return
+	} else if err != sql.ErrNoRows {
+		logger.Error().Err(err).Msg("Database error checking email")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 

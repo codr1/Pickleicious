@@ -6,26 +6,10 @@ import (
 
 templ EditMemberForm(member Member) {
     <script src="/static/js/camera.js"></script>
+    <script src="/static/js/members.js"></script>
 
     <div class="bg-white p-6 rounded-lg shadow">
-        <script>
-            // Only define if not already defined
-            if (typeof window.confirmDelete === 'undefined') {
-                window.confirmDelete = function(id, name) {
-                    if (confirm(`Are you sure you want to delete ${name}?`)) {
-                        htmx.ajax('DELETE', `/api/v1/members/${id}`, {
-                            target: '#member-detail',
-                            swap: 'outerHTML',
-                            afterSwap: function() {
-                                // Refresh the members list
-                                htmx.trigger('#members-list', 'load');
-                            }
-                        });
-                    }
-                }
-            }
-        </script>
-        
+         
         <div id="submit-indicator" class="htmx-indicator">
             <div class="flex items-center justify-center">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -47,7 +31,12 @@ templ EditMemberForm(member Member) {
             hx-target="#member-detail"
             hx-indicator="#submit-indicator"
             hx-trigger="submit"
-            hx-on::after-request="htmx.trigger('#members-list', 'refreshMembersList')"
+            hx-on::after-response="
+                if(event.detail.xhr.status === 409) {
+                    handleDuplicateEmail(event.detail.xhr.response);
+                } else if(event.detail.xhr.status === 200) {
+                    htmx.trigger('#members-list', 'refreshMembersList');
+                }"
             class="space-y-6">
             
             <!-- Photo capture -->
@@ -197,7 +186,7 @@ templ EditMemberForm(member Member) {
                 </div>
             </div>
 
-            <!-- Status Fields -->
+            <!-- Status and Waiver Fields -->
             <div class="grid grid-cols-2 gap-6">
                 <div>
                     <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
@@ -210,15 +199,22 @@ templ EditMemberForm(member Member) {
                         <option value="inactive" selected?={member.Status == "inactive"}>Inactive</option>
                     </select>
                 </div>
-                <div class="flex items-center">
-                    <input 
-                        type="checkbox" 
-                        id="waiver_signed" 
-                        name="waiver_signed"
-                        checked?={member.WaiverSigned}
-                        class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label for="waiver_signed" class="ml-2 block text-sm text-gray-900">Waiver Signed</label>
+                <div class="flex items-center space-x-4">
+                    <div>
+                        <span class="block text-sm font-medium text-gray-700">Waiver Status</span>
+                        <span class={templ.Classes(
+                            "inline-block mt-2 px-3 py-1 rounded-full text-sm",
+                            templ.KV("bg-green-100 text-green-800", member.WaiverSigned),
+                            templ.KV("bg-red-100 text-red-800", !member.WaiverSigned),
+                        )}>
+                            if member.WaiverSigned {
+                                Signed
+                            } else {
+                                Not Signed
+                            }
+                        </span>
+                    </div>
+                    
                 </div>
             </div>
 
@@ -238,6 +234,14 @@ templ EditMemberForm(member Member) {
                         class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700">
                         Save Changes
                     </button>
+                if !member.WaiverSigned {
+                    <button
+                        type="button"
+                        onclick="alert('Sending Waiver')"
+                        class="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md shadow-sm hover:bg-yellow-700">
+                        Resend Waiver
+                    </button>
+                }
                 </div>
             </div>
         </form>
