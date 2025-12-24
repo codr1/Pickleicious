@@ -75,10 +75,22 @@ func TestHandleSearch(t *testing.T) {
 	}
 
 	body := recorder.Body.String()
-	if !strings.Contains(body, "Alice") {
+	if !strings.Contains(body, "Alice Smith") {
 		t.Fatalf("expected search results to include Alice, got: %s", body)
 	}
 	if strings.Contains(body, "Bob") {
 		t.Fatalf("expected search results to exclude Bob, got: %s", body)
+	}
+
+	emptyReq := httptest.NewRequest(http.MethodGet, "/api/v1/nav/search?q=", nil)
+	emptyRecorder := httptest.NewRecorder()
+
+	HandleSearch(emptyRecorder, emptyReq)
+
+	if emptyRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected empty status: %d", emptyRecorder.Code)
+	}
+	if !strings.Contains(emptyRecorder.Body.String(), "Type to search members") {
+		t.Fatalf("expected empty search prompt, got: %s", emptyRecorder.Body.String())
 	}
 }

@@ -3,8 +3,8 @@ package nav
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/templates/components/nav"
@@ -26,14 +26,19 @@ func HandleMenuClose(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleSearch(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
-	if q == "" {
-		w.Write([]byte("[]"))
+	searchTerm := strings.TrimSpace(r.URL.Query().Get("q"))
+	var err error
+	if searchTerm == "" {
+		component := nav.SearchResults("", nil)
+		err = component.Render(r.Context(), w)
+		if err != nil {
+			http.Error(w, "Search failed", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	results, err := queries.SearchMembers(r.Context(), dbgen.SearchMembersParams{
-		SearchTerm: sql.NullString{String: q, Valid: true},
+		SearchTerm: sql.NullString{String: searchTerm, Valid: true},
 		Limit:      10,
 	})
 	if err != nil {
@@ -41,6 +46,10 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	component := nav.SearchResults(searchTerm, results)
+	err = component.Render(r.Context(), w)
+	if err != nil {
+		http.Error(w, "Search failed", http.StatusInternalServerError)
+		return
+	}
 }
