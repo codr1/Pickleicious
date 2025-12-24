@@ -4,7 +4,7 @@ package nav
 templ SearchBar() {
     <form 
         class="relative w-full"
-        hx-get="/api/v1/search"
+        hx-get="/api/v1/nav/search"
         hx-trigger="input changed delay:500ms, search"
         hx-target="#search-results">
         <input

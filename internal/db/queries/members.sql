@@ -1,100 +1,122 @@
 -- internal/db/queries/members.sql
--- We are using SQLite, so keep the SQL as simple as possible
-
+-- Queries for users who are members (is_member = 1)
+-- Uses consolidated users table
 
 -- name: ListMembers :many
-SELECT 
-    m.*,
+SELECT
+    u.*,
     p.id as photo_id,
-    mb.card_type,
-    mb.card_last_four,
-    mb.billing_address,
-    mb.billing_city,
-    mb.billing_state,
-    mb.billing_postal_code
-FROM members m
-LEFT JOIN member_photos p ON p.member_id = m.id
-LEFT JOIN member_billing mb ON mb.member_id = m.id
-WHERE m.status <> 'deleted'
+    ub.card_type,
+    ub.card_last_four,
+    ub.billing_address,
+    ub.billing_city,
+    ub.billing_state,
+    ub.billing_postal_code
+FROM users u
+LEFT JOIN user_photos p ON p.user_id = u.id
+LEFT JOIN user_billing ub ON ub.user_id = u.id
+WHERE u.is_member = 1
+    AND u.status <> 'deleted'
     AND (
-        @search_term IS NULL 
-        OR m.first_name LIKE '%' || @search_term || '%'
-        OR m.last_name LIKE '%' || @search_term || '%'
-        OR m.email LIKE '%' || @search_term || '%'
+        @search_term IS NULL
+        OR u.first_name LIKE '%' || @search_term || '%'
+        OR u.last_name LIKE '%' || @search_term || '%'
+        OR u.email LIKE '%' || @search_term || '%'
     )
-ORDER BY m.last_name, m.first_name
+ORDER BY u.last_name, u.first_name
 LIMIT @limit OFFSET @offset;
 
--- name: GetMemberByID :one
-SELECT 
-    m.id,
-    m.first_name,
-    m.last_name,
-    m.email,
-    m.phone,
-    m.street_address,
-    m.city,
-    m.state,
-    m.postal_code,
-    m.status,
-    m.date_of_birth,
-    m.waiver_signed,
-    m.created_at,
-    m.updated_at,
-    mp.id as photo_id
-FROM members m
-LEFT JOIN member_photos mp ON mp.member_id = m.id
-WHERE m.id = @id AND m.status != 'deleted';
+-- name: SearchMembers :many
+SELECT
+    u.id,
+    u.first_name,
+    u.last_name,
+    u.email
+FROM users u
+WHERE u.is_member = 1
+    AND u.status <> 'deleted'
+    AND (
+        @search_term IS NULL
+        OR u.first_name LIKE '%' || @search_term || '%'
+        OR u.last_name LIKE '%' || @search_term || '%'
+        OR u.email LIKE '%' || @search_term || '%'
+    )
+ORDER BY u.last_name, u.first_name
+LIMIT @limit;
 
+-- name: GetMemberByID :one
+SELECT
+    u.id,
+    u.first_name,
+    u.last_name,
+    u.email,
+    u.phone,
+    u.street_address,
+    u.city,
+    u.state,
+    u.postal_code,
+    u.status,
+    u.date_of_birth,
+    u.waiver_signed,
+    u.membership_level,
+    u.created_at,
+    u.updated_at,
+    up.id as photo_id
+FROM users u
+LEFT JOIN user_photos up ON up.user_id = u.id
+WHERE u.id = @id AND u.is_member = 1 AND u.status != 'deleted';
 
 -- name: GetMemberByEmail :one
-SELECT * FROM members 
-WHERE email = @email AND deleted_at IS NULL
+SELECT * FROM users
+WHERE email = @email AND is_member = 1 AND status != 'deleted'
 LIMIT 1;
 
 -- name: GetMemberByEmailIncludeDeleted :one
-SELECT * FROM members 
-WHERE email = @email 
-  AND email IS NOT NULL 
+SELECT * FROM users
+WHERE email = @email
+  AND email IS NOT NULL
+  AND is_member = 1
 LIMIT 1;
 
 -- name: CreateMember :execlastid
-INSERT INTO members (
+INSERT INTO users (
     first_name, last_name, email, phone,
-    street_address, city, state, postal_code, 
-    status, date_of_birth, waiver_signed
+    street_address, city, state, postal_code,
+    status, date_of_birth, waiver_signed,
+    is_member, membership_level
 ) VALUES (
     @first_name, @last_name, @email, @phone,
     @street_address, @city, @state, @postal_code,
-    @status, 
+    @status,
     strftime('%Y-%m-%d', @date_of_birth),
-    @waiver_signed
+    @waiver_signed,
+    1, -- is_member = true
+    @membership_level
 );
 
 -- name: GetCreatedMember :one
-SELECT 
-    m.*,
+SELECT
+    u.*,
     p.id as photo_id,
-    mb.card_type,
-    mb.card_last_four,
-    mb.billing_address,
-    mb.billing_city,
-    mb.billing_state,
-    mb.billing_postal_code
-FROM members m
-LEFT JOIN member_photos p ON p.member_id = m.id
-LEFT JOIN member_billing mb ON mb.member_id = m.id
-WHERE m.id = last_insert_rowid();
+    ub.card_type,
+    ub.card_last_four,
+    ub.billing_address,
+    ub.billing_city,
+    ub.billing_state,
+    ub.billing_postal_code
+FROM users u
+LEFT JOIN user_photos p ON p.user_id = u.id
+LEFT JOIN user_billing ub ON ub.user_id = u.id
+WHERE u.id = last_insert_rowid();
 
 -- name: DeleteMember :exec
-UPDATE members 
+UPDATE users
 SET status = 'deleted',
     updated_at = CURRENT_TIMESTAMP
-WHERE id = @id;
-
+WHERE id = @id AND is_member = 1;
 
 -- name: UpdateMember :exec
-UPDATE members
+UPDATE users
 SET first_name = @first_name,
     last_name = @last_name,
     email = @email,
@@ -106,40 +128,39 @@ SET first_name = @first_name,
     status = @status,
     date_of_birth = strftime('%Y-%m-%d', @date_of_birth),
     waiver_signed = @waiver_signed,
+    membership_level = @membership_level,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = @id;
+WHERE id = @id AND is_member = 1;
 
 -- name: GetUpdatedMember :one
-SELECT 
-    m.*,
+SELECT
+    u.*,
     p.id as photo_id,
-    mb.card_type,
-    mb.card_last_four,
-    mb.billing_address,
-    mb.billing_city,
-    mb.billing_state,
-    mb.billing_postal_code
-FROM members m
-LEFT JOIN member_photos p ON p.member_id = m.id
-LEFT JOIN member_billing mb ON mb.member_id = m.id
-WHERE m.id = @id;
-
-
+    ub.card_type,
+    ub.card_last_four,
+    ub.billing_address,
+    ub.billing_city,
+    ub.billing_state,
+    ub.billing_postal_code
+FROM users u
+LEFT JOIN user_photos p ON p.user_id = u.id
+LEFT JOIN user_billing ub ON ub.user_id = u.id
+WHERE u.id = @id;
 
 -- name: GetMemberPhoto :one
-SELECT data, content_type 
-FROM member_photos
-WHERE member_id = @member_id;
+SELECT data, content_type
+FROM user_photos
+WHERE user_id = @user_id;
 
 -- name: UpdateBillingInfo :one
-INSERT INTO member_billing (
-    member_id, card_last_four, card_type,
+INSERT INTO user_billing (
+    user_id, card_last_four, card_type,
     billing_address, billing_city, billing_state, billing_postal_code
 ) VALUES (
-    @member_id, @card_last_four, @card_type,
+    @user_id, @card_last_four, @card_type,
     @billing_address, @billing_city, @billing_state, @billing_postal_code
 )
-ON CONFLICT(member_id) DO UPDATE SET
+ON CONFLICT(user_id) DO UPDATE SET
     card_last_four = excluded.card_last_four,
     card_type = excluded.card_type,
     billing_address = excluded.billing_address,
@@ -148,77 +169,64 @@ ON CONFLICT(member_id) DO UPDATE SET
     billing_postal_code = excluded.billing_postal_code,
     updated_at = CURRENT_TIMESTAMP
 RETURNING *;
+
 -- name: CreatePhoto :one
-INSERT INTO member_photos (member_id, data, content_type, size)
-VALUES (@member_id, @data, @content_type, @size)
+INSERT INTO user_photos (user_id, data, content_type, size)
+VALUES (@user_id, @data, @content_type, @size)
 RETURNING id;
 
 -- name: GetPhoto :one
-SELECT data, content_type 
-FROM member_photos
+SELECT data, content_type
+FROM user_photos
 WHERE id = @id;
 
 -- name: DeletePhoto :exec
-DELETE FROM member_photos
+DELETE FROM user_photos
 WHERE id = @id;
 
 -- name: RestoreMember :exec
-UPDATE members
+UPDATE users
 SET status = 'active',
     updated_at = CURRENT_TIMESTAMP
-WHERE id = @id;
+WHERE id = @id AND is_member = 1;
 
 -- name: GetRestoredMember :one
-SELECT 
-    m.*,
+SELECT
+    u.*,
     p.id as photo_id,
-    mb.card_type,
-    mb.card_last_four,
-    mb.billing_address,
-    mb.billing_city,
-    mb.billing_state,
-    mb.billing_postal_code
-FROM members m
-LEFT JOIN member_photos p ON p.member_id = m.id
-LEFT JOIN member_billing mb ON mb.member_id = m.id
-WHERE m.id = @id;
+    ub.card_type,
+    ub.card_last_four,
+    ub.billing_address,
+    ub.billing_city,
+    ub.billing_state,
+    ub.billing_postal_code
+FROM users u
+LEFT JOIN user_photos p ON p.user_id = u.id
+LEFT JOIN user_billing ub ON ub.user_id = u.id
+WHERE u.id = @id;
 
 -- name: UpdateMemberEmail :one
-UPDATE members
+UPDATE users
 SET email = @email,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = @id
+WHERE id = @id AND is_member = 1
 RETURNING *;
 
-SELECT 
-    m.*,
-    p.id as photo_id,
-    mb.card_type,
-    mb.card_last_four,
-    mb.billing_address,
-    mb.billing_city,
-    mb.billing_state,
-    mb.billing_postal_code
-FROM members m
-LEFT JOIN member_photos p ON p.member_id = m.id
-LEFT JOIN member_billing mb ON mb.member_id = m.id
-WHERE m.id = @id;
-
 -- name: GetMemberBilling :one
-SELECT 
+SELECT
     card_last_four,
     card_type,
     billing_address,
     billing_city,
     billing_state,
     billing_postal_code
-FROM member_billing
-WHERE member_id = @member_id;
+FROM user_billing
+WHERE user_id = @user_id;
 
 -- name: UpsertPhoto :one
-INSERT INTO member_photos (member_id, data, content_type, size)
-VALUES (@member_id, @data, @content_type, @size)
-ON CONFLICT(member_id) DO UPDATE SET
+INSERT INTO user_photos (user_id, data, content_type, size)
+VALUES (@user_id, @data, @content_type, @size)
+ON CONFLICT(user_id) DO UPDATE SET
     data = excluded.data,
     content_type = excluded.content_type,
     size = excluded.size,

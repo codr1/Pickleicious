@@ -1,6 +1,8 @@
 // internal/models/theme.go
 package models
 
+import "time"
+
 type ThemeColors struct {
 	Background        string `json:"background"`
 	Foreground        string `json:"foreground"`

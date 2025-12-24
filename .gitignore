@@ -82,3 +82,4 @@ coverage.html
 # Keep certain directories with .gitkeep
 !/internal/db/generated/.gitkeep
 !/build/.gitkeep
+build/

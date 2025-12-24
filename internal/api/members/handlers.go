@@ -292,7 +292,7 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 
 		// Save/Update the photo and get its ID
 		photo, err := queries.UpsertPhoto(r.Context(), dbgen.UpsertPhotoParams{
-			MemberID:    id,
+			UserID:      id,
 			Data:        photoBytes,
 			ContentType: "image/jpeg",
 			Size:        int64(len(photoBytes)),
@@ -526,8 +526,7 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 
 		// Store photo in database
 		photo, err := queries.UpsertPhoto(r.Context(), dbgen.UpsertPhotoParams{
-
-			MemberID:    member.ID,
+			UserID:      member.ID,
 			Data:        photoBytes,
 			ContentType: "image/jpeg",
 			Size:        int64(len(photoBytes)),

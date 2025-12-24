@@ -36,9 +36,11 @@ CREATE TABLE operating_hours (
 );
 
 
------- USERS --------
+------ USERS (consolidated: auth + member + staff) --------
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
+
+    -- Auth fields
     email TEXT UNIQUE,
     phone TEXT,
     cognito_sub TEXT,                       -- Cognito's unique user ID
@@ -46,15 +48,8 @@ CREATE TABLE users (
     preferred_auth_method TEXT,             -- e.g. 'SMS', 'EMAIL', or 'PUSH'
     password_hash TEXT,                     -- For staff local auth
     local_auth_enabled BOOLEAN NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'active',  -- e.g. 'active', 'suspended', 'archived'
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 
------- MEMBERS --------
-CREATE TABLE members (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL,
+    -- Profile fields (shared)
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     photo_url TEXT,
@@ -62,27 +57,37 @@ CREATE TABLE members (
     city TEXT,
     state TEXT,
     postal_code TEXT,
-    date_of_birth TEXT NOT NULL,            -- stored as YYYY-MM-DD
-    waiver_signed BOOLEAN NOT NULL,         -- already exists (maps to TOS acceptance, etc.)
-    status TEXT NOT NULL DEFAULT 'active',  -- e.g. 'active', 'suspended', 'archived'
-    
-    home_facility_id INTEGER,               -- The facility this member calls "home"
+    home_facility_id INTEGER,               -- The facility this user calls "home"
+
+    -- Role flags
+    is_member BOOLEAN NOT NULL DEFAULT 0,
+    is_staff BOOLEAN NOT NULL DEFAULT 0,
+
+    -- Member-specific fields
+    date_of_birth TEXT NOT NULL DEFAULT '',  -- stored as YYYY-MM-DD
+    waiver_signed BOOLEAN NOT NULL DEFAULT 0,
     membership_level INTEGER NOT NULL DEFAULT 0,  -- 0=Unverified Guest, 1=Verified Guest, 2=Member, 3+=Member+
+
+    -- Staff-specific fields (nullable if not staff)
+    staff_role TEXT,                        -- 'admin', 'manager', 'desk', 'pro', etc.
+
+    -- Common
+    status TEXT NOT NULL DEFAULT 'active',  -- e.g. 'active', 'suspended', 'archived'
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
+
     FOREIGN KEY (home_facility_id) REFERENCES facilities(id)
 );
 
 
--- TODO: WE are going to need a table called transactions that will contain every single transaction. 
---       We will also need a table called products that will contain common products and the various fields 
+-- TODO: WE are going to need a table called transactions that will contain every single transaction.
+--       We will also need a table called products that will contain common products and the various fields
 --         and formulas to calculate a sum.  For example -Game, will have hours so it is easy for the frontdesk
 --         to bill for thing
 
-CREATE TABLE member_billing (
+CREATE TABLE user_billing (
     id INTEGER PRIMARY KEY,
-    member_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL UNIQUE,
     card_last_four TEXT,
     card_type TEXT,
     billing_address TEXT,
@@ -91,23 +96,21 @@ CREATE TABLE member_billing (
     billing_postal_code TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (member_id) REFERENCES members(id)
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-
-
-CREATE TABLE member_photos (
+CREATE TABLE user_photos (
     id INTEGER PRIMARY KEY,
-    member_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
     data BLOB NOT NULL,
     content_type TEXT NOT NULL,
     size INTEGER NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (member_id) REFERENCES members(id)
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE UNIQUE INDEX idx_member_photos_member_id ON member_photos(member_id);
+CREATE UNIQUE INDEX idx_user_photos_user_id ON user_photos(user_id);
 
 --------- Staff ---------
 CREATE TABLE staff (
@@ -171,8 +174,8 @@ CREATE TABLE reservations (
     facility_id INTEGER NOT NULL,
     reservation_type_id INTEGER NOT NULL,
     recurrence_rule_id INTEGER,        -- null if it's not recurring
-    primary_member_id INTEGER,         -- if there's a responsible member (e.g. for a game)
-    pro_id INTEGER,                    -- if it's a pro session
+    primary_user_id INTEGER,           -- if there's a responsible user (e.g. for a game)
+    pro_id INTEGER,                    -- if it's a pro session (FK to staff)
     start_time DATETIME NOT NULL,
     end_time DATETIME NOT NULL,
 
@@ -187,7 +190,7 @@ CREATE TABLE reservations (
     FOREIGN KEY (facility_id)         REFERENCES facilities(id),
     FOREIGN KEY (reservation_type_id) REFERENCES reservation_types(id),
     FOREIGN KEY (recurrence_rule_id)  REFERENCES recurrence_rules(id),
-    FOREIGN KEY (primary_member_id)   REFERENCES members(id),
+    FOREIGN KEY (primary_user_id)     REFERENCES users(id),
     FOREIGN KEY (pro_id)              REFERENCES staff(id)
 );
 
@@ -203,16 +206,16 @@ CREATE TABLE reservation_courts (
 );
 
 -- Reservation Participants (junction table)
---     Tracks which members are signed up for each reservation (beyond the primary_member).
+--     Tracks which users are signed up for each reservation (beyond the primary_user).
 CREATE TABLE reservation_participants (
     id INTEGER PRIMARY KEY,
     reservation_id INTEGER NOT NULL,
-    member_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (reservation_id) REFERENCES reservations(id),
-    FOREIGN KEY (member_id)      REFERENCES members(id),
-    UNIQUE (reservation_id, member_id)
+    FOREIGN KEY (user_id)        REFERENCES users(id),
+    UNIQUE (reservation_id, user_id)
 );
 
 ------ COGNITO CONFIG ------

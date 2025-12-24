@@ -1,0 +1,29 @@
+// internal/templates/components/nav/search_results.templ
+package nav
+
+import (
+	"fmt"
+
+	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+)
+
+templ SearchResults(query string, results []dbgen.SearchMembersRow) {
+	<div id="search-results" class="absolute w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+		if query == "" {
+			<div class="px-4 py-2 text-sm text-gray-500">Type to search members...</div>
+		} else if len(results) == 0 {
+			<div class="px-4 py-2 text-sm text-gray-500">No matches found</div>
+		} else {
+			<div class="max-h-64 overflow-y-auto divide-y divide-gray-100">
+				for _, member := range results {
+					<button type="button" class="w-full text-left px-4 py-2 hover:bg-gray-50" hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)} hx-target="#member-detail">
+						<div class="text-sm font-medium text-gray-900">{member.FirstName} {member.LastName}</div>
+						if member.Email.Valid {
+							<div class="text-xs text-gray-500">{member.Email.String}</div>
+						}
+					</button>
+				}
+			</div>
+		}
+	</div>
+}

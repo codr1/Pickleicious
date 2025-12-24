@@ -3,15 +3,15 @@ package auth
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	authtempl "github.com/codr1/Pickleicious/internal/templates/components/auth"
-    "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 )
 
 type CognitoConfig struct {
@@ -23,6 +23,8 @@ type CognitoConfig struct {
 }
 
 var cognitoClient *cognitoidentityprovider.Client
+var queries *dbgen.Queries
+var limiter *rate.Limiter
 
 func InitHandlers(q *dbgen.Queries) {
 	queries = q
@@ -56,25 +58,25 @@ func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if email or phone
+	// Check if email or phone - auth info is on User, not Staff
 	isEmail := strings.Contains(identifier, "@")
-	var staff dbgen.Staff
+	var user dbgen.User
 	var err error
 
 	if isEmail {
-		staff, err = queries.GetStaffByEmail(r.Context(), identifier)
+		user, err = queries.GetUserByEmail(r.Context(), sql.NullString{String: identifier, Valid: true})
 	} else {
-		staff, err = queries.GetStaffByPhone(r.Context(), identifier)
+		user, err = queries.GetUserByPhone(r.Context(), sql.NullString{String: identifier, Valid: true})
 	}
 
 	if err != nil && err != sql.ErrNoRows {
-		logger.Error().Err(err).Msg("Database error checking staff")
+		logger.Error().Err(err).Msg("Database error checking user")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// If staff member found and local auth is enabled, show staff section
-	if err == nil && staff.LocalAuthEnabled {
+	// If user found and local auth is enabled, show staff section
+	if err == nil && user.LocalAuthEnabled {
 		component := authtempl.StaffAuthSection()
 		component.Render(r.Context(), w)
 		return
@@ -87,15 +89,21 @@ func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 func HandleSendCode(w http.ResponseWriter, r *http.Request) {
     logger := log.Ctx(r.Context())
     identifier := r.FormValue("identifier")
-    organizationID := r.FormValue("organization_id") // Added this
+    organizationIDStr := r.FormValue("organization_id")
 
-    if identifier == "" || organizationID == "" {
+    if identifier == "" || organizationIDStr == "" {
         http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
         return
     }
 
+    organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+    if err != nil {
+        http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+        return
+    }
+
     // Get Cognito config for this organization
-    config, err := queries.GetCognitoConfig(r.Context(), organizationID)
+    cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
     if err != nil {
         logger.Error().Err(err).Msg("Failed to get Cognito config")
         http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -103,7 +111,8 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
     }
 
     // Initialize Cognito client with organization-specific config
-    // TODO: Implement Cognito client initialization with config
+    // TODO: Implement Cognito client initialization with cognitoConfig
+    _ = cognitoConfig // Suppress unused warning until TODO is implemented
 
     // Send verification code via Cognito
     // TODO: Implement Cognito code sending
@@ -121,15 +130,21 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
     logger := log.Ctx(r.Context())
     code := r.FormValue("code")
     identifier := r.FormValue("identifier")
-    organizationID := r.FormValue("organization_id") // Added this
+    organizationIDStr := r.FormValue("organization_id")
 
-    if code == "" || identifier == "" || organizationID == "" {
+    if code == "" || identifier == "" || organizationIDStr == "" {
         http.Error(w, "Code, identifier, and organization are required", http.StatusBadRequest)
         return
     }
 
+    organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+    if err != nil {
+        http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+        return
+    }
+
     // Get Cognito config for this organization
-    config, err := queries.GetCognitoConfig(r.Context(), organizationID)
+    cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
     if err != nil {
         logger.Error().Err(err).Msg("Failed to get Cognito config")
         http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -137,7 +152,8 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
     }
 
     // Verify code with Cognito
-    // TODO: Implement Cognito verification
+    // TODO: Implement Cognito verification with cognitoConfig
+    _ = cognitoConfig // Suppress unused warning until TODO is implemented
 
     // Update user's Cognito status if needed
     // TODO: Update cognito_status in database
