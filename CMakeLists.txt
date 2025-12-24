@@ -118,8 +118,14 @@ add_custom_target(dev_watch
 # Add this after the existing directory creation
 add_custom_target(static_assets
     COMMAND ${CMAKE_COMMAND} -E make_directory ${BINARY_DIR}/static
-    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/web/static
         ${BINARY_DIR}/static
     COMMENT "Copying static assets"
+)
+
+add_custom_target(test
+    COMMAND ${GO_EXECUTABLE} test ./...
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Running Go tests"
 )
