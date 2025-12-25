@@ -1,0 +1,45 @@
+// internal/templates/components/openplay/layout.templ
+package openplay
+
+import (
+	"fmt"
+)
+
+templ OpenPlayLayout(rules []OpenPlayRule, facilityID int64) {
+	<div class="flex h-[calc(100vh-4rem)]">
+		<div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
+			<div class="p-4 border-b border-gray-200 bg-white">
+				<div class="flex items-center justify-between">
+					<h2 class="text-lg font-semibold text-gray-900">Open Play Rules</h2>
+					<button
+						class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+						hx-get={fmt.Sprintf("/api/v1/open-play/rules/new?facility_id=%d", facilityID)}
+						hx-target="#open-play-rule-detail">
+						New Rule
+					</button>
+				</div>
+				<p class="mt-2 text-sm text-gray-500">Select a rule to review or update the details.</p>
+			</div>
+
+			<div
+				class="flex-1 overflow-y-auto bg-gray-50"
+				id="open-play-rules-list"
+				hx-get={fmt.Sprintf("/api/v1/open-play/rules?facility_id=%d", facilityID)}
+				hx-trigger="refreshOpenPlayRulesList from:body">
+				if len(rules) == 0 {
+					<div class="flex items-center justify-center p-6 text-sm text-gray-500">
+						No open play rules yet.
+					</div>
+				} else {
+					@OpenPlayRulesList(rules, facilityID)
+				}
+			</div>
+		</div>
+
+		<div class="w-1/2 h-full min-w-[50%]" id="open-play-rule-detail">
+			<div class="h-full w-full flex items-center justify-center text-gray-500">
+				Select a rule to view details or create a new one.
+			</div>
+		</div>
+	</div>
+}

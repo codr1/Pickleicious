@@ -1,0 +1,97 @@
+// internal/templates/components/openplay/rule_detail.templ
+package openplay
+
+import (
+	"fmt"
+	"html"
+)
+
+templ OpenPlayRuleDetail(rule OpenPlayRule, facilityID int64) {
+	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
+		<div class="p-6 border-b border-gray-200">
+			<div class="flex items-center justify-between">
+				<div>
+					<h2 class="text-xl font-bold text-gray-900">{rule.Name}</h2>
+					<p class="text-sm text-gray-500">Rule ID {fmt.Sprintf("%d", rule.ID)}</p>
+				</div>
+				<div class="flex space-x-2">
+					<button
+						class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+						hx-get={fmt.Sprintf("/api/v1/open-play/rules/%d/edit?facility_id=%d", rule.ID, facilityID)}
+						hx-target="#open-play-rule-detail">
+						Edit
+					</button>
+					<button
+						class="px-4 py-2 bg-red-50 border border-red-300 text-red-700 rounded-lg text-sm hover:bg-red-100"
+						hx-delete={fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", rule.ID, facilityID)}
+						hx-target="#open-play-rule-detail"
+						hx-swap="innerHTML"
+						hx-confirm={fmt.Sprintf("Delete open play rule %s?", html.EscapeString(rule.Name))}>
+						Delete
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="flex-1 overflow-y-auto p-6">
+			<div class="grid grid-cols-2 gap-6">
+				<div class="space-y-4">
+					<div>
+						<h4 class="text-sm font-semibold text-gray-900">Min participants</h4>
+						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MinParticipants)}</p>
+					</div>
+					<div>
+						<h4 class="text-sm font-semibold text-gray-900">Max participants per court</h4>
+						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MaxParticipantsPerCourt)}</p>
+					</div>
+					<div>
+						<h4 class="text-sm font-semibold text-gray-900">Cancellation cutoff</h4>
+						<p class="text-gray-600">{fmt.Sprintf("%d", rule.CancellationCutoffMinutes)} minutes</p>
+					</div>
+				</div>
+				<div class="space-y-4">
+					<div>
+						<h4 class="text-sm font-semibold text-gray-900">Auto scale</h4>
+						<p class="text-gray-600">
+							if rule.AutoScaleEnabled {
+								Enabled
+							} else {
+								Disabled
+							}
+						</p>
+					</div>
+					<div>
+						<h4 class="text-sm font-semibold text-gray-900">Min courts</h4>
+						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MinCourts)}</p>
+					</div>
+					<div>
+						<h4 class="text-sm font-semibold text-gray-900">Max courts</h4>
+						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MaxCourts)}</p>
+					</div>
+				</div>
+			</div>
+
+			<div class="mt-8 border-t border-gray-200 pt-6 text-sm text-gray-500">
+				<div class="flex flex-wrap gap-6">
+					<p>Facility ID {fmt.Sprintf("%d", rule.FacilityID)}</p>
+					<p>
+						Created
+						if rule.CreatedAt.IsZero() {
+							<span>-</span>
+						} else {
+							<span>{rule.CreatedAt.Format("2006-01-02 15:04")}</span>
+						}
+					</p>
+					<p>
+						Updated
+						if rule.UpdatedAt.IsZero() {
+							<span>-</span>
+						} else {
+							<span>{rule.UpdatedAt.Format("2006-01-02 15:04")}</span>
+						}
+					</p>
+				</div>
+			</div>
+		</div>
+	</div>
+}
