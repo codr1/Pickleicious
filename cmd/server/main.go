@@ -81,13 +81,13 @@ func main() {
 	members.InitHandlers(database.Queries)
 	log.Info().Msg("Member handlers initialized with database queries")
 
-	// Verify members table exists and has data
+	// Verify users table exists
 	var count int
-	err = database.DB.QueryRow("SELECT COUNT(*) FROM members").Scan(&count)
+	err = database.DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to query members table")
+		log.Fatal().Err(err).Msg("Failed to query users table")
 	}
-	log.Info().Int("member_count", count).Msg("Found members in database")
+	log.Info().Int("user_count", count).Msg("Found users in database")
 
 	// Create server instance
 	server := newServer(config)
