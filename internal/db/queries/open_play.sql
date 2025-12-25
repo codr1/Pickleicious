@@ -38,7 +38,7 @@ FROM open_play_rules
 WHERE facility_id = @facility_id
 ORDER BY name;
 
--- name: UpdateOpenPlayRule :execrows
+-- name: UpdateOpenPlayRule :one
 UPDATE open_play_rules
 SET name = @name,
     min_participants = @min_participants,
@@ -49,7 +49,10 @@ SET name = @name,
     max_courts = @max_courts,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id
-  AND facility_id = @facility_id;
+  AND facility_id = @facility_id
+RETURNING id, facility_id, name, min_participants, max_participants_per_court,
+    cancellation_cutoff_minutes, auto_scale_enabled, min_courts, max_courts,
+    created_at, updated_at;
 
 -- name: DeleteOpenPlayRule :execrows
 DELETE FROM open_play_rules
