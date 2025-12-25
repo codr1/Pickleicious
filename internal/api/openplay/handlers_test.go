@@ -245,11 +245,11 @@ func TestOpenPlayRuleCreateValidation(t *testing.T) {
 				"min_participants":            []string{"9"},
 				"max_participants_per_court":  []string{"4"},
 				"cancellation_cutoff_minutes": []string{"15"},
-				"min_courts":                  []string{"1"},
-				"max_courts":                  []string{"2"},
+				"min_courts":                  []string{"2"},
+				"max_courts":                  []string{"4"},
 			},
 			wantStatus:  http.StatusBadRequest,
-			wantMessage: "min_participants must be less than or equal to max_participants_per_court * max_courts",
+			wantMessage: "min_participants must be less than or equal to max_participants_per_court * min_courts",
 		},
 	}
 

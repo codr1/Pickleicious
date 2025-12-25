@@ -574,8 +574,8 @@ func validateOpenPlayRuleInput(minParticipants, maxParticipantsPerCourt, cancell
 		return fieldError{Field: "max_courts", Reason: "must be greater than 0"}
 	case minCourts > maxCourts:
 		return fieldError{Field: "min_courts", Reason: "must be less than or equal to max_courts"}
-	case minParticipants > maxParticipantsPerCourt*maxCourts:
-		return fieldError{Field: "min_participants", Reason: "must be less than or equal to max_participants_per_court * max_courts"}
+	case minParticipants > maxParticipantsPerCourt*minCourts:
+		return fieldError{Field: "min_participants", Reason: "must be less than or equal to max_participants_per_court * min_courts"}
 	default:
 		return nil
 	}

@@ -19,7 +19,6 @@ CREATE TABLE open_play_rules (
     CHECK (max_courts > 0),
     CHECK (min_courts <= max_courts),
     CHECK (min_participants <= max_participants_per_court * min_courts),
-    CHECK (min_participants <= max_participants_per_court * max_courts),
     FOREIGN KEY (facility_id) REFERENCES facilities(id)
 );
 
