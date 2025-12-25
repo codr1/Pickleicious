@@ -14,11 +14,13 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
+	"github.com/codr1/Pickleicious/internal/api/openplay"
 	"github.com/codr1/Pickleicious/internal/config"
+	"github.com/codr1/Pickleicious/internal/db"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
-func newServer(config *config.Config) *http.Server {
+func newServer(config *config.Config, database *db.DB) *http.Server {
 	router := http.NewServeMux()
 
 	// Setup middleware chain
@@ -30,6 +32,8 @@ func newServer(config *config.Config) *http.Server {
 		api.WithContentType,
 	)
 
+	openplay.InitHandlers(database.Queries)
+
 	// Register routes
 	registerRoutes(router)
 
@@ -39,6 +43,17 @@ func newServer(config *config.Config) *http.Server {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
+	}
+}
+
+func methodHandler(handlers map[string]http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handler, ok := handlers[r.Method]
+		if !ok {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handler(w, r)
 	}
 }
 
@@ -66,16 +81,10 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Member routes
 	mux.HandleFunc("/members", members.HandleMembersPage)
-	mux.HandleFunc("/api/v1/members", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			members.HandleMembersList(w, r)
-		case http.MethodPost:
-			members.HandleCreateMember(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	mux.HandleFunc("/api/v1/members", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  members.HandleMembersList,
+		http.MethodPost: members.HandleCreateMember,
+	}))
 	mux.HandleFunc("/api/v1/members/search", members.HandleMemberSearch)
 	mux.HandleFunc("/api/v1/members/new", members.HandleNewMemberForm)
 	mux.HandleFunc("/api/v1/members/billing", members.HandleMemberBilling)
@@ -114,6 +123,32 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)
 	mux.HandleFunc("/api/v1/courts/calendar", courts.HandleCalendarView)
 
+	// Open play rules
+	mux.HandleFunc("/open-play-rules", openplay.HandleOpenPlayRulesPage)
+	mux.HandleFunc("/api/v1/open-play-rules", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  openplay.HandleOpenPlayRulesList,
+		http.MethodPost: openplay.HandleOpenPlayRuleCreate,
+	}))
+	mux.HandleFunc("/api/v1/open-play-rules/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		openplay.HandleOpenPlayRuleNew(w, r)
+	})
+	mux.HandleFunc("/api/v1/open-play-rules/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:    openplay.HandleOpenPlayRuleDetail,
+		http.MethodPut:    openplay.HandleOpenPlayRuleUpdate,
+		http.MethodDelete: openplay.HandleOpenPlayRuleDelete,
+	}))
+	mux.HandleFunc("/api/v1/open-play-rules/{id}/edit", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		openplay.HandleOpenPlayRuleEdit(w, r)
+	})
+
 	// Static file handling with logging and environment awareness
 	staticDir := os.Getenv("STATIC_DIR")
 	if staticDir == "" {
@@ -133,12 +168,7 @@ func registerRoutes(mux *http.ServeMux) {
 	}))
 
 	// Add this new route for member restoration
-	mux.HandleFunc("/api/v1/members/restore", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			members.HandleRestoreDecision(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	mux.HandleFunc("/api/v1/members/restore", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: members.HandleRestoreDecision,
+	}))
 }

@@ -10,7 +10,7 @@ templ OpenPlayRulesList(rules []OpenPlayRule, facilityID int64) {
 		for _, rule := range rules {
 			<div
 				class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:bg-gray-50 cursor-pointer"
-				hx-get={fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", rule.ID, facilityID)}
+				hx-get={fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", rule.ID, facilityID)}
 				hx-target="#open-play-rule-detail">
 				<div class="flex items-center justify-between">
 					<div>

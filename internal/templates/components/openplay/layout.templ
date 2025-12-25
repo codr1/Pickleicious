@@ -13,7 +13,7 @@ templ OpenPlayLayout(rules []OpenPlayRule, facilityID int64) {
 					<h2 class="text-lg font-semibold text-gray-900">Open Play Rules</h2>
 					<button
 						class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
-						hx-get={fmt.Sprintf("/api/v1/open-play/rules/new?facility_id=%d", facilityID)}
+						hx-get={fmt.Sprintf("/api/v1/open-play-rules/new?facility_id=%d", facilityID)}
 						hx-target="#open-play-rule-detail">
 						New Rule
 					</button>
@@ -24,7 +24,7 @@ templ OpenPlayLayout(rules []OpenPlayRule, facilityID int64) {
 			<div
 				class="flex-1 overflow-y-auto bg-gray-50"
 				id="open-play-rules-list"
-				hx-get={fmt.Sprintf("/api/v1/open-play/rules?facility_id=%d", facilityID)}
+				hx-get={fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID)}
 				hx-trigger="refreshOpenPlayRulesList from:body">
 				if len(rules) == 0 {
 					<div class="flex items-center justify-center p-6 text-sm text-gray-500">

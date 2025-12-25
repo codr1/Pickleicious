@@ -29,9 +29,9 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 
 		<form
 			if rule.ID == 0 {
-				hx-post={fmt.Sprintf("/api/v1/open-play/rules?facility_id=%d", facilityID)}
+				hx-post={fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID)}
 			} else {
-				hx-put={fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", rule.ID, facilityID)}
+				hx-put={fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", rule.ID, facilityID)}
 			}
 			hx-target="#open-play-rule-detail"
 			hx-indicator="#submit-indicator"
@@ -136,7 +136,7 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 					<button
 						type="button"
 						class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-						hx-get={fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", rule.ID, facilityID)}
+						hx-get={fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", rule.ID, facilityID)}
 						hx-target="#open-play-rule-detail">
 						Cancel
 					</button>

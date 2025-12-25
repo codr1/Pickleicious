@@ -76,7 +76,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 	}
 	createReq := httptest.NewRequest(
 		http.MethodPost,
-		fmt.Sprintf("/api/v1/open-play/rules?facility_id=%d", facilityID),
+		fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID),
 		strings.NewReader(createForm.Encode()),
 	)
 	createReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -101,7 +101,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 
 	pageReq := httptest.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("/open-play?facility_id=%d", facilityID),
+		fmt.Sprintf("/open-play-rules?facility_id=%d", facilityID),
 		nil,
 	)
 	pageRecorder := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 
 	listReq := httptest.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("/api/v1/open-play/rules?facility_id=%d", facilityID),
+		fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID),
 		nil,
 	)
 	listRecorder := httptest.NewRecorder()
@@ -129,9 +129,10 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 
 	detailReq := httptest.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", ruleID, facilityID),
+		fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", ruleID, facilityID),
 		nil,
 	)
+	detailReq.SetPathValue("id", fmt.Sprintf("%d", ruleID))
 	detailRecorder := httptest.NewRecorder()
 	HandleOpenPlayRuleDetail(detailRecorder, detailReq)
 	if detailRecorder.Code != http.StatusOK {
@@ -152,9 +153,10 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 	}
 	updateReq := httptest.NewRequest(
 		http.MethodPut,
-		fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", ruleID, facilityID),
+		fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", ruleID, facilityID),
 		strings.NewReader(updateForm.Encode()),
 	)
+	updateReq.SetPathValue("id", fmt.Sprintf("%d", ruleID))
 	updateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	updateRecorder := httptest.NewRecorder()
 	HandleOpenPlayRuleUpdate(updateRecorder, updateReq)
@@ -167,15 +169,16 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 
 	deleteReq := httptest.NewRequest(
 		http.MethodDelete,
-		fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", ruleID, facilityID),
+		fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", ruleID, facilityID),
 		nil,
 	)
+	deleteReq.SetPathValue("id", fmt.Sprintf("%d", ruleID))
 	deleteRecorder := httptest.NewRecorder()
 	HandleOpenPlayRuleDelete(deleteRecorder, deleteReq)
 	if deleteRecorder.Code != http.StatusOK {
 		t.Fatalf("delete status: %d", deleteRecorder.Code)
 	}
-	expectedRedirect := fmt.Sprintf("/open-play?facility_id=%d", facilityID)
+	expectedRedirect := fmt.Sprintf("/open-play-rules?facility_id=%d", facilityID)
 	if deleteRecorder.Header().Get("HX-Redirect") != expectedRedirect {
 		t.Fatalf("delete HX-Redirect: %s", deleteRecorder.Header().Get("HX-Redirect"))
 	}
@@ -254,7 +257,7 @@ func TestOpenPlayRuleCreateValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(
 				http.MethodPost,
-				fmt.Sprintf("/api/v1/open-play/rules?facility_id=%d", facilityID),
+				fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID),
 				strings.NewReader(tc.form.Encode()),
 			)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -268,21 +271,5 @@ func TestOpenPlayRuleCreateValidation(t *testing.T) {
 				t.Fatalf("message %q missing in: %s", tc.wantMessage, recorder.Body.String())
 			}
 		})
-	}
-}
-
-func TestOpenPlayRuleIDFromPathValidation(t *testing.T) {
-	id, err := openPlayRuleIDFromPath("/api/v1/open-play/rules/123")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if id != 123 {
-		t.Fatalf("expected id 123, got %d", id)
-	}
-	if _, err := openPlayRuleIDFromPath("/api/v1/open-play/rules/123/edit"); err == nil {
-		t.Fatal("expected error for edit suffix")
-	}
-	if _, err := openPlayRuleIDFromPath("/api/v1/open-play/rules/"); err == nil {
-		t.Fatal("expected error for missing rule id")
 	}
 }

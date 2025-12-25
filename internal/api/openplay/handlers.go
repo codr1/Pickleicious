@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	openplaytempl "github.com/codr1/Pickleicious/internal/templates/components/openplay"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
@@ -26,8 +27,6 @@ var (
 	queries     *dbgen.Queries
 	queriesOnce sync.Once
 )
-
-const openPlayRulePathFragment = "open-play/rules"
 
 const openPlayQueryTimeout = 5 * time.Second
 
@@ -41,7 +40,7 @@ func InitHandlers(q *dbgen.Queries) {
 	})
 }
 
-// /open-play
+// /open-play-rules
 func HandleOpenPlayRulesPage(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -104,6 +103,65 @@ func HandleOpenPlayRulesList(w http.ResponseWriter, r *http.Request) {
 
 	component := openPlayRulesListComponent(rules)
 	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rules list", "Failed to render list") {
+		return
+	}
+}
+
+func HandleOpenPlayRuleNew(w http.ResponseWriter, r *http.Request) {
+	facilityID, err := facilityIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	rule := dbgen.OpenPlayRule{FacilityID: facilityID}
+	component := openplaytempl.OpenPlayRuleForm(openplaytempl.NewOpenPlayRule(rule), facilityID)
+	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
+		return
+	}
+}
+
+func HandleOpenPlayRuleEdit(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	ruleID, err := openPlayRuleIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid rule ID", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := facilityIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
+	defer cancel()
+
+	rule, err := q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+		ID:         ruleID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Open play rule not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("rule_id", ruleID).Msg("Failed to fetch open play rule for edit")
+		http.Error(w, "Failed to fetch open play rule", http.StatusInternalServerError)
+		return
+	}
+
+	component := openplaytempl.OpenPlayRuleForm(openplaytempl.NewOpenPlayRule(rule), facilityID)
+	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
 		return
 	}
 }
@@ -212,7 +270,7 @@ func HandleOpenPlayRuleDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleID, err := openPlayRuleIDFromPath(r.URL.Path)
+	ruleID, err := openPlayRuleIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid rule ID", http.StatusBadRequest)
 		return
@@ -258,7 +316,7 @@ func HandleOpenPlayRuleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleID, err := openPlayRuleIDFromPath(r.URL.Path)
+	ruleID, err := openPlayRuleIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid rule ID", http.StatusBadRequest)
 		return
@@ -364,7 +422,7 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleID, err := openPlayRuleIDFromPath(r.URL.Path)
+	ruleID, err := openPlayRuleIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid rule ID", http.StatusBadRequest)
 		return
@@ -395,7 +453,7 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	headers := map[string]string{
-		"HX-Redirect": fmt.Sprintf("/open-play?facility_id=%d", facilityID),
+		"HX-Redirect": fmt.Sprintf("/open-play-rules?facility_id=%d", facilityID),
 	}
 	component := openPlayRuleDeleteComponent()
 	if !renderHTMLComponent(r.Context(), w, component, headers, "Failed to render delete response", "Failed to render response") {
@@ -459,38 +517,16 @@ func loadQueries() *dbgen.Queries {
 	return queries
 }
 
-// openPlayRuleIDFromPath expects a path containing "/open-play/rules/{id}" with no trailing segments.
-// NOTE: This is coupled to the current routing structure containing openPlayRulePathFragment.
-func openPlayRuleIDFromPath(path string) (int64, error) {
-	trimmed := strings.Trim(path, "/")
-	if trimmed == "" {
-		return 0, fmt.Errorf("invalid path")
+func openPlayRuleIDFromRequest(r *http.Request) (int64, error) {
+	pathID := strings.TrimSpace(r.PathValue("id"))
+	if pathID == "" {
+		return 0, fmt.Errorf("invalid rule ID")
 	}
-	parts := strings.Split(trimmed, "/")
-	for i := 0; i < len(parts)-1; i++ {
-		if parts[i] != "open-play" {
-			continue
-		}
-		if i+1 >= len(parts) || parts[i+1] != "rules" {
-			continue
-		}
-		if i+2 >= len(parts) {
-			return 0, fmt.Errorf("missing rule ID")
-		}
-		if i+3 != len(parts) {
-			return 0, fmt.Errorf("invalid path")
-		}
-		idStr := strings.TrimSpace(parts[i+2])
-		if idStr == "" {
-			return 0, fmt.Errorf("missing rule ID")
-		}
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil || id <= 0 {
-			return 0, fmt.Errorf("invalid rule ID")
-		}
-		return id, nil
+	id, err := strconv.ParseInt(pathID, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid rule ID")
 	}
-	return 0, fmt.Errorf("path must contain %s/{id}", openPlayRulePathFragment)
+	return id, nil
 }
 
 func parseIntField(r *http.Request, name string) (int64, error) {

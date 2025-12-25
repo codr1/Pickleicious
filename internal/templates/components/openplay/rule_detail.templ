@@ -17,13 +17,13 @@ templ OpenPlayRuleDetail(rule OpenPlayRule, facilityID int64) {
 				<div class="flex space-x-2">
 					<button
 						class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
-						hx-get={fmt.Sprintf("/api/v1/open-play/rules/%d/edit?facility_id=%d", rule.ID, facilityID)}
+						hx-get={fmt.Sprintf("/api/v1/open-play-rules/%d/edit?facility_id=%d", rule.ID, facilityID)}
 						hx-target="#open-play-rule-detail">
 						Edit
 					</button>
 					<button
 						class="px-4 py-2 bg-red-50 border border-red-300 text-red-700 rounded-lg text-sm hover:bg-red-100"
-						hx-delete={fmt.Sprintf("/api/v1/open-play/rules/%d?facility_id=%d", rule.ID, facilityID)}
+						hx-delete={fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", rule.ID, facilityID)}
 						hx-target="#open-play-rule-detail"
 						hx-swap="innerHTML"
 						hx-confirm={fmt.Sprintf("Delete open play rule %s?", html.EscapeString(rule.Name))}>
