@@ -62,10 +62,10 @@ add_custom_target(generate_templ
 )
 
 add_custom_target(tailwind
-    COMMAND cd ${CMAKE_SOURCE_DIR}/web && 
-            tailwindcss 
-            -i ./styles/input.css 
-            -o ${BINARY_DIR}/static/css/main.css 
+    COMMAND cd ${CMAKE_SOURCE_DIR}/web &&
+            npx tailwindcss
+            -i ./styles/input.css
+            -o ${BINARY_DIR}/static/css/main.css
             $<$<CONFIG:Release>:--minify>
     COMMENT "Building Tailwind CSS"
 )
@@ -102,9 +102,9 @@ add_custom_target(dev_watch
         ${CMAKE_SOURCE_DIR}/web/static
         ${BINARY_DIR}/static
     # Start Tailwind watcher
-    COMMAND tailwindcss 
-        -i ${CMAKE_SOURCE_DIR}/web/styles/input.css 
-        -o ${BINARY_DIR}/static/css/main.css 
+    COMMAND cd ${CMAKE_SOURCE_DIR}/web && npx tailwindcss
+        -i ./styles/input.css
+        -o ${BINARY_DIR}/static/css/main.css
         --watch &
     # Start Templ watcher
     COMMAND templ generate --watch &
