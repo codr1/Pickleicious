@@ -90,7 +90,7 @@ func main() {
 	log.Info().Int("user_count", count).Msg("Found users in database")
 
 	// Create server instance
-	server := newServer(config)
+	server := newServer(config, database)
 
 	// Setup graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

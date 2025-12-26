@@ -1,7 +1,11 @@
 // internal/templates/components/nav/menu.templ
 package nav
 
-templ Menu() {
+import (
+	"fmt"
+)
+
+templ Menu(facilityID int64) {
     <div class="flex h-full flex-col divide-y divide-gray-200 bg-white">
         <!-- Header -->
         <div class="flex items-center justify-between p-4">
@@ -38,6 +42,21 @@ templ Menu() {
                    onclick="closeMenu()">
                     Courts
                 </a>
+                if facilityID > 0 {
+                    <a href={templ.SafeURL(fmt.Sprintf("/open-play-rules?facility_id=%d", facilityID))}
+                       class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+                       hx-boost="true"
+                       hx-push-url="false"
+                       hx-target="main"
+                       onclick="closeMenu()">
+                        Open Play Rules
+                    </a>
+                } else {
+                    <span
+                        class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-400 cursor-not-allowed">
+                        Open Play Rules
+                    </span>
+                }
                 <a href="/members" 
                    class="block rounded-lg px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
                    hx-boost="true"

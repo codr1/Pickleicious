@@ -127,5 +127,6 @@ add_custom_target(static_assets
 add_custom_target(test
     COMMAND ${GO_EXECUTABLE} test ./...
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    DEPENDS generate_templ generate_sqlc
     COMMENT "Running Go tests"
 )
