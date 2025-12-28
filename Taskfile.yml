@@ -1,0 +1,68 @@
+version: "3"
+
+vars:
+  BIN_DIR: bin
+  SERVER_BIN: "{{.BIN_DIR}}/server"
+  DB_DIR: build/db
+  DB_PATH: build/db/pickleicious.db
+  MIGRATIONS_DIR: internal/db/migrations
+
+tasks:
+  generate:
+    desc: Generate templ and sqlc code
+    cmds:
+      - templ generate
+      - sqlc generate
+
+  build:
+    desc: Build the server binary
+    deps:
+      - generate
+    cmds:
+      - go build -o {{.SERVER_BIN}} ./cmd/server
+
+  build:dev:
+    desc: Build the server binary for development
+    deps:
+      - generate
+    cmds:
+      - go build -tags dev -o {{.SERVER_BIN}} ./cmd/server
+
+  build:staging:
+    desc: Build the server binary for staging
+    deps:
+      - generate
+    cmds:
+      - go build -tags staging -o {{.SERVER_BIN}} ./cmd/server
+
+  build:prod:
+    desc: Build the server binary for production
+    deps:
+      - generate
+    cmds:
+      - go build -tags prod -ldflags "-s -w" -o {{.SERVER_BIN}} ./cmd/server
+
+  test:
+    desc: Run Go tests
+    cmds:
+      - go test ./...
+
+  css:
+    desc: Build Tailwind CSS
+    dir: web
+    cmds:
+      - mkdir -p ./static/css
+      - npx tailwindcss -i ./styles/input.css -o ./static/css/main.css
+
+  db:migrate:
+    desc: Run database migrations with goose
+    cmds:
+      - mkdir -p {{.DB_DIR}}
+      - goose -dir {{.MIGRATIONS_DIR}} sqlite3 {{.DB_PATH}} up
+
+  dev:
+    desc: Run the dev server with Air
+    deps:
+      - generate
+    cmds:
+      - air -c .air.toml
