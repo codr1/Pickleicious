@@ -18,6 +18,7 @@ tasks:
     desc: Build the server binary
     deps:
       - generate
+      - css
     cmds:
       - go build -o {{.SERVER_BIN}} ./cmd/server
 
@@ -64,5 +65,6 @@ tasks:
     desc: Run the dev server with Air
     deps:
       - generate
+      - css
     cmds:
       - air -c .air.toml
