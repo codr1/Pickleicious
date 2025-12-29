@@ -15,6 +15,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	"github.com/codr1/Pickleicious/internal/api/openplay"
+	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
@@ -33,6 +34,7 @@ func newServer(config *config.Config, database *db.DB) *http.Server {
 	)
 
 	openplay.InitHandlers(database.Queries)
+	themes.InitHandlers(database.Queries)
 
 	// Register routes
 	registerRoutes(router)
@@ -148,6 +150,22 @@ func registerRoutes(mux *http.ServeMux) {
 		}
 		openplay.HandleOpenPlayRuleEdit(w, r)
 	})
+
+	// Theme API
+	mux.HandleFunc("/api/themes", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  themes.HandleThemesList,
+		http.MethodPost: themes.HandleThemeCreate,
+	}))
+	mux.HandleFunc("/api/themes/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut:    themes.HandleThemeUpdate,
+		http.MethodDelete: themes.HandleThemeDelete,
+	}))
+	mux.HandleFunc("/api/themes/{id}/clone", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: themes.HandleThemeClone,
+	}))
+	mux.HandleFunc("/api/facilities/{id}/theme", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: themes.HandleFacilityThemeSet,
+	}))
 
 	// Static file handling with logging and environment awareness
 	staticDir := os.Getenv("STATIC_DIR")
