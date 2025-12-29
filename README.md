@@ -17,6 +17,8 @@ Common commands:
 - `task test` - Run Go tests
 - `task css` - Build Tailwind CSS
 - `task db:migrate` - Run database migrations
+- `task db:reset` - Delete the database and re-run migrations
+- `task clean` - Remove build artifacts
 
 Environment variants:
 

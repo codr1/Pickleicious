@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  BIN_DIR: bin
+  BIN_DIR: build/bin
   SERVER_BIN: "{{.BIN_DIR}}/server"
   DB_DIR: build/db
   DB_PATH: build/db/pickleicious.db
@@ -26,6 +26,7 @@ tasks:
       - generate
       - css
     cmds:
+      - mkdir -p {{.BIN_DIR}}
       - go build -o {{.SERVER_BIN}} ./cmd/server
 
   build:dev:
@@ -34,6 +35,7 @@ tasks:
       - generate
       - css
     cmds:
+      - mkdir -p {{.BIN_DIR}}
       - go build -tags dev -o {{.SERVER_BIN}} ./cmd/server
 
   build:staging:
@@ -42,6 +44,7 @@ tasks:
       - generate
       - css
     cmds:
+      - mkdir -p {{.BIN_DIR}}
       - go build -tags staging -o {{.SERVER_BIN}} ./cmd/server
 
   build:prod:
@@ -50,6 +53,7 @@ tasks:
       - generate
       - css
     cmds:
+      - mkdir -p {{.BIN_DIR}}
       - go build -tags prod -ldflags "-s -w" -o {{.SERVER_BIN}} ./cmd/server
 
   test:
@@ -70,6 +74,12 @@ tasks:
       - mkdir -p {{.DB_DIR}}
       - go run cmd/tools/dbmigrate/main.go -command up -db {{.DB_PATH}} -migrations {{.MIGRATIONS_DIR}}
 
+  db:reset:
+    desc: Reset the database and re-run migrations
+    cmds:
+      - rm -f {{.DB_PATH}}
+      - task: db:migrate
+
   dev:
     desc: Run the dev server without file watching
     deps:
@@ -85,3 +95,9 @@ tasks:
       - css
     cmds:
       - air -c .air.toml
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -f {{.SERVER_BIN}}
+      - rm -rf build/tmp {{.DB_DIR}}
