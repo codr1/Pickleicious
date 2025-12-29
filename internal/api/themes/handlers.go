@@ -2,11 +2,13 @@
 package themes
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"strconv"
@@ -14,11 +16,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
+	themetempl "github.com/codr1/Pickleicious/internal/templates/components/themes"
+	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
 const (
@@ -64,6 +69,98 @@ func InitHandlers(q *dbgen.Queries) {
 	})
 }
 
+// /admin/themes
+func HandleThemesPage(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	facilityID, err := facilityIDFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	editor := newThemeEditorData(facilityID)
+	page := layouts.Base(themetempl.ThemeAdminLayout(facilityID, editor))
+	if !renderHTMLComponent(r.Context(), w, page, nil, "Failed to render themes page", "Failed to render page") {
+		return
+	}
+}
+
+// /api/v1/themes/new
+func HandleThemeNew(w http.ResponseWriter, r *http.Request) {
+	facilityID, err := facilityIDFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	component := themetempl.ThemeEditor(newThemeEditorData(facilityID))
+	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render new theme form", "Failed to render form") {
+		return
+	}
+}
+
+// /api/v1/themes/{id}
+func HandleThemeDetail(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	themeID, err := themeIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid theme ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
+	defer cancel()
+
+	row, err := q.GetTheme(ctx, themeID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Theme not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("theme_id", themeID).Msg("Failed to fetch theme")
+		http.Error(w, "Failed to load theme", http.StatusInternalServerError)
+		return
+	}
+
+	theme := themeFromDB(row)
+	facilityID, err := facilityIDFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !theme.IsSystem && theme.FacilityID != nil && *theme.FacilityID != facilityID {
+		http.Error(w, "Theme does not belong to facility", http.StatusBadRequest)
+		return
+	}
+
+	if !isHXRequest(r) {
+		writeJSON(w, http.StatusOK, theme)
+		return
+	}
+
+	editor := themeEditorData(theme, facilityID)
+	component := themetempl.ThemeEditor(editor)
+	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render theme form", "Failed to render form") {
+		return
+	}
+}
+
 func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -99,6 +196,21 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	themes := append(systemThemes, facilityThemes...)
+	if isHXRequest(r) {
+		activeThemeID, err := q.GetActiveThemeID(ctx, facilityID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
+			http.Error(w, "Failed to load active theme", http.StatusInternalServerError)
+			return
+		}
+
+		component := themetempl.ThemeList(themetempl.NewThemes(themes, activeThemeID), facilityID)
+		if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render themes list", "Failed to render list") {
+			return
+		}
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"themes": themes})
 }
 
@@ -112,9 +224,9 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req themeRequest
-	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	req, err := decodeThemeRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -193,6 +305,12 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isHXRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshThemesList")
+		writeThemeFeedback(w, http.StatusCreated, "Theme created.")
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, themeFromDB(created))
 }
 
@@ -212,9 +330,9 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req themeRequest
-	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	req, err := decodeThemeRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -297,6 +415,12 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isHXRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshThemesList")
+		writeThemeFeedback(w, http.StatusOK, "Theme updated.")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, themeFromDB(updated))
 }
 
@@ -361,6 +485,12 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isHXRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshThemesList")
+		writeThemeFeedback(w, http.StatusOK, "Theme deleted.")
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -380,9 +510,9 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req themeCloneRequest
-	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	req, err := decodeThemeCloneRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -478,6 +608,12 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isHXRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshThemesList")
+		writeThemeFeedback(w, http.StatusCreated, "Theme cloned.")
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, themeFromDB(created))
 }
 
@@ -497,9 +633,9 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req facilityThemeRequest
-	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	req, err := decodeFacilityThemeRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if req.ThemeID <= 0 {
@@ -543,6 +679,12 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to set active theme")
 		http.Error(w, "Failed to update active theme", http.StatusInternalServerError)
+		return
+	}
+
+	if isHXRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshThemesList")
+		writeThemeFeedback(w, http.StatusOK, "Active theme updated.")
 		return
 	}
 
@@ -624,10 +766,174 @@ func decodeJSON(r *http.Request, dst any) error {
 	return nil
 }
 
+func decodeThemeRequest(r *http.Request) (themeRequest, error) {
+	if isJSONRequest(r) {
+		var req themeRequest
+		return req, decodeJSON(r, &req)
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return themeRequest{}, err
+	}
+
+	facilityID, err := parseOptionalInt64Field(firstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
+	if err != nil {
+		return themeRequest{}, err
+	}
+
+	return themeRequest{
+		FacilityID:     facilityID,
+		IsSystem:       parseBoolField(firstNonEmpty(r.FormValue("is_system"), r.FormValue("isSystem"))),
+		Name:           firstNonEmpty(r.FormValue("name")),
+		PrimaryColor:   firstNonEmpty(r.FormValue("primary_color"), r.FormValue("primaryColor")),
+		SecondaryColor: firstNonEmpty(r.FormValue("secondary_color"), r.FormValue("secondaryColor")),
+		TertiaryColor:  firstNonEmpty(r.FormValue("tertiary_color"), r.FormValue("tertiaryColor")),
+		AccentColor:    firstNonEmpty(r.FormValue("accent_color"), r.FormValue("accentColor")),
+		HighlightColor: firstNonEmpty(r.FormValue("highlight_color"), r.FormValue("highlightColor")),
+	}, nil
+}
+
+func decodeThemeCloneRequest(r *http.Request) (themeCloneRequest, error) {
+	if isJSONRequest(r) {
+		var req themeCloneRequest
+		return req, decodeJSON(r, &req)
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return themeCloneRequest{}, err
+	}
+
+	facilityID, err := parseOptionalInt64Field(firstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
+	if err != nil {
+		return themeCloneRequest{}, err
+	}
+
+	return themeCloneRequest{
+		FacilityID: facilityID,
+		Name:       firstNonEmpty(r.FormValue("name")),
+	}, nil
+}
+
+func decodeFacilityThemeRequest(r *http.Request) (facilityThemeRequest, error) {
+	if isJSONRequest(r) {
+		var req facilityThemeRequest
+		return req, decodeJSON(r, &req)
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return facilityThemeRequest{}, err
+	}
+
+	themeID, err := parseRequiredInt64Field(firstNonEmpty(r.FormValue("theme_id"), r.FormValue("themeId")), "theme_id")
+	if err != nil {
+		return facilityThemeRequest{}, err
+	}
+
+	return facilityThemeRequest{ThemeID: themeID}, nil
+}
+
+func isJSONRequest(r *http.Request) bool {
+	return strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json")
+}
+
+func isHXRequest(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("HX-Request"), "true")
+}
+
+func parseOptionalInt64Field(raw string, field string) (*int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return nil, fmt.Errorf("%s must be a positive integer", field)
+	}
+	return &value, nil
+}
+
+func parseRequiredInt64Field(raw string, field string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", field)
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", field)
+	}
+	return value, nil
+}
+
+func parseBoolField(raw string) bool {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	return value == "true" || value == "1" || value == "yes" || value == "on"
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func renderHTMLComponent(ctx context.Context, w http.ResponseWriter, component templ.Component, headers map[string]string, logMsg string, errMsg string) bool {
+	logger := log.Ctx(ctx)
+	var buf bytes.Buffer
+	if err := component.Render(ctx, &buf); err != nil {
+		logger.Error().Err(err).Msg(logMsg)
+		http.Error(w, errMsg, http.StatusInternalServerError)
+		return false
+	}
+	w.Header().Set("Content-Type", "text/html")
+	for key, value := range headers {
+		w.Header().Set(key, value)
+	}
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		logger.Error().Err(err).Msg("Failed to write response")
+	}
+	return true
+}
+
+func writeThemeFeedback(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(
+		w,
+		`<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">%s</div>`,
+		html.EscapeString(message),
+	)
+}
+
+func newThemeEditorData(facilityID int64) themetempl.ThemeEditorData {
+	return themeEditorData(defaultTheme(), facilityID)
+}
+
+func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEditorData {
+	return themetempl.ThemeEditorData{
+		Theme:      themetempl.NewTheme(theme, 0),
+		FacilityID: facilityID,
+		ReadOnly:   theme.IsSystem,
+	}
+}
+
+func defaultTheme() models.Theme {
+	return models.Theme{
+		Name:           "",
+		IsSystem:       false,
+		PrimaryColor:   "#1f2937",
+		SecondaryColor: "#e5e7eb",
+		TertiaryColor:  "#f9fafb",
+		AccentColor:    "#2563eb",
+		HighlightColor: "#16a34a",
+	}
 }
 
 func loadQueries() *dbgen.Queries {

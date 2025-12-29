@@ -151,19 +151,30 @@ func registerRoutes(mux *http.ServeMux) {
 		openplay.HandleOpenPlayRuleEdit(w, r)
 	})
 
+	// Theme admin page
+	mux.HandleFunc("/admin/themes", themes.HandleThemesPage)
+
 	// Theme API
-	mux.HandleFunc("/api/themes", methodHandler(map[string]http.HandlerFunc{
+	mux.HandleFunc("/api/v1/themes", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  themes.HandleThemesList,
 		http.MethodPost: themes.HandleThemeCreate,
 	}))
-	mux.HandleFunc("/api/themes/{id}", methodHandler(map[string]http.HandlerFunc{
+	mux.HandleFunc("/api/v1/themes/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		themes.HandleThemeNew(w, r)
+	})
+	mux.HandleFunc("/api/v1/themes/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:    themes.HandleThemeDetail,
 		http.MethodPut:    themes.HandleThemeUpdate,
 		http.MethodDelete: themes.HandleThemeDelete,
 	}))
-	mux.HandleFunc("/api/themes/{id}/clone", methodHandler(map[string]http.HandlerFunc{
+	mux.HandleFunc("/api/v1/themes/{id}/clone", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: themes.HandleThemeClone,
 	}))
-	mux.HandleFunc("/api/facilities/{id}/theme", methodHandler(map[string]http.HandlerFunc{
+	mux.HandleFunc("/api/v1/facilities/{id}/theme", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: themes.HandleFacilityThemeSet,
 	}))
 

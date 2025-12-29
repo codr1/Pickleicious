@@ -1,0 +1,101 @@
+// internal/templates/components/themes/layout.templ
+package themes
+
+import "fmt"
+
+templ ThemeAdminLayout(facilityID int64, editor ThemeEditorData) {
+	<div class="space-y-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<div>
+				<h2 class="text-2xl font-semibold text-gray-900">Theme Management</h2>
+				<p class="mt-1 text-sm text-gray-600">Create, clone, and activate facility themes. System themes are read-only.</p>
+			</div>
+			<button
+				class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+				hx-get={fmt.Sprintf("/api/v1/themes/new?facility_id=%d", facilityID)}
+				hx-target="#theme-editor"
+				hx-swap="innerHTML">
+				New Theme
+			</button>
+		</div>
+
+		<div class="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
+			<section class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+				<div class="mb-4 flex items-center justify-between">
+					<h3 class="text-lg font-semibold text-gray-900">Themes</h3>
+					<span class="text-xs text-gray-500">Facility ID {fmt.Sprintf("%d", facilityID)}</span>
+				</div>
+				<div
+					id="themes-list"
+					class="space-y-4"
+					hx-get={fmt.Sprintf("/api/v1/themes?facility_id=%d", facilityID)}
+					hx-trigger="load, refreshThemesList from:body"
+					hx-swap="innerHTML">
+					<div class="rounded border border-dashed border-gray-200 p-4 text-sm text-gray-500">
+						Loading themes...
+					</div>
+				</div>
+			</section>
+
+			<section id="theme-editor">
+				@ThemeEditor(editor)
+			</section>
+		</div>
+	</div>
+
+	<script>
+		(function () {
+			function collectThemeValues(root) {
+				const values = {};
+				root.querySelectorAll('[data-color-input]').forEach((input) => {
+					const key = input.getAttribute('data-color-input');
+					values[key] = input.value;
+				});
+				return values;
+			}
+
+			function syncPreview(root) {
+				if (!root) {
+					return;
+				}
+				const preview = root.querySelector('[data-theme-preview]');
+				const values = collectThemeValues(root);
+				if (preview) {
+					preview.style.setProperty('--theme-primary', values.primary_color || '#111827');
+					preview.style.setProperty('--theme-secondary', values.secondary_color || '#e5e7eb');
+					preview.style.setProperty('--theme-tertiary', values.tertiary_color || '#f9fafb');
+					preview.style.setProperty('--theme-accent', values.accent_color || '#1f2937');
+					preview.style.setProperty('--theme-highlight', values.highlight_color || '#0f766e');
+				}
+				root.querySelectorAll('[data-color-swatch]').forEach((swatch) => {
+					const key = swatch.getAttribute('data-color-swatch');
+					if (values[key]) {
+						swatch.style.backgroundColor = values[key];
+					}
+				});
+			}
+
+			function initThemeEditor() {
+				const editor = document.getElementById('theme-editor');
+				if (!editor) {
+					return;
+				}
+				const inputs = editor.querySelectorAll('[data-color-input]');
+				inputs.forEach((input) => {
+					input.removeEventListener('input', input.__themeListener || (() => {}));
+					const handler = () => syncPreview(editor);
+					input.__themeListener = handler;
+					input.addEventListener('input', handler);
+				});
+				syncPreview(editor);
+			}
+
+			document.addEventListener('DOMContentLoaded', initThemeEditor);
+			document.body.addEventListener('htmx:afterSwap', (event) => {
+				if (event.detail && event.detail.target && event.detail.target.id === 'theme-editor') {
+					initThemeEditor();
+				}
+			});
+		})();
+	</script>
+}
