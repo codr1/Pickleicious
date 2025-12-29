@@ -12,7 +12,13 @@ tasks:
     desc: Generate templ and sqlc code
     cmds:
       - templ generate
-      - sqlc generate
+      - cmd: sqlc generate
+        dir: internal/db
+  generate-sqlc:
+    desc: Generate sqlc code
+    cmds:
+      - cmd: sqlc generate
+        dir: internal/db
 
   build:
     desc: Build the server binary
@@ -26,6 +32,7 @@ tasks:
     desc: Build the server binary for development
     deps:
       - generate
+      - css
     cmds:
       - go build -tags dev -o {{.SERVER_BIN}} ./cmd/server
 
@@ -33,6 +40,7 @@ tasks:
     desc: Build the server binary for staging
     deps:
       - generate
+      - css
     cmds:
       - go build -tags staging -o {{.SERVER_BIN}} ./cmd/server
 
@@ -40,6 +48,7 @@ tasks:
     desc: Build the server binary for production
     deps:
       - generate
+      - css
     cmds:
       - go build -tags prod -ldflags "-s -w" -o {{.SERVER_BIN}} ./cmd/server
 
@@ -56,12 +65,20 @@ tasks:
       - npx tailwindcss -i ./styles/input.css -o ./static/css/main.css
 
   db:migrate:
-    desc: Run database migrations with goose
+    desc: Run database migrations with dbmigrate
     cmds:
       - mkdir -p {{.DB_DIR}}
-      - goose -dir {{.MIGRATIONS_DIR}} sqlite3 {{.DB_PATH}} up
+      - go run cmd/tools/dbmigrate/main.go -command up -db {{.DB_PATH}} -migrations {{.MIGRATIONS_DIR}}
 
   dev:
+    desc: Run the dev server without file watching
+    deps:
+      - generate
+      - css
+    cmds:
+      - go run -tags dev ./cmd/server
+
+  dev:watch:
     desc: Run the dev server with Air
     deps:
       - generate

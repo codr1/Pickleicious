@@ -1,6 +1,5 @@
 # Binaries
 /bin/*
-!/bin/.gitkeep
 
 # Go specific
 *.exe
@@ -57,14 +56,6 @@ temp/
 /build/
 /bin/
 /dist/
-
-# CMake specific
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-compile_commands.json
-*.cmake
-!CMakeLists.txt
 
 # Configuration
 /config/app.yaml

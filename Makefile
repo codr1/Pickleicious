@@ -1,9 +1,11 @@
 # Makefile
 
 # Configuration
-BUILD_DIR := build
-ENV ?= dev
-BUILD_TYPE ?= Debug
+BIN_DIR := bin
+SERVER_BIN := $(BIN_DIR)/server
+DB_DIR := build/db
+DB_PATH ?= $(DB_DIR)/pickleicious.db
+MIGRATIONS_DIR := ./internal/db/migrations
 
 # Colors for output
 GREEN  := $(shell tput setaf 2)
@@ -24,99 +26,93 @@ install-tools:
 		npm install -g tailwindcss; \
 	fi
 
-# TODO: START HERE !
-.PHONY: all build clean dev test tools help db-setup db-migrate db-reset generate-sqlc static-assets dev_watch
+.PHONY: all build build-dev build-staging build-prod clean dev dev-watch test help db-setup db-migrate db-reset generate-sqlc static-assets templates css generate
 
 # Default target
 all: build
 
-# Ensure build directory exists and run CMake
-$(BUILD_DIR)/Makefile:
-	@echo "$(GREEN)Configuring CMake for $(ENV) environment...$(RESET)"
-	@mkdir -p $(BUILD_DIR)
-	@cd $(BUILD_DIR) && cmake .. -DENV=$(ENV) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+# Generate templ and sqlc code
+generate:
+	@echo "$(GREEN)Generating templ and sqlc code...$(RESET)"
+	@templ generate
+	@cd internal/db && sqlc generate
+
+# Build CSS assets
+css:
+	@echo "$(GREEN)Building CSS...$(RESET)"
+	@mkdir -p web/static/css
+	@cd web && npx tailwindcss -i ./styles/input.css -o ./static/css/main.css
 
 # Build the server
-build: $(BUILD_DIR)/Makefile
+build: generate css
 	@echo "$(GREEN)Building server...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target server
+	@mkdir -p $(BIN_DIR)
+	@go build -o $(SERVER_BIN) ./cmd/server
+
+# Build variants
+build-dev: generate css
+	@echo "$(GREEN)Building dev server...$(RESET)"
+	@mkdir -p $(BIN_DIR)
+	@go build -tags dev -o $(SERVER_BIN) ./cmd/server
+
+build-staging: generate css
+	@echo "$(GREEN)Building staging server...$(RESET)"
+	@mkdir -p $(BIN_DIR)
+	@go build -tags staging -o $(SERVER_BIN) ./cmd/server
+
+build-prod: generate css
+	@echo "$(GREEN)Building prod server...$(RESET)"
+	@mkdir -p $(BIN_DIR)
+	@go build -tags prod -ldflags "-s -w" -o $(SERVER_BIN) ./cmd/server
 
 # Run the development server
-dev: $(BUILD_DIR)/Makefile static-assets
+dev: generate css
 	@echo "$(GREEN)Starting development server...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target dev
+	@go run -tags dev ./cmd/server
+
+# Run the development server with live reload
+dev-watch: generate css
+	@echo "$(GREEN)Starting development server with live reload...$(RESET)"
+	@air -c .air.toml
 
 # Clean build artifacts
 clean:
 	@echo "$(YELLOW)Cleaning build artifacts...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target clean_all 2>/dev/null || true
-	@rm -rf $(BUILD_DIR)
+	@rm -rf $(BIN_DIR)
 
 # Run tests
-test: $(BUILD_DIR)/Makefile
+test:
 	@echo "$(GREEN)Running tests...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target test
-
-# Build tools
-tools: $(BUILD_DIR)/Makefile
-	@echo "$(GREEN)Building tools...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target tools
-
-# Development with file watching
-dev_watch: $(BUILD_DIR)/Makefile
-	@echo "$(GREEN)Starting development server with file watching...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target db_migrate_up generate_sqlc
-	@cmake --build $(BUILD_DIR) --target dev_watch
+	@go test ./...
 
 # Generate templates only
-templates: $(BUILD_DIR)/Makefile
+templates:
 	@echo "$(GREEN)Generating templates...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target generate_templ
-
-# Build CSS only
-css: $(BUILD_DIR)/Makefile
-	@echo "$(GREEN)Building CSS...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target tailwind
+	@templ generate
 
 # Creates database and runs all migrations
-db-setup: $(BUILD_DIR)/Makefile
+db-setup:
 	@echo "${GREEN}Setting up database...${RESET}"
-	@cmake --build $(BUILD_DIR) --target db_migrate_up
+	@$(MAKE) db-migrate-up
 
 # Runs any pending migrations
-db-migrate: $(BUILD_DIR)/Makefile
+db-migrate:
 	@echo "${GREEN}Running database migrations...${RESET}"
-	@cmake --build $(BUILD_DIR) --target db_migrate_up
+	@$(MAKE) db-migrate-up
 
 # Wipes database and runs all migrations fresh
-db-reset: $(BUILD_DIR)/Makefile
+db-reset:
 	@echo "${GREEN}Resetting database...${RESET}"
 	@rm -f "$(DB_PATH)"
 	@mkdir -p "$$(dirname "$(DB_PATH)")"
 	@$(MAKE) db-migrate-up
 
 # Generates Go code from SQL queries using sqlc
-generate-sqlc: $(BUILD_DIR)/Makefile   # Generates type-safe DB code from SQL
+generate-sqlc:
 	@echo "${GREEN}Generating SQLC code...${RESET}"
-	@cmake --build $(BUILD_DIR) --target generate_sqlc
+	@cd internal/db && sqlc generate
 
-# Development server with database setup
-.PHONY: dev-server
-dev-server: $(BUILD_DIR)/Makefile db-setup generate-sqlc  # Runs with hot reload, debug logging, local SQLite
-	@echo "${GREEN}Starting development server...${RESET}"
-	@cmake --build $(BUILD_DIR) --target dev_watch
-
-# Production server with database setup
-.PHONY: prod
-prod: $(BUILD_DIR)/Makefile db-migrate  # No hot reload, optimized, proper DB config, etc
-	@echo "${GREEN}Starting production server...${RESET}"
-	@ENV=prod cmake --build $(BUILD_DIR) --target server
-
-# Default database path if config.yaml is not found
-DB_PATH ?= build/db/pickleicious.db
-MIGRATIONS_DIR := ./internal/db/migrations
-
-# Database tasks
+# Run database migrations using the Go tool
 .PHONY: db-migrate-up
 db-migrate-up:
 	@echo "${GREEN}Running database migrations...${RESET}"
@@ -127,36 +123,27 @@ db-migrate-up:
 		-db $(DB_PATH) \
 		-migrations $(MIGRATIONS_DIR)
 
-# Add new target
-static-assets: $(BUILD_DIR)/Makefile
+# Copy static assets
+static-assets:
 	@echo "$(GREEN)Copying static assets...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target static_assets
-
-# Add new target
-dev-watch: $(BUILD_DIR)/Makefile
-	@echo "$(GREEN)Starting development server with file watching...$(RESET)"
-	@cmake --build $(BUILD_DIR) --target dev_watch
+	@mkdir -p $(BIN_DIR)/static
+	@cp -R web/static/* $(BIN_DIR)/static/
 
 # Help target
 help:
 	@echo "Available targets:"
 	@echo "  make               - Build the server (default)"
-	@echo "  make prod          - Run the production server"
-	@echo "  make dev           - Run the development server"
-	@echo "  make test          - Run tests"
-	@echo "  make tools         - Build development tools"
-	@echo "  make db-setup 	    - Creates database and runs all migrations" 
-	@echo "  make db-migrate    - Runs any pending migrations"
-	@echo "  make db-reset      - Wipes database and runs all migrations fresh"
-	@echo "  make generate_sqlc - Generates Go code from SQL queries using sqlc"
-	@echo "  make clean         - Clean build artifacts"
-	@echo "  make dev-watch     - Run development server with file watching"
-	@echo ""
-	@echo "Configuration:"
-	@echo "  make ENV=prod      - Build for production"
-	@echo "  make ENV=staging   - Build for staging"
-	@echo "  make ENV=dev      - Build for development (default)"
+	@echo "  make build-dev      - Build the server for development"
+	@echo "  make build-staging  - Build the server for staging"
+	@echo "  make build-prod     - Build the server for production"
+	@echo "  make dev            - Run the development server (no file watching)"
+	@echo "  make dev-watch      - Run the development server with live reload"
+	@echo "  make test           - Run tests"
+	@echo "  make db-setup       - Creates database and runs all migrations" 
+	@echo "  make db-migrate     - Runs any pending migrations"
+	@echo "  make db-reset       - Wipes database and runs all migrations fresh"
+	@echo "  make generate-sqlc  - Generates Go code from SQL queries using sqlc"
+	@echo "  make clean          - Clean build artifacts"
 	@echo ""
 	@echo "Example usage:"
-	@echo "  make dev ENV=staging    - Run development server with staging config"
-
+	@echo "  make dev"

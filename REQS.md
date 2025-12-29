@@ -1456,29 +1456,28 @@ pickleicious/
 ├── assets/
 │   ├── stories/             # Story YAML files
 │   └── themes/              # Theme color definitions
-├── CMakeLists.txt           # Build system
 ├── .air.toml                # Hot reload config
 └── config.yaml              # App configuration
 ```
 
-### 11.3 Build System (CMake)
+### 11.3 Build System (Taskfile)
 
 **Environments:**
-- `dev` (default)
-- `staging`
-- `prod` (minified CSS, production flags)
+- `build:dev`
+- `build:staging`
+- `build:prod` (minified binary flags)
 
-**Key Targets:**
+**Key Tasks:**
 | Target | Description |
 |--------|-------------|
-| `generate_templ` | Compile .templ files |
-| `tailwind` | Build CSS from Tailwind |
-| `static_assets` | Copy static files |
-| `generate_sqlc` | Generate type-safe queries |
-| `db_migrate_up` | Run migrations |
-| `server` | Build server binary |
+| `generate` | Compile .templ files and sqlc queries |
+| `css` | Build CSS from Tailwind |
+| `db:migrate` | Run migrations |
+| `build` | Build server binary |
+| `build:dev` | Build server binary for development |
+| `build:staging` | Build server binary for staging |
+| `build:prod` | Build server binary for production |
 | `dev` | Run development server |
-| `dev_watch` | Hot reload (Air + Tailwind watch + Templ watch) |
 
 ### 11.4 Configuration
 
