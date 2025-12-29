@@ -1,5 +1,5 @@
 # Binaries
-/bin/*
+/bin/
 
 # Go specific
 *.exe
@@ -54,7 +54,6 @@ temp/
 
 # Build and output
 /build/
-/bin/
 /dist/
 
 # Configuration
@@ -73,4 +72,3 @@ coverage.html
 # Keep certain directories with .gitkeep
 !/internal/db/generated/.gitkeep
 !/build/.gitkeep
-build/

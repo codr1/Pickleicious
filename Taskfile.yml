@@ -24,7 +24,7 @@ tasks:
     desc: Build the server binary
     deps:
       - generate
-      - css
+      - static_assets
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - go build -o {{.SERVER_BIN}} ./cmd/server
@@ -33,28 +33,28 @@ tasks:
     desc: Build the server binary for development
     deps:
       - generate
-      - css
+      - static_assets
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -tags dev -o {{.SERVER_BIN}} ./cmd/server
+      - go build -o {{.SERVER_BIN}} ./cmd/server
 
   build:staging:
     desc: Build the server binary for staging
     deps:
       - generate
-      - css
+      - static_assets
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -tags staging -o {{.SERVER_BIN}} ./cmd/server
+      - go build -o {{.SERVER_BIN}} ./cmd/server
 
   build:prod:
     desc: Build the server binary for production
     deps:
       - generate
-      - css
+      - static_assets
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -tags prod -ldflags "-s -w" -o {{.SERVER_BIN}} ./cmd/server
+      - go build -ldflags "-s -w" -o {{.SERVER_BIN}} ./cmd/server
 
   test:
     desc: Run Go tests
@@ -67,6 +67,14 @@ tasks:
     cmds:
       - mkdir -p ./static/css
       - npx tailwindcss -i ./styles/input.css -o ./static/css/main.css
+
+  static_assets:
+    desc: Copy static assets into the build output directory
+    deps:
+      - css
+    cmds:
+      - mkdir -p {{.BIN_DIR}}/static
+      - cp -R web/static/. {{.BIN_DIR}}/static/
 
   db:migrate:
     desc: Run database migrations with dbmigrate
@@ -82,14 +90,18 @@ tasks:
 
   dev:
     desc: Run the dev server without file watching
+    env:
+      STATIC_DIR: web/static
     deps:
       - generate
       - css
     cmds:
-      - go run -tags dev ./cmd/server
+      - go run ./cmd/server
 
   dev:watch:
     desc: Run the dev server with Air
+    env:
+      STATIC_DIR: web/static
     deps:
       - generate
       - css
@@ -100,4 +112,5 @@ tasks:
     desc: Remove build artifacts
     cmds:
       - rm -f {{.SERVER_BIN}}
+      - rm -rf {{.BIN_DIR}}/static
       - rm -rf build/tmp {{.DB_DIR}}
