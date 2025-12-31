@@ -1463,8 +1463,6 @@ pickleicious/
 ### 11.3 Build System (Taskfile)
 
 **Environments:**
-- `build:dev`
-- `build:staging`
 - `build:prod` (minified binary flags)
 
 **Key Tasks:**
@@ -1474,8 +1472,6 @@ pickleicious/
 | `css` | Build CSS from Tailwind |
 | `db:migrate` | Run migrations |
 | `build` | Build server binary |
-| `build:dev` | Build server binary for development |
-| `build:staging` | Build server binary for staging |
 | `build:prod` | Build server binary for production |
 | `dev` | Run development server |
 

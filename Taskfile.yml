@@ -29,24 +29,6 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       - go build -o {{.SERVER_BIN}} ./cmd/server
 
-  build:dev:
-    desc: Build the server binary for development
-    deps:
-      - generate
-      - static_assets
-    cmds:
-      - mkdir -p {{.BIN_DIR}}
-      - go build -o {{.SERVER_BIN}} ./cmd/server
-
-  build:staging:
-    desc: Build the server binary for staging
-    deps:
-      - generate
-      - static_assets
-    cmds:
-      - mkdir -p {{.BIN_DIR}}
-      - go build -o {{.SERVER_BIN}} ./cmd/server
-
   build:prod:
     desc: Build the server binary for production
     deps:

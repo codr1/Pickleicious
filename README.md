@@ -22,6 +22,4 @@ Common commands:
 
 Environment variants:
 
-- `task build:dev`
-- `task build:staging`
 - `task build:prod`
