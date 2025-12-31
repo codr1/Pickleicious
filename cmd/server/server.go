@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,8 +16,11 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	"github.com/codr1/Pickleicious/internal/api/openplay"
+	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
+	"github.com/codr1/Pickleicious/internal/models"
+	"github.com/codr1/Pickleicious/internal/request"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
@@ -33,9 +37,11 @@ func newServer(config *config.Config, database *db.DB) *http.Server {
 	)
 
 	openplay.InitHandlers(database.Queries)
+	themes.InitHandlers(database.Queries)
+	courts.InitHandlers(database.Queries)
 
 	// Register routes
-	registerRoutes(router)
+	registerRoutes(router, database)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.App.Port),
@@ -57,14 +63,30 @@ func methodHandler(handlers map[string]http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func registerRoutes(mux *http.ServeMux) {
+func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Main page handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		component := layouts.Base(nil)
+		var activeTheme *models.Theme
+		if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+
+			var err error
+			activeTheme, err = models.GetActiveTheme(ctx, database.Queries, facilityID)
+			if err != nil {
+				log.Ctx(r.Context()).
+					Error().
+					Err(err).
+					Int64("facility_id", facilityID).
+					Msg("Failed to load active theme")
+				activeTheme = nil
+			}
+		}
+		component := layouts.Base(nil, activeTheme)
 		component.Render(r.Context(), w)
 	})
 
@@ -148,6 +170,33 @@ func registerRoutes(mux *http.ServeMux) {
 		}
 		openplay.HandleOpenPlayRuleEdit(w, r)
 	})
+
+	// Theme admin page
+	mux.HandleFunc("/admin/themes", themes.HandleThemesPage)
+
+	// Theme API
+	mux.HandleFunc("/api/v1/themes", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  themes.HandleThemesList,
+		http.MethodPost: themes.HandleThemeCreate,
+	}))
+	mux.HandleFunc("/api/v1/themes/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		themes.HandleThemeNew(w, r)
+	})
+	mux.HandleFunc("/api/v1/themes/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:    themes.HandleThemeDetail,
+		http.MethodPut:    themes.HandleThemeUpdate,
+		http.MethodDelete: themes.HandleThemeDelete,
+	}))
+	mux.HandleFunc("/api/v1/themes/{id}/clone", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: themes.HandleThemeClone,
+	}))
+	mux.HandleFunc("/api/v1/facilities/{id}/theme", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: themes.HandleFacilityThemeSet,
+	}))
 
 	// Static file handling with logging and environment awareness
 	staticDir := os.Getenv("STATIC_DIR")

@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/models"
 	openplaytempl "github.com/codr1/Pickleicious/internal/templates/components/openplay"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
@@ -68,7 +69,13 @@ func HandleOpenPlayRulesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page := layouts.Base(openPlayRulesPageComponent(rules))
+	activeTheme, err := models.GetActiveTheme(ctx, q, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
+		activeTheme = nil
+	}
+
+	page := layouts.Base(openPlayRulesPageComponent(rules), activeTheme)
 	if !renderHTMLComponent(r.Context(), w, page, nil, "Failed to render open play rules page", "Failed to render page") {
 		return
 	}

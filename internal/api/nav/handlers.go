@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/request"
 	"github.com/codr1/Pickleicious/internal/templates/components/nav"
 	"github.com/rs/zerolog/log"
 )
@@ -59,7 +59,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func facilityIDFromMenuRequest(r *http.Request) (int64, bool) {
-	if facilityID, ok := parseFacilityID(r.URL.Query().Get("facility_id")); ok {
+	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 		return facilityID, true
 	}
 
@@ -78,19 +78,5 @@ func facilityIDFromMenuRequest(r *http.Request) (int64, bool) {
 		return 0, false
 	}
 
-	return parseFacilityID(parsed.Query().Get("facility_id"))
-}
-
-func parseFacilityID(value string) (int64, bool) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0, false
-	}
-
-	facilityID, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || facilityID <= 0 {
-		return 0, false
-	}
-
-	return facilityID, true
+	return request.ParseFacilityID(parsed.Query().Get("facility_id"))
 }
