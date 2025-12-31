@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "build/tmp"
 
 [build]
-cmd = "go build -tags dev -o ./build/bin/server ./cmd/server"
+cmd = "go build -o ./build/bin/server ./cmd/server"
 bin = "./build/bin/server"
 include_ext = ["go", "templ", "css", "js", "html"]
 exclude_dir = ["build", "tmp", "vendor"]
@@ -23,4 +23,4 @@ runner = "green"
 clean_on_exit = true
 
 [screen]
-clear_on_rebuild = true 
+clear_on_rebuild = true
