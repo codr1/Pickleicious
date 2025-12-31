@@ -7,7 +7,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/models"
 )
 
-func get_theme_css_vars(theme *models.Theme) string {
+func getThemeCssVars(theme *models.Theme) string {
 	defaultTheme := models.DefaultTheme()
 	primary := defaultTheme.PrimaryColor
 	secondary := defaultTheme.SecondaryColor
