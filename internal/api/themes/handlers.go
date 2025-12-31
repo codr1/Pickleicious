@@ -86,8 +86,17 @@ func HandleThemesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
+	defer cancel()
+
+	activeTheme, err := models.GetActiveTheme(ctx, q, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
+		activeTheme = nil
+	}
+
 	editor := newThemeEditorData(facilityID)
-	page := layouts.Base(themetempl.ThemeAdminLayout(facilityID, editor))
+	page := layouts.Base(themetempl.ThemeAdminLayout(facilityID, editor), activeTheme)
 	if !renderHTMLComponent(r.Context(), w, page, nil, "Failed to render themes page", "Failed to render page") {
 		return
 	}
@@ -200,8 +209,7 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 		activeThemeID, err := q.GetActiveThemeID(ctx, facilityID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
-			http.Error(w, "Failed to load active theme", http.StatusInternalServerError)
-			return
+			activeThemeID = 0
 		}
 
 		component := themetempl.ThemeList(themetempl.NewThemes(themes, activeThemeID), facilityID)
@@ -459,7 +467,10 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usage, err := q.CountThemeUsage(ctx, themeID)
+	usage, err := q.CountThemeUsage(ctx, sql.NullInt64{
+		Int64: themeID,
+		Valid: true,
+	})
 	if err != nil {
 		logger.Error().Err(err).Int64("theme_id", themeID).Msg("Failed to check theme usage")
 		http.Error(w, "Failed to validate theme usage", http.StatusInternalServerError)
@@ -663,22 +674,20 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = q.UpsertActiveThemeID(ctx, dbgen.UpsertActiveThemeIDParams{
-		FacilityID:    facilityID,
-		ActiveThemeID: req.ThemeID,
+	updated, err := q.UpsertActiveThemeID(ctx, dbgen.UpsertActiveThemeIDParams{
+		FacilityID: facilityID,
+		ActiveThemeID: sql.NullInt64{
+			Int64: req.ThemeID,
+			Valid: true,
+		},
 	})
 	if err != nil {
-		if isSQLiteForeignKeyViolation(err) {
-			_, themeErr := q.GetTheme(ctx, req.ThemeID)
-			if errors.Is(themeErr, sql.ErrNoRows) {
-				http.Error(w, "Theme not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "Facility not found", http.StatusNotFound)
-			return
-		}
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to set active theme")
 		http.Error(w, "Failed to update active theme", http.StatusInternalServerError)
+		return
+	}
+	if updated == 0 {
+		http.Error(w, "Facility not found", http.StatusNotFound)
 		return
 	}
 
@@ -913,7 +922,7 @@ func writeThemeFeedback(w http.ResponseWriter, status int, message string) {
 }
 
 func newThemeEditorData(facilityID int64) themetempl.ThemeEditorData {
-	return themeEditorData(defaultTheme(), facilityID)
+	return themeEditorData(models.DefaultTheme(), facilityID)
 }
 
 func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEditorData {
@@ -921,18 +930,6 @@ func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEdito
 		Theme:      themetempl.NewTheme(theme, 0),
 		FacilityID: facilityID,
 		ReadOnly:   theme.IsSystem,
-	}
-}
-
-func defaultTheme() models.Theme {
-	return models.Theme{
-		Name:           "",
-		IsSystem:       false,
-		PrimaryColor:   "#1f2937",
-		SecondaryColor: "#e5e7eb",
-		TertiaryColor:  "#f9fafb",
-		AccentColor:    "#2563eb",
-		HighlightColor: "#16a34a",
 	}
 }
 

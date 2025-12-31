@@ -2,6 +2,7 @@
 package members
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -16,7 +17,10 @@ import (
 	"golang.org/x/time/rate"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/models"
+	"github.com/codr1/Pickleicious/internal/request"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/members"
+	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
 var queries *dbgen.Queries
@@ -26,6 +30,8 @@ var (
 	ipLimiters   = make(map[string]*rate.Limiter)
 	ipLimitersMu sync.Mutex
 )
+
+const membersQueryTimeout = 5 * time.Second
 
 func InitHandlers(q *dbgen.Queries) {
 	queries = q
@@ -54,13 +60,28 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var activeTheme *models.Theme
+	facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id"))
+	if ok {
+		ctx, cancel := context.WithTimeout(r.Context(), membersQueryTimeout)
+		defer cancel()
+
+		theme, err := models.GetActiveTheme(ctx, queries, facilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
+			theme = nil
+		}
+		activeTheme = theme
+	}
+
 	// Convert to template Members
 	templateMembers := membertempl.NewMembers(members)
 
 	// Render the layout template with members
 	component := membertempl.MembersLayout(templateMembers)
+	page := layouts.Base(component, activeTheme)
 
-	err = component.Render(r.Context(), w)
+	err = page.Render(r.Context(), w)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to render members layout")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)

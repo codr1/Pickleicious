@@ -4,6 +4,7 @@ package models
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -20,9 +21,18 @@ const wcagAAContrastNote = "WCAG AA for large text/UI components"
 const maxThemeNameLength = 100
 const darkTextColor = "#000000"
 const lightTextColor = "#FFFFFF"
+const defaultThemePrimary = "#1f2937"
+const defaultThemeSecondary = "#e5e7eb"
+const defaultThemeTertiary = "#f9fafb"
+const defaultThemeAccent = "#2563eb"
+const defaultThemeHighlight = "#16a34a"
 
 var hexColorRegex = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 var themeNameRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ()-]*$`)
+
+func IsHexColor(value string) bool {
+	return hexColorRegex.MatchString(strings.TrimSpace(value))
+}
 
 type Theme struct {
 	ID             int64     `json:"id"`
@@ -36,6 +46,18 @@ type Theme struct {
 	HighlightColor string    `json:"highlightColor"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+func DefaultTheme() Theme {
+	return Theme{
+		Name:           "",
+		IsSystem:       false,
+		PrimaryColor:   defaultThemePrimary,
+		SecondaryColor: defaultThemeSecondary,
+		TertiaryColor:  defaultThemeTertiary,
+		AccentColor:    defaultThemeAccent,
+		HighlightColor: defaultThemeHighlight,
+	}
 }
 
 func (t Theme) Validate() error {
@@ -97,6 +119,28 @@ func GetFacilityThemes(ctx context.Context, queries *dbgen.Queries, facilityID i
 		return nil, err
 	}
 	return themesFromDB(rows), nil
+}
+
+func GetActiveTheme(ctx context.Context, queries *dbgen.Queries, facilityID int64) (*Theme, error) {
+	activeThemeID, err := queries.GetActiveThemeID(ctx, facilityID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if activeThemeID <= 0 {
+		return nil, nil
+	}
+	row, err := queries.GetTheme(ctx, activeThemeID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	theme := themeFromDB(row)
+	return &theme, nil
 }
 
 func themesFromDB(rows []dbgen.Theme) []Theme {

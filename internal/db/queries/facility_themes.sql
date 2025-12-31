@@ -1,20 +1,15 @@
 -- internal/db/queries/facility_themes.sql
 -- name: GetActiveThemeID :one
-SELECT active_theme_id FROM facility_theme_settings
-WHERE facility_id = @facility_id;
+SELECT COALESCE(active_theme_id, 0)
+FROM facilities
+WHERE id = @facility_id;
 
--- name: UpsertActiveThemeID :exec
-INSERT INTO facility_theme_settings (
-    facility_id,
-    active_theme_id
-) VALUES (
-    @facility_id,
-    @active_theme_id
-)
-ON CONFLICT(facility_id) DO UPDATE SET
-    active_theme_id = excluded.active_theme_id,
-    updated_at = CURRENT_TIMESTAMP;
+-- name: UpsertActiveThemeID :execrows
+UPDATE facilities
+SET active_theme_id = @active_theme_id,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @facility_id;
 
 -- name: CountThemeUsage :one
-SELECT COUNT(*) FROM facility_theme_settings
+SELECT COUNT(*) FROM facilities
 WHERE active_theme_id = @theme_id;

@@ -1,15 +1,19 @@
 // internal/templates/layouts/base.templ
 package layouts
 
-import "github.com/codr1/Pickleicious/internal/templates/components/nav"
+import (
+    "github.com/codr1/Pickleicious/internal/models"
+    "github.com/codr1/Pickleicious/internal/templates/components/nav"
+)
 
-templ Base(content templ.Component) {
+templ Base(content templ.Component, theme *models.Theme) {
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <title>Pickleicious</title>
+        @templ.Raw("<style>" + get_theme_css_vars(theme) + "</style>")
         <script src="https://unpkg.com/htmx.org@1.9.10"></script>
         <link href="/static/css/main.css" rel="stylesheet"/>
         <script>

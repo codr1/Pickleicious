@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,8 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
+	"github.com/codr1/Pickleicious/internal/models"
+	"github.com/codr1/Pickleicious/internal/request"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
@@ -35,9 +38,10 @@ func newServer(config *config.Config, database *db.DB) *http.Server {
 
 	openplay.InitHandlers(database.Queries)
 	themes.InitHandlers(database.Queries)
+	courts.InitHandlers(database.Queries)
 
 	// Register routes
-	registerRoutes(router)
+	registerRoutes(router, database)
 
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.App.Port),
@@ -59,14 +63,30 @@ func methodHandler(handlers map[string]http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func registerRoutes(mux *http.ServeMux) {
+func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Main page handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		component := layouts.Base(nil)
+		var activeTheme *models.Theme
+		if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+
+			var err error
+			activeTheme, err = models.GetActiveTheme(ctx, database.Queries, facilityID)
+			if err != nil {
+				log.Ctx(r.Context()).
+					Error().
+					Err(err).
+					Int64("facility_id", facilityID).
+					Msg("Failed to load active theme")
+				activeTheme = nil
+			}
+		}
+		component := layouts.Base(nil, activeTheme)
 		component.Render(r.Context(), w)
 	})
 
