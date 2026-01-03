@@ -1,2150 +1,898 @@
-# SPEC.md — Agent Orchestration System (AOS) Technical Specification
+# Pickleicious Specification
 
-This SPEC complements `PRD.md` with **implementation-grade** details:
-- File formats, schemas, and parsing rules
-- Lock acquisition algorithm
-- CLI behavior and exit codes
-- Stage execution (including Clarification, Documentation, UAT)
-- Agent integration contracts (Codex, Claude Code)
-- Run artifact schemas
-- Golden run scenarios with expected outputs
-- Self-testing requirements
-
-This document is written to be implementable without guesswork.
+Pickleicious is a management system for pickleball facilities. It handles the daily operations of running a club: tracking who walks through the door, managing court reservations, running open play sessions, and giving each facility its own branded experience.
 
 ---
 
-## 1) Path conventions and environment variables
+## System Architecture
 
-### 1.1 Directory structure (parameterized)
+The application follows a layered architecture with clear separation between HTTP handling, business logic, and data access.
 
-AOS uses these canonical paths, all derived from configuration:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `AOS_WORKFLOW_REPO` | This workflow repository | `~/dev/myproject.ops/workflow` |
-| `AOS_OPS_DIR` | Ops runtime (untracked sibling) | `~/dev/myproject.ops` |
-| `AOS_PROJECTS_DIR` | Projects directory | `$AOS_WORKFLOW_REPO/projects` |
-| `PROJECT_REPO` | Product repository (per-project) | `~/dev/myproject` |
-| `PROJECT_WORKTREES` | Worktrees directory | `$AOS_OPS_DIR/worktrees` |
-| `PROJECT_RUNS` | Run logs directory | `$AOS_OPS_DIR/runs` |
-
-**Resolution order:**
-1. Environment variable (if set)
-2. `project.env` value (if exists)
-3. Default (derived from workflow repo location)
-
-### 1.2 Environment variables
-
-**Global (optional overrides):**
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AOS_OPS_DIR` | Derived from workflow repo parent | Ops runtime directory |
-| `AOS_PROJECT` | None (required for multi-project) | Active project name |
-| `AOS_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `AOS_LOCK_TIMEOUT` | `600` | Lock acquisition timeout in seconds |
-
-**Secrets (never in git):**
-- Must be stored in `$AOS_OPS_DIR/secrets/`
-- Loaded via `secrets/env.sh` or similar
-- AOS must NEVER print secret values
-- AOS must NEVER commit files from secrets directory
-
-### 1.3 Multi-project support
-
-When multiple projects are registered:
 ```
-workflow/projects/
-  projectA/
-    project.env
-    ...
-  projectB/
-    project.env
-    ...
+                                    +------------------+
+                                    |   HTTP Client    |
+                                    |  (Browser/HTMX)  |
+                                    +--------+---------+
+                                             |
+                                    +--------v---------+
+                                    |   Middleware     |
+                                    | Logging/Recovery |
+                                    | RequestID/CORS   |
+                                    +--------+---------+
+                                             |
+         +-----------------------------------+-----------------------------------+
+         |                    |                    |                    |        |
++--------v-------+  +--------v-------+  +--------v-------+  +--------v-------+  |
+|    /members    |  |    /courts     |  |    /themes     |  | /open-play-... |  |
+|    Handlers    |  |    Handlers    |  |    Handlers    |  |    Handlers    |  |
++--------+-------+  +--------+-------+  +--------+-------+  +--------+-------+  |
+         |                    |                    |                    |        |
+         +-----------------------------------+-----------------------------------+
+                                             |
+                                    +--------v---------+
+                                    |     Models       |
+                                    |  (Business Logic)|
+                                    +--------+---------+
+                                             |
+                                    +--------v---------+
+                                    |   sqlc Queries   |
+                                    | (Type-safe SQL)  |
+                                    +--------+---------+
+                                             |
+                                    +--------v---------+
+                                    |     SQLite       |
+                                    +------------------+
 ```
 
-Commands require project context:
-- `wf --project projectA run ws1 --once`
-- Or set `AOS_PROJECT=projectA` in environment
-- Or `cd` into project directory and infer from path
+### Technology Choices
+
+| Layer | Technology | Why |
+|-------|------------|-----|
+| HTTP Server | `net/http` | Standard library, no framework lock-in, sufficient for our needs |
+| Templates | `templ` | Type-safe HTML at compile time, catches errors before runtime |
+| SQL | `sqlc` | Generates Go from SQL, catches schema drift at compile time |
+| Database | SQLite | Embedded, zero ops, perfect for single-facility deployments |
+| Frontend | HTMX | Server-rendered with interactivity, no JavaScript build pipeline |
+| CSS | Tailwind | Utility-first, works with CSS variables for theming |
+| Build | Taskfile | YAML task runner, simpler than Make for our needs |
+
+### Design Principles
+
+**Server-Rendered with Interactivity**: The UI is server-rendered HTML enhanced with HTMX. This keeps the system fast and simple - no complex JavaScript build pipeline, no client-side state management. Interactions feel instant because only the affected fragment updates, not the whole page.
+
+**Type Safety End-to-End**: SQL queries generate typed Go code. Templates are type-checked at compile time. This catches errors early and makes refactoring safe. If a database column is renamed, the compiler finds every place it's used.
+
+**Facilities as Boundaries**: Most data is scoped to a facility. This keeps queries fast (indexed by facility_id) and access control simple (staff see their facility). Organization-level views aggregate across facilities when needed.
+
+**Graceful Degradation**: If something fails, the system degrades gracefully. Can't load the member photo? Show a placeholder. Theme not found? Use defaults. Search returns no results? Clear message with suggestion to create new member.
 
 ---
 
-## 2) File formats and parsing
+## The Domain
 
-### 2.1 Env file format (AOS-safe subset)
+### Entity Relationships
 
-AOS uses `.env`-style files for configuration. Parsing MUST be safe.
-
-**Grammar:**
 ```
-file     = line*
-line     = empty | comment | assignment
-empty    = WS* NL
-comment  = WS* "#" [^\n]* NL
-assignment = KEY "=" VALUE NL
-
-KEY      = [A-Z][A-Z0-9_]*
-VALUE    = unquoted | quoted
-unquoted = [^\s"'`$;|&\n]+
-quoted   = '"' [^"`$]* '"'
-```
-
-**Forbidden in values (MUST reject):**
-- Backticks: `` ` ``
-- Command substitution: `$(`, `${`
-- Shell operators: `;`, `&&`, `||`, `|`
-- Unbalanced quotes
-
-**Multiline values:** NOT supported. Use separate keys or JSON files for complex data.
-
-**Space-separated lists:** Allowed within quoted values:
-```env
-EXPECTED_PATHS="requirements/ scripts/test/ mk/"
-```
-Parsed as single string; consumer splits on whitespace.
-
-### 2.2 Safe env parser implementation
-
-**Required:** `orchestrator/lib/envparse.py`
-
-```python
-"""
-Safe .env parser for AOS.
-
-Usage:
-    from envparse import load_env
-    config = load_env("/path/to/file.env")  # Returns dict
-
-CLI:
-    python -m envparse /path/to/file.env    # Prints JSON to stdout
-"""
-
-import re
-import json
-import sys
-from pathlib import Path
-
-FORBIDDEN_PATTERNS = [
-    r'`',           # backticks
-    r'\$\(',        # command substitution
-    r'\$\{',        # variable expansion
-    r';',           # command chaining
-    r'&&',          # AND chaining
-    r'\|\|',        # OR chaining
-    r'\|',          # pipe
-]
-
-KEY_PATTERN = re.compile(r'^[A-Z][A-Z0-9_]*$')
-
-def load_env(filepath: str) -> dict:
-    """Parse env file safely, return dict."""
-    result = {}
-    path = Path(filepath)
-
-    if not path.exists():
-        raise FileNotFoundError(f"Env file not found: {filepath}")
-
-    for lineno, line in enumerate(path.read_text().splitlines(), 1):
-        line = line.strip()
-
-        # Skip empty and comments
-        if not line or line.startswith('#'):
-            continue
-
-        # Must have =
-        if '=' not in line:
-            raise ValueError(f"Line {lineno}: Invalid syntax (no '=')")
-
-        key, _, value = line.partition('=')
-        key = key.strip()
-        value = value.strip()
-
-        # Validate key
-        if not KEY_PATTERN.match(key):
-            raise ValueError(f"Line {lineno}: Invalid key '{key}'")
-
-        # Strip quotes if present
-        if value.startswith('"') and value.endswith('"'):
-            value = value[1:-1]
-        elif value.startswith("'") and value.endswith("'"):
-            value = value[1:-1]
-
-        # Check for forbidden patterns
-        for pattern in FORBIDDEN_PATTERNS:
-            if re.search(pattern, value):
-                raise ValueError(f"Line {lineno}: Forbidden pattern in value")
-
-        result[key] = value
-
-    return result
-
-if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print("Usage: python -m envparse <file.env>", file=sys.stderr)
-        sys.exit(1)
-    try:
-        config = load_env(sys.argv[1])
-        print(json.dumps(config))
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(2)
+                              +----------------+
+                              | organizations  |
+                              +-------+--------+
+                                      |
+                                      | 1:N
+                                      v
++----------------+            +----------------+            +----------------+
+| cognito_config |----1:1----|   facilities   |----1:N----| operating_hours|
++----------------+            +-------+--------+            +----------------+
+                                      |
+              +------------+----------+----------+------------+
+              |            |          |          |            |
+              v            v          v          v            v
+        +--------+   +--------+  +--------+  +---------+  +--------+
+        | courts |   | themes |  | users  |  | open_   |  | reserv-|
+        +--------+   +--------+  +---+----+  | play_   |  | ations |
+                                     |       | rules   |  +---+----+
+              +----------+-----------+       +---------+      |
+              |          |           |                        |
+              v          v           v                   +----+----+
+        +--------+  +--------+  +--------+               |         |
+        | user_  |  | user_  |  | staff  |          +----v---+ +---v----+
+        | photos |  | billing|  +--------+          |reserv- | |reserv- |
+        +--------+  +--------+                      |_courts | |_partic.|
+                                                    +--------+ +--------+
 ```
 
-**Bash integration (safe):**
-```bash
-load_project_config() {
-    local config_json
-    config_json=$(python3 -m envparse "$1") || {
-        echo "ERROR: Failed to parse $1" >&2
-        return 2
-    }
-    # Extract specific values via jq
-    PROJECT_NAME=$(echo "$config_json" | jq -r '.PROJECT_NAME')
-    REPO_PATH=$(echo "$config_json" | jq -r '.REPO_PATH')
-    # ... etc
+### Facilities and Organizations
+
+A pickleball business may operate multiple facilities under one organization. Each facility is a physical location with its own courts, operating hours, staff, and members. Think of the organization as the business entity (Ace Pickleball Inc.) and facilities as individual clubs (Ace Pickleball Downtown, Ace Pickleball Westside).
+
+Each facility operates in its own timezone and sets its own hours. A facility might be open 6am-10pm on weekdays but only 8am-6pm on Sundays. These hours constrain when courts can be reserved and when open play sessions can run.
+
+**Organization** contains:
+- Name and unique slug for URLs
+- Status (active/inactive)
+- Optional Cognito configuration for SSO
+
+**Facility** contains:
+- Parent organization reference
+- Name, slug, timezone
+- Active theme selection
+- Operating hours per day of week
+
+### Courts
+
+Courts are the fundamental bookable resource. Each facility has a numbered set of courts (Court 1, Court 2, etc.). Courts can be active or temporarily offline for maintenance, repairs, or private events.
+
+The system tracks court availability across all reservation types. A court can only have one reservation at any given time - no double-booking is possible.
+
+**Court** contains:
+- Parent facility reference
+- Name and court number (unique per facility)
+- Status: active, maintenance, offline
+
+### People in the System
+
+The system recognizes two overlapping roles: members and staff. A person can be both - the club pro who also plays recreationally, or the manager who's also a paying member.
+
+```
++------------------+
+|      users       |
++------------------+
+| Identity         |
+| - email (unique) |
+| - phone          |
+| - name           |
++------------------+
+| Authentication   |
+| - cognito_sub    |
+| - password_hash  |
+| - local_auth_on  |
++------------------+
+| Role Flags       |
+| - is_member      |-----> Member fields apply
+| - is_staff       |-----> Staff fields apply
++------------------+
+| Member Fields    |
+| - membership_lvl |
+| - date_of_birth  |
+| - waiver_signed  |
++------------------+
+| Staff Fields     |
+| - staff_role     |
+| - home_facility  |
++------------------+
+```
+
+#### Members
+
+Members are the customers. They range from first-time guests to premium members:
+
+| Level | Name | Description |
+|-------|------|-------------|
+| 0 | Unverified Guest | Just signed up, hasn't verified email/phone. Can be checked in manually but can't self-serve. |
+| 1 | Verified Guest | Confirmed identity. Can sign up for open play, book courts if facility allows. |
+| 2 | Member | Paying member with full privileges. |
+| 3+ | Member+ | Premium tiers with additional benefits defined per facility. |
+
+Each member has a profile: name, contact info, address, photo, date of birth (required for waivers and age-restricted events), and waiver status. The system enforces that waivers must be signed before participation in play.
+
+**Member-specific fields:**
+- Date of birth (stored as YYYY-MM-DD text)
+- Waiver signed status and timestamp
+- Membership level (0-3+)
+- Billing information (separate table)
+- Photo (binary blob, separate table)
+
+#### Staff
+
+Staff operate the facility. Roles include:
+
+| Role | Capabilities |
+|------|--------------|
+| Admin | Full system access, manage other staff, configure facility settings |
+| Manager | Day-to-day operations, manage members and reservations, run reports |
+| Desk | Check members in, handle walk-ins, process payments |
+| Pro | Teaching professional, assigned to lessons and clinics |
+
+Staff can belong to a specific facility (the front desk person at Downtown) or operate at the organization level (the owner who oversees all locations).
+
+**Staff-specific fields:**
+- Role (admin, manager, desk, pro)
+- Home facility (NULL for organization-level)
+- Local authentication enabled flag
+- Password hash for local login
+
+---
+
+## Member Management
+
+### The Front Desk Experience
+
+The front desk needs to quickly find any member, see their status, and take action. This is the primary workflow for staff.
+
+```
++------------------+     +------------------+     +------------------+
+|  Search Box      |     |  Results List    |     |  Member Card     |
+|  "john" or       +---->|  Shows matches   +---->|  Photo, name,    |
+|  "555-1234"      |     |  with photos     |     |  level, status   |
++------------------+     +------------------+     +------------------+
+                                                          |
+                              +---------------------------+
+                              |
+              +---------------+---------------+---------------+
+              |               |               |               |
+              v               v               v               v
+        +----------+   +----------+   +----------+   +----------+
+        | Check In |   |   Edit   |   |  Billing |   |  Delete  |
+        +----------+   +----------+   +----------+   +----------+
+```
+
+Search works across name, email, and phone - typing "john" shows all Johns, "555-1234" finds that phone number. Results appear instantly with HTMX partial updates.
+
+### Member Registration Flow
+
+When a new person walks in, desk staff can create them on the spot:
+
+```
++------------------+     +------------------+     +------------------+
+|  /members/new    |     |  Validate Form   |     |  Check Email     |
+|  (form display)  +---->|  - Required      +---->|  Uniqueness      |
++------------------+     |  - DOB format    |     +--------+---------+
+                         |  - Age 0-100     |              |
+                         +------------------+              v
+                                                  +--------+---------+
+                                                  |   Conflict?      |
+                                                  +--------+---------+
+                                                    |              |
+                                              No    |              | Yes
+                                                    v              v
+                                            +-------+------+  +----+--------+
+                                            | INSERT user  |  | Show Error  |
+                                            | is_member=1  |  | OR Restore  |
+                                            | level=0      |  | Dialog      |
+                                            +------+-------+  +-------------+
+                                                   |
+                                                   v
+                                            +------+-------+
+                                            | Has photo?   |
+                                            +------+-------+
+                                              |          |
+                                        Yes   |          | No
+                                              v          |
+                                       +------+------+   |
+                                       | UPSERT      |   |
+                                       | user_photos |   |
+                                       +------+------+   |
+                                              |          |
+                                              +----+-----+
+                                                   |
+                                                   v
+                                            +------+-------+
+                                            | Return HTML  |
+                                            | HX-Trigger:  |
+                                            | refreshList  |
+                                            +--------------+
+```
+
+**Required fields**: First name, last name, email (unique among members)
+
+**Optional fields**: Phone, address, date of birth, waiver status, photo
+
+**Photo capture**: A photo can be taken right there via webcam or phone camera. The image is base64-encoded and stored as a binary blob. Photos are used for visual identification on future visits.
+
+### Validation Rules
+
+| Field | Rule |
+|-------|------|
+| Email | Required, must be unique among is_member=1 users |
+| Phone | 10-20 characters if provided |
+| Postal code | 5-10 characters if provided |
+| Date of birth | Valid YYYY-MM-DD, calculated age must be 0-100 |
+| Name | First and last name required, trimmed |
+
+### Soft Deletion and Restoration
+
+Members are never truly deleted. When someone's membership lapses or they request removal:
+
+1. Status changes from 'active' to 'deleted'
+2. They disappear from normal searches
+3. Their history is preserved (reservations, payments, waivers)
+4. Referential integrity maintained
+
+If they return months later, the system offers to restore their account when someone tries to create a duplicate email. All their history comes back.
+
+---
+
+## Court Reservations
+
+Courts can be reserved for different purposes, and the system handles each appropriately.
+
+### Reservation Types
+
+| Type | Description | Multi-Court | Participants |
+|------|-------------|-------------|--------------|
+| Game | Member books court for themselves and friends | Optional | Primary + guests |
+| Pro Session | Teaching pro assigned for lesson/clinic | Optional | Pro + students |
+| Event | Larger gathering, tournament | Yes | Teams with rosters |
+| Open Play | Drop-in rotation session | Yes | Dynamic signup |
+| Maintenance | Blocks court from booking | No | None |
+| League | Recurring competitive play | Yes | Team rosters |
+
+### Reservation Structure
+
+Each reservation captures:
+
+- **Facility and court(s)**: Where it happens
+- **Time window**: Start and end datetime
+- **Type**: What kind of reservation
+- **Primary user**: Who's responsible
+- **Participants**: Who's playing (junction table)
+- **Recurrence**: One-time or repeating pattern
+- **Open play rule**: For open play sessions, which rules apply
+
+Multi-court reservations are supported through a junction table. A tournament might need all 8 courts for a Saturday. An event might need courts 1-4 while leaving 5-8 for regular bookings.
+
+### Recurrence Patterns
+
+Reservations can be one-time or recurring:
+
+| Pattern | Example |
+|---------|---------|
+| Weekly | Tuesday night league, every week |
+| Biweekly | Beginner clinic, every other Saturday |
+| Monthly | Club tournament, first Sunday of month |
+
+The recurrence rule stores the pattern definition (compatible with iCalendar RRULE format), and the system generates individual reservation instances.
+
+---
+
+## Open Play Sessions
+
+Open play is the heart of recreational pickleball. Members show up during designated hours, sign in, and rotate through games with whoever else is there. Unlike reserved court time, open play is drop-in - you don't need a group, you just show up and play.
+
+### How Open Play Works
+
+1. Facility defines open play time slots (e.g., "Morning Open Play, 8am-12pm")
+2. Members sign up in advance or walk in
+3. System tracks signup count
+4. At cutoff time, system evaluates: enough players?
+5. If yes, session runs. If no, session cancels and courts release.
+6. During session, players rotate based on facility rules
+
+### Open Play Rules
+
+Each facility configures rules that govern session behavior:
+
+```
++------------------+     +------------------+     +------------------+
+|  Create Rule     |     |  Attach to       |     |  Session         |
+|  (min/max        +---->|  Reservation     +---->|  Approaches      |
+|  participants)   |     |  open_play_      |     |  Cutoff          |
++------------------+     |  rule_id         |     +--------+---------+
+                         +------------------+              |
+                                                           v
+                                                  +--------+---------+
+                                                  | Count Signups    |
+                                                  | (reservation_    |
+                                                  | participants)    |
+                                                  +--------+---------+
+                                                           |
+                                              +------------+------------+
+                                              |                         |
+                                     < min    |                         | >= min
+                                              v                         v
+                                      +-------+--------+        +-------+--------+
+                                      | Cancel Session |        | If auto_scale  |
+                                      | Release Courts |        | enabled:       |
+                                      +----------------+        | Adjust courts  |
+                                                                +----------------+
+```
+
+**Rule parameters:**
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| min_participants | 4 | Below this at cutoff = cancel |
+| max_participants_per_court | 8 | Capacity per court for rotation |
+| cancellation_cutoff_minutes | 60 | When to evaluate go/no-go |
+| auto_scale_enabled | true | Dynamically adjust court count |
+| min_courts | 1 | Never scale below this |
+| max_courts | 4 | Never scale above this |
+
+**Validation constraints:**
+- All numeric values must be > 0
+- min_courts must be <= max_courts
+- min_participants must be <= max_participants_per_court * min_courts
+
+### Auto-Scaling Logic
+
+When auto_scale_enabled is true, the system adjusts court allocation based on signups:
+
+```
+Signups: 6   Courts needed: ceil(6/8) = 1
+Signups: 12  Courts needed: ceil(12/8) = 2
+Signups: 20  Courts needed: ceil(20/8) = 3
+Signups: 35  Courts needed: ceil(35/8) = 5 -> capped at max_courts (4)
+```
+
+Scaling respects court availability. If the session needs 3 courts but only 2 are free, it uses 2 and logs the constraint.
+
+### Staff Notifications
+
+When a session is cancelled or courts are reallocated, staff receive in-app notifications:
+
+- "Morning Open Play cancelled - only 2 signups (minimum: 4)"
+- "Evening Open Play scaled from 2 to 3 courts - 22 participants"
+
+This allows staff to inform affected members and adjust operations.
+
+---
+
+## Theming and Branding
+
+Each facility can have its own visual identity. The member check-in screen at Downtown looks different from Westside because they chose different themes.
+
+### Theme Hierarchy
+
+```
++-------------------+
+|   System Themes   |  Pre-built, available to all
+|  (facility=NULL)  |
++--------+----------+
+         |
+         | Facility can use OR
+         v
++--------+----------+
+|  Facility Themes  |  Custom, only for this facility
+| (facility=set)    |
++--------+----------+
+         |
+         | Facility selects active theme
+         v
++--------+----------+
+|   Active Theme    |  Applied to all pages
+| (facility FK)     |
++-------------------+
+```
+
+### Theme Application Flow
+
+```
++------------------+     +------------------+     +------------------+
+|  Page Request    |     |  Extract         |     |  Load Active     |
+|  ?facility_id=X  +---->|  facility_id     +---->|  Theme           |
++------------------+     +------------------+     +--------+---------+
+                                                          |
+                                                          v
+                                                  +-------+--------+
+                                                  | facilities     |
+                                                  | .active_theme_ |
+                                                  | id             |
+                                                  +-------+--------+
+                                                          |
+                                              +-----------+-----------+
+                                              |                       |
+                                        Set   |                       | NULL
+                                              v                       v
+                                      +-------+--------+      +-------+--------+
+                                      | SELECT theme   |      | Use Default    |
+                                      | WHERE id=X     |      | Theme()        |
+                                      +-------+--------+      +-------+--------+
+                                              |                       |
+                                              +-----------+-----------+
+                                                          |
+                                                          v
+                                                  +-------+--------+
+                                                  | Generate CSS   |
+                                                  | Variables      |
+                                                  +-------+--------+
+                                                          |
+                                                          v
+                                                  +-------+--------+
+                                                  | Inject into    |
+                                                  | <head> <style> |
+                                                  +-------+--------+
+                                                          |
+                                                          v
+                                                  +-------+--------+
+                                                  | Tailwind uses  |
+                                                  | var(--theme-*) |
+                                                  +----------------+
+```
+
+### Color Palette
+
+A theme defines five colors:
+
+| Color | Purpose | Default |
+|-------|---------|---------|
+| Primary | Main brand color, headers | #1f2937 (dark gray) |
+| Secondary | Complementary, borders | #e5e7eb (light gray) |
+| Tertiary | Backgrounds, subtle areas | #f9fafb (near white) |
+| Accent | CTAs, links, buttons | #2563eb (blue) |
+| Highlight | Success states, confirmations | #16a34a (green) |
+
+**Generated CSS:**
+```css
+:root {
+    --theme-primary: #1f2937;
+    --theme-secondary: #e5e7eb;
+    --theme-tertiary: #f9fafb;
+    --theme-accent: #2563eb;
+    --theme-highlight: #16a34a;
 }
 ```
 
-**DO NOT** use `eval` or `source` on untrusted env files.
+Tailwind classes reference these variables: `bg-[var(--theme-primary)]`, `text-[var(--theme-accent)]`
 
-### 2.3 Plan.md parsing
+### Accessibility Requirements
 
-**Micro-commit heading pattern:**
-```regex
-^###\s+(COMMIT-[A-Za-z0-9_-]+-\d{3}):\s*(.+?)\s*$
-```
+Colors must meet WCAG AA contrast standards:
 
-Captures:
-- Group 1: Commit ID (e.g., `COMMIT-TF-001`)
-- Group 2: Title
+- Text must have 3.0+ contrast ratio against backgrounds
+- System validates by testing each color against black (#000000) and white (#FFFFFF)
+- Uses relative luminance formula per WCAG 2.0 specification
+- Rejects themes that would produce unreadable text
 
-**Done state pattern (within micro-commit block):**
-```regex
-^Done:\s*\[([ xX])\]\s*$
-```
+### Theme Operations
 
-Captures:
-- Group 1: ` ` (undone) or `x`/`X` (done)
+**Create**: Define colors for a facility. Name must be unique within that facility's scope.
 
-**Block boundaries:**
-- A micro-commit block starts at its `###` heading
-- A micro-commit block ends at the next `###` heading or EOF
+**Clone**: Copy an existing theme (system or facility) as a starting point. Useful for taking "Classic Court" and tweaking one color.
 
-**Selection rule:**
-- Select the FIRST micro-commit where Done is `[ ]` (space, not x)
-- If no undone commits exist: workstream is complete
+**Edit**: Modify colors. System re-validates accessibility on save.
 
-**Required parser:** `orchestrator/lib/planparse.py`
+**Delete**: Remove a theme. Cannot delete if it's the active theme for any facility.
 
-```python
-"""
-Plan.md parser for AOS.
-
-Usage:
-    from planparse import parse_plan, get_next_microcommit
-
-    commits = parse_plan("/path/to/plan.md")
-    next_commit = get_next_microcommit(commits)
-"""
-
-import re
-from pathlib import Path
-from dataclasses import dataclass
-from typing import Optional
-
-HEADING_RE = re.compile(r'^###\s+(COMMIT-[A-Za-z0-9_-]+-\d{3}):\s*(.+?)\s*$')
-DONE_RE = re.compile(r'^Done:\s*\[([ xX])\]\s*$')
-
-@dataclass
-class MicroCommit:
-    id: str
-    title: str
-    done: bool
-    line_number: int
-    block_content: str
-
-def parse_plan(filepath: str) -> list[MicroCommit]:
-    """Parse plan.md and return list of micro-commits."""
-    path = Path(filepath)
-    if not path.exists():
-        raise FileNotFoundError(f"Plan file not found: {filepath}")
-
-    lines = path.read_text().splitlines()
-    commits = []
-    current = None
-    current_lines = []
-
-    for lineno, line in enumerate(lines, 1):
-        heading_match = HEADING_RE.match(line)
-
-        if heading_match:
-            # Save previous block
-            if current:
-                current.block_content = '\n'.join(current_lines)
-                commits.append(current)
-
-            # Start new block
-            current = MicroCommit(
-                id=heading_match.group(1),
-                title=heading_match.group(2),
-                done=False,
-                line_number=lineno,
-                block_content=""
-            )
-            current_lines = [line]
-        elif current:
-            current_lines.append(line)
-            done_match = DONE_RE.match(line)
-            if done_match:
-                current.done = done_match.group(1).lower() == 'x'
-
-    # Save last block
-    if current:
-        current.block_content = '\n'.join(current_lines)
-        commits.append(current)
-
-    return commits
-
-def get_next_microcommit(commits: list[MicroCommit]) -> Optional[MicroCommit]:
-    """Return first undone micro-commit, or None if all done."""
-    for commit in commits:
-        if not commit.done:
-            return commit
-    return None
-
-def mark_done(filepath: str, commit_id: str) -> bool:
-    """Mark a micro-commit as done in the plan file."""
-    path = Path(filepath)
-    content = path.read_text()
-
-    # Find the commit block and its Done line
-    lines = content.splitlines()
-    in_block = False
-
-    for i, line in enumerate(lines):
-        if HEADING_RE.match(line) and commit_id in line:
-            in_block = True
-        elif HEADING_RE.match(line):
-            in_block = False
-        elif in_block and DONE_RE.match(line):
-            lines[i] = 'Done: [x]'
-            path.write_text('\n'.join(lines) + '\n')
-            return True
-
-    return False
-```
-
-### 2.4 JSON file conventions
-
-All JSON files MUST:
-- Use 2-space indentation
-- Use UTF-8 encoding
-- End with newline
-- Be valid JSON (parseable by standard libraries)
+**Set Active**: Assign a theme to a facility. Takes effect immediately on next page load.
 
 ---
 
-## 3) Schemas (authoritative)
+## Authentication and Access
 
-### 3.1 `project.env` (required)
+### Member Authentication
 
-```env
-# Required
-PROJECT_NAME=myproject
-REPO_PATH=/home/user/dev/myproject
-OPS_PATH=/home/user/dev/myproject.ops
-DEFAULT_BRANCH=main
+Members can authenticate in multiple ways:
 
-# Optional
-BRANCH_PREFIX=feat
+| Method | Flow |
+|--------|------|
+| Email code | System sends 6-digit code, member enters it |
+| SMS code | Code sent to phone number |
+| Cognito SSO | Redirects to AWS Cognito hosted UI |
+
+Authentication is optional for walk-in check-ins. Staff can check someone in without the member having an account - useful for first-time guests or those who forgot their phone.
+
+### Staff Authentication
+
+Staff have local accounts with passwords, separate from member authentication. A pro might:
+1. Log in as staff to manage their lesson schedule
+2. Check themselves in as a member for open play
+
+Staff authentication is required for administrative functions. No anonymous access to member data, financial information, or system configuration.
+
+### Authorization Model
+
+Access is scoped to facilities:
+
+| Role | Scope |
+|------|-------|
+| Desk Staff | Own facility only |
+| Manager | Own facility only |
+| Admin | All facilities in organization |
+| Pro | Own schedule + assigned facility |
+
+A desk staff member at Downtown cannot see member data from Westside unless they have organization-level access.
+
+### Cognito Integration
+
+Organizations can integrate their AWS Cognito user pool for SSO:
+
+- Pool ID and client credentials stored per organization
+- Callback URLs for OAuth flow
+- Members authenticate once, access all organization systems
+
+---
+
+## Scheduling and Calendars
+
+### Current Implementation
+
+The court calendar displays an 8-court grid for a single day, showing time slots from 6am to 10pm.
+
+**UI Elements:**
+- Date navigation (previous/next day buttons)
+- View selector dropdown (Work Week/Week/Month - UI only, not yet functional)
+- 8-column grid with hourly time slots
+
+**What Exists:**
+- Basic day grid display
+- Date shown in header
+- Click-to-book triggers HTMX request (handler not yet wired)
+
+**What Does Not Exist Yet:**
+- Actual reservations displayed on calendar
+- Week/Month view rendering
+- Booking modal and creation flow
+- Drag-to-reschedule
+- Hover previews
+
+The calendar templates and handlers are scaffolded at `internal/templates/components/courts/calendar.templ` and `internal/api/courts/handlers.go`.
+
+### Planned Visual Indicators
+
+When reservations are implemented, they will use these colors:
+
+| Color | Reservation Type |
+|-------|------------------|
+| Blue | Regular game booking |
+| Green | Open play session |
+| Orange | Pro session/lesson |
+| Purple | Event/tournament |
+| Gray | Maintenance block |
+| Red | League play |
+
+---
+
+## Notifications
+
+### Current State
+
+Notifications are **not yet implemented**. The top navigation has a placeholder bell icon but no notification system exists.
+
+### Planned: Staff Notifications (In-App)
+
+When implemented, staff will see alerts for operational events:
+
+| Event | Example |
+|-------|---------|
+| Open play cancelled | "Morning Open Play cancelled - only 2 signups (min: 4)" |
+| Courts reallocated | "Evening Open Play scaled 2→3 courts (22 participants)" |
+| New registration | "New member: John Smith - waiver pending" |
+| Capacity warning | "Saturday Open Play at 90% capacity (36/40)" |
+
+### Planned: Member Communications
+
+Planned delivery channels: email, SMS, push notifications (mobile app)
+
+- Reservation confirmations
+- Session cancellation notices
+- Waitlist openings
+- Upcoming reservation reminders
+- Membership renewal reminders
+
+---
+
+## Business Rules
+
+### Waiver Requirements
+
+Members must have a signed waiver before participating in play:
+
+- `waiver_signed` boolean tracks current status
+- Staff see visual indicator when checking in someone who needs to sign
+- System can block participation until waiver is complete (configurable)
+
+### Age Restrictions
+
+Date of birth enables age-based features:
+
+| Use Case | Age Check |
+|----------|-----------|
+| Junior programs | Under 18 |
+| Senior events | 55+, 65+, 70+ |
+| Alcohol service | 21+ verification |
+
+Age is validated at entry time - system rejects future dates and ages over 120.
+
+### Capacity Management
+
+Each reservation type has capacity limits enforced at signup time:
+
+| Resource | Constraint |
+|----------|------------|
+| Court | One reservation per time slot |
+| Open play | max_participants_per_court × courts |
+| Event | teams × people_per_team |
+| Lesson | Student limit per pro |
+
+Overbooking is not possible. Attempting to exceed capacity returns an error.
+
+### Soft Deletion
+
+Members are never truly deleted:
+
+1. Status changes to 'deleted'
+2. Hidden from searches
+3. History preserved (reservations, payments)
+4. Referential integrity maintained
+5. Can be restored later
+
+---
+
+## Request/Response Patterns
+
+### HTMX Integration
+
+All endpoints detect HTMX requests via `HX-Request: true` header:
+
+- **HTMX request**: Returns HTML fragment, sets trigger headers
+- **Direct request**: Returns full page or JSON
+
+**Response headers for dynamic updates:**
+```
+HX-Trigger: refreshMembersList    # Fire client-side event
+HX-Retarget: #member-detail       # Change swap target
+HX-Reswap: innerHTML              # Change swap strategy
+HX-Redirect: /members             # Full page redirect
 ```
 
-### 3.2 `project_profile.env` (required for run)
+### Error Handling
 
-```env
-# Required for wf run
-REPO_PATH=/home/user/dev/myproject
-DEFAULT_BRANCH=main
-MAKEFILE_PATH=Makefile
-HITL_MODE=strict
+| HTTP Code | Meaning |
+|-----------|---------|
+| 200 | Success (GET, PUT) |
+| 201 | Created (POST) |
+| 204 | Deleted (DELETE with HTMX) |
+| 400 | Validation error |
+| 404 | Not found |
+| 405 | Method not allowed |
+| 409 | Conflict (duplicate) |
+| 500 | Server error |
 
-# Test targets (empty string = skip)
-MAKE_TARGET_UNIT=test-unit
-MAKE_TARGET_INTEGRATION=test-integration
-MAKE_TARGET_SMOKE=test-smoke
-MAKE_TARGET_E2E=test-e2e
+Validation errors return plain text messages suitable for display.
 
-# Alternative: custom commands (if not using Make)
-# TEST_CMD_UNIT="npm run test:unit"
-# TEST_CMD_INTEGRATION="npm run test:integration"
+---
 
-# Optional
-STACK=node
-TEST_RUNNERS=jest,playwright
-DOCKER_ALLOWED=yes
-COMMITSIZE_MAX_LOC=200
-COMMITSIZE_MAX_FILES=10
+## Middleware Chain
 
-# Documentation
-DOCS_PATH=docs
-DOCS_ASSETS_PATH=docs/assets
+Every request passes through middleware in order:
 
-# Requirements paths
-REQ_RAW_PATHS=requirements/raw
-REQ_CLEAN_PATH=requirements/clean
-REQ_STORIES_PATH=requirements/stories
+```
+Request
+   |
+   v
++------------------+
+| WithLogging      |  Logs: method, path, status, duration, request_id
++--------+---------+
+         |
+         v
++--------+---------+
+| WithRecovery     |  Catches panics, logs stack trace, returns 500
++--------+---------+
+         |
+         v
++--------+---------+
+| WithRequestID    |  Generates UUID, adds to context + X-Request-ID header
++--------+---------+
+         |
+         v
++--------+---------+
+| WithContentType  |  Sets default Accept: text/html
++--------+---------+
+         |
+         v
+     Handler
 ```
 
-### 3.3 Workstream `meta.env`
+Every response includes `X-Request-ID` for tracing issues through logs.
 
-```env
-# Required
-ID=test_framework
-TITLE="Production-grade test framework"
-BRANCH=feat/test_framework
-WORKTREE=/home/user/dev/myproject.ops/worktrees/test_framework
-BASE_BRANCH=main
-BASE_SHA=abc123def456
-STATUS=implement
-EXPECTED_PATHS="requirements/ scripts/test/ mk/"
-CREATED_AT=2025-01-15T10:00:00Z
-LAST_REFRESHED=2025-01-15T12:00:00Z
+---
 
-# Optional (updated by wf run)
-LAST_RUN_ID=20250115-120000_myproject_test_framework_COMMIT-TF-001
-LAST_COMMIT_SHA=def789abc012
-LAST_RESULT=passed
-BLOCKED_BY=""
+## Configuration
+
+### Application Config (config.yaml)
+
+```yaml
+app:
+  name: "Pickleicious"
+  environment: "development"    # development | production
+  port: 8080
+  base_url: "http://localhost:8080"
+
+database:
+  driver: "sqlite"              # sqlite | turso
+  filename: "build/db/pickleicious.db"
+
+features:
+  enable_metrics: false
+  enable_tracing: false
+  enable_debug: true
 ```
 
-**STATUS values:**
-| Status | Description |
-|--------|-------------|
-| `planning` | Plan being created |
-| `implement` | Implementation in progress |
-| `blocked:clarification` | Waiting for CLQ answers |
-| `blocked:review` | Review requested changes |
-| `blocked:test` | Tests failing |
-| `docs` | Documentation stage |
-| `uat:pending` | Awaiting UAT |
-| `uat:failed` | UAT failed, needs fixes |
-| `merge-ready` | All gates passed |
-| `done` | Merged and closed |
+### Environment Variables
 
-### 3.4 `result.json` schema
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| STATIC_DIR | Static file location | build/bin/static |
+| DATABASE_AUTH_TOKEN | Turso cloud auth | - |
+| APP_SECRET_KEY | Signing key | - |
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "required": ["version", "project", "workstream", "microcommit", "status", "timestamps"],
-  "properties": {
-    "version": { "const": 1 },
-    "project": { "type": "string" },
-    "workstream": { "type": "string" },
-    "microcommit": { "type": "string", "pattern": "^COMMIT-[A-Za-z0-9_-]+-\\d{3}$" },
-    "status": { "enum": ["passed", "failed", "blocked"] },
-    "failed_stage": {
-      "enum": ["load", "select", "clarification", "implement", "test", "review", "qa_gate", "docs", "uat"]
-    },
-    "blocked_reason": { "type": "string" },
-    "base_sha": { "type": "string", "pattern": "^[a-f0-9]{7,40}$" },
-    "commit_sha": { "type": "string", "pattern": "^[a-f0-9]{7,40}$" },
-    "touched_files_count": { "type": "integer", "minimum": 0 },
-    "timestamps": {
-      "type": "object",
-      "required": ["started", "ended"],
-      "properties": {
-        "started": { "type": "string", "format": "date-time" },
-        "ended": { "type": "string", "format": "date-time" },
-        "duration_seconds": { "type": "number" }
-      }
-    },
-    "stages": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "status": { "enum": ["passed", "failed", "skipped"] },
-          "duration_seconds": { "type": "number" },
-          "notes": { "type": "string" }
-        }
-      }
-    },
-    "notes": { "type": "string" }
-  }
-}
+---
+
+## Build System
+
+### Taskfile Commands
+
+| Command | Purpose |
+|---------|---------|
+| `task generate` | Run templ + sqlc code generation |
+| `task build` | Build server binary |
+| `task build:prod` | Production build (stripped) |
+| `task test` | Run Go tests |
+| `task css` | Build Tailwind CSS |
+| `task db:migrate` | Apply database migrations |
+| `task db:reset` | Reset database to clean state |
+| `task clean` | Remove build artifacts |
+| `task dev` | Development with hot reload |
+
+### Build Artifacts
+
 ```
-
-**Example:**
-```json
-{
-  "version": 1,
-  "project": "myproject",
-  "workstream": "test_framework",
-  "microcommit": "COMMIT-TF-001",
-  "status": "passed",
-  "base_sha": "abc123d",
-  "commit_sha": "def789a",
-  "touched_files_count": 5,
-  "timestamps": {
-    "started": "2025-01-15T12:00:00Z",
-    "ended": "2025-01-15T12:05:30Z",
-    "duration_seconds": 330
-  },
-  "stages": {
-    "load": { "status": "passed", "duration_seconds": 0.5 },
-    "select": { "status": "passed", "duration_seconds": 0.1 },
-    "clarification": { "status": "passed", "duration_seconds": 0.1 },
-    "implement": { "status": "passed", "duration_seconds": 180 },
-    "test": { "status": "passed", "duration_seconds": 120 },
-    "review": { "status": "passed", "duration_seconds": 30 },
-    "qa_gate": { "status": "passed", "duration_seconds": 1 }
-  },
-  "notes": ""
-}
-```
-
-### 3.5 `claude_review.json` schema
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "required": ["version", "decision"],
-  "properties": {
-    "version": { "const": 1 },
-    "decision": { "enum": ["approve", "request_changes"] },
-    "blockers": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["file", "issue"],
-        "properties": {
-          "file": { "type": "string" },
-          "line": { "type": ["integer", "null"] },
-          "issue": { "type": "string" },
-          "severity": { "enum": ["critical", "major", "minor"] },
-          "fix_hint": { "type": "string" }
-        }
-      }
-    },
-    "required_changes": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "suggestions": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "documentation": {
-      "type": "object",
-      "properties": {
-        "required": { "type": "boolean" },
-        "present": { "type": "boolean" },
-        "quality": { "enum": ["adequate", "good", "needs_work"] },
-        "missing_sections": { "type": "array", "items": { "type": "string" } },
-        "stale_screenshots": { "type": "array", "items": { "type": "string" } }
-      }
-    },
-    "notes": { "type": "string" }
-  }
-}
-```
-
-**Decision rules:**
-- `decision == "request_changes"` AND `blockers` non-empty → run fails
-- `decision == "request_changes"` AND `required_changes` non-empty → run fails
-- `decision == "approve"` → run continues
-- Invalid JSON → run fails
-
-### 3.6 `test_manifest.json` schema
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "required": ["version", "suites"],
-  "properties": {
-    "version": { "const": 1 },
-    "generated": { "type": "string", "format": "date-time" },
-    "suites": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["name", "status", "artifacts"],
-        "properties": {
-          "name": { "type": "string" },
-          "status": { "enum": ["passed", "failed", "skipped"] },
-          "exit_code": { "type": "integer" },
-          "duration_seconds": { "type": "number" },
-          "artifacts": {
-            "type": "object",
-            "properties": {
-              "summary_json": { "type": "string" },
-              "junit_xml": { "type": "string" },
-              "coverage": { "type": "string" },
-              "screenshots": { "type": "array", "items": { "type": "string" } }
-            }
-          },
-          "stats": {
-            "type": "object",
-            "properties": {
-              "total": { "type": "integer" },
-              "passed": { "type": "integer" },
-              "failed": { "type": "integer" },
-              "skipped": { "type": "integer" }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### 3.7 Clarification `CLQ-xxx.json` (machine-readable companion)
-
-Each `CLQ-xxx.md` has an optional `CLQ-xxx.json` for programmatic access:
-
-```json
-{
-  "version": 1,
-  "id": "CLQ-001",
-  "status": "pending",
-  "created": "2025-01-15T10:00:00Z",
-  "answered": null,
-  "urgency": "blocking",
-  "source_stage": "implementation",
-  "workstream": "user_auth",
-  "blocks": ["COMMIT-UA-003"],
-  "question": "Which authentication method should we use?",
-  "options": [
-    { "id": "jwt", "label": "JWT tokens", "tradeoffs": "Stateless, needs refresh" },
-    { "id": "session", "label": "Session cookies", "tradeoffs": "Simpler, needs storage" }
-  ],
-  "answer": null,
-  "answered_by": null
-}
-```
-
-### 3.8 UAT `UAT-xxx.json` (machine-readable companion)
-
-```json
-{
-  "version": 1,
-  "id": "UAT-001",
-  "status": "pending",
-  "created": "2025-01-15T10:00:00Z",
-  "completed": null,
-  "workstream": "user_auth",
-  "requirements": ["REQ-012-1", "REQ-012-2", "STORY-012"],
-  "scenarios": [
-    {
-      "name": "Successful login",
-      "steps": ["Navigate to /login", "Enter credentials", "Click Sign In"],
-      "expected": "Redirected to dashboard",
-      "result": null
-    }
-  ],
-  "result": null,
-  "validated_by": null,
-  "issues": []
-}
+build/
+  bin/
+    server              # Compiled Go binary
+    static/             # CSS, JS, images
+  db/
+    pickleicious.db     # SQLite database file
 ```
 
 ---
 
-## 4) Workstream operations
+## Implementation Status
 
-### 4.1 `wf new <id> "<title>" "<expected_paths>"`
+### Operational Today
 
-**Validation:**
-```
-id         := [a-z][a-z0-9_-]*       # lowercase, start with letter
-title      := .{1,100}               # 1-100 chars
-expected   := space-separated paths
-```
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Member CRUD | Complete | Create, list, search, edit, soft delete, restore |
+| Member Photos | Complete | Base64 upload, BLOB storage |
+| Member Search | Complete | Name, email, phone - instant results |
+| Theme Management | Complete | Create, edit, clone, delete, set active |
+| Theme Accessibility | Complete | WCAG AA contrast validation |
+| Open Play Rules | Complete | Full CRUD with constraint validation |
+| Court Calendar | Partial | Display works, booking not wired |
 
-**Branch naming:**
-- Default pattern: `feat/<id>`
-- Configurable via `BRANCH_PREFIX` in project.env
-- Other valid prefixes: `fix/`, `chore/`, `refactor/`, `docs/`
+### Scaffolded (Schema Ready)
 
-**Algorithm:**
-```python
-def wf_new(id: str, title: str, expected_paths: str):
-    # 1. Validate inputs
-    if not re.match(r'^[a-z][a-z0-9_-]*$', id):
-        fail(2, f"Invalid workstream ID: {id}")
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Reservations | Schema only | Tables exist, no handlers |
+| Recurring Events | Schema only | Recurrence rules defined |
+| Participant Tracking | Schema only | Junction tables ready |
+| Member Billing | Schema only | Table exists, no processing |
 
-    # 2. Load project config
-    project = load_project_config()
+### Not Yet Started
 
-    # 3. Compute paths
-    branch = f"{project.branch_prefix}/{id}"
-    worktree = f"{project.ops_path}/worktrees/{id}"
-
-    # 4. Check for conflicts
-    # Branch exists locally?
-    if run(f"git -C {project.repo} show-ref --verify --quiet refs/heads/{branch}"):
-        fail(2, f"Branch already exists: {branch}")
-
-    # Branch exists on remote?
-    run(f"git -C {project.repo} fetch --all --prune", check=False)
-    if run(f"git -C {project.repo} show-ref --verify --quiet refs/remotes/origin/{branch}"):
-        fail(2, f"Branch exists on remote: {branch}")
-
-    # Worktree directory exists?
-    if Path(worktree).exists():
-        fail(2, f"Worktree directory exists: {worktree}")
-
-    # Workstream already registered?
-    if workstream_exists(id):
-        fail(2, f"Workstream already exists: {id}")
-
-    # 5. Get base SHA
-    base_sha = run(f"git -C {project.repo} rev-parse {project.default_branch}")
-
-    # 6. Create branch + worktree atomically
-    run(f"git -C {project.repo} worktree add {worktree} -b {branch} {base_sha}")
-
-    # 7. Create workstream directory structure
-    ws_dir = f"{project.workflow_repo}/projects/{project.name}/workstreams/{id}"
-    mkdir(ws_dir)
-
-    # 8. Write meta.env
-    write_env(f"{ws_dir}/meta.env", {
-        "ID": id,
-        "TITLE": title,
-        "BRANCH": branch,
-        "WORKTREE": worktree,
-        "BASE_BRANCH": project.default_branch,
-        "BASE_SHA": base_sha,
-        "STATUS": "planning",
-        "EXPECTED_PATHS": expected_paths,
-        "CREATED_AT": now_iso(),
-        "LAST_REFRESHED": now_iso(),
-    })
-
-    # 9. Create placeholder files
-    write(f"{ws_dir}/plan.md", PLAN_TEMPLATE.format(id=id, title=title))
-    write(f"{ws_dir}/notes.md", f"# Notes: {title}\n")
-    write(f"{ws_dir}/touched_files.txt", "")
-
-    # 10. Create queue directories
-    mkdir(f"{ws_dir}/clarifications/pending")
-    mkdir(f"{ws_dir}/clarifications/answered")
-    mkdir(f"{ws_dir}/uat/pending")
-    mkdir(f"{ws_dir}/uat/passed")
-
-    # 11. Initial refresh
-    wf_refresh(id)
-
-    print(f"Created workstream: {id}")
-    print(f"  Branch: {branch}")
-    print(f"  Worktree: {worktree}")
-```
-
-**Failure recovery:**
-If creation fails mid-way:
-- Remove worktree if created: `git worktree remove --force <path>`
-- Remove branch if created: `git branch -D <branch>`
-- Remove workstream directory if created
-
-### 4.2 `wf refresh [<id>]`
-
-If `<id>` provided, refresh that workstream. Otherwise, refresh all active workstreams.
-
-**Algorithm:**
-```python
-def wf_refresh(id: str = None):
-    workstreams = [id] if id else get_active_workstreams()
-
-    for ws_id in workstreams:
-        ws = load_workstream(ws_id)
-
-        # Check worktree exists and is valid
-        if not Path(ws.worktree).exists():
-            warn(f"Worktree missing for {ws_id}")
-            continue
-
-        # Check for uncommitted changes (warning only)
-        status = run(f"git -C {ws.worktree} status --porcelain")
-        if status:
-            warn(f"Uncommitted changes in {ws_id}")
-
-        # Compute touched files
-        touched = run(f"git -C {ws.worktree} diff --name-only {ws.base_sha}..HEAD")
-        touched_sorted = sorted(set(touched.splitlines()))
-
-        write(f"{ws.dir}/touched_files.txt", '\n'.join(touched_sorted))
-
-        # Update meta.env
-        update_env(f"{ws.dir}/meta.env", {
-            "LAST_REFRESHED": now_iso()
-        })
-
-    # Regenerate ACTIVE_WORKSTREAMS.md
-    regenerate_active_workstreams()
-```
-
-### 4.3 `wf conflicts <id>`
-
-**Algorithm:**
-```python
-def wf_conflicts(id: str):
-    target = load_workstream(id)
-    target_files = set(read_lines(f"{target.dir}/touched_files.txt"))
-    target_expected = target.expected_paths.split()
-
-    results = []
-
-    for other in get_active_workstreams():
-        if other.id == id:
-            continue
-
-        other_files = set(read_lines(f"{other.dir}/touched_files.txt"))
-
-        # Actual overlap
-        actual_overlap = target_files & other_files
-
-        # Predicted overlap (expected paths of target vs touched of other)
-        predicted_overlap = {}
-        for prefix in target_expected:
-            matching = [f for f in other_files if f.startswith(prefix)]
-            if matching:
-                predicted_overlap[prefix] = matching
-
-        if actual_overlap or predicted_overlap:
-            results.append({
-                "workstream": other.id,
-                "actual_overlap": sorted(actual_overlap),
-                "predicted_overlap": predicted_overlap
-            })
-
-    # Output
-    if not results:
-        print(f"No conflicts detected for {id}")
-        return
-
-    print(f"Conflicts for {id}:")
-    for r in results:
-        print(f"\n  vs {r['workstream']}:")
-        if r['actual_overlap']:
-            print(f"    Actual overlap ({len(r['actual_overlap'])} files):")
-            for f in r['actual_overlap'][:10]:
-                print(f"      - {f}")
-            if len(r['actual_overlap']) > 10:
-                print(f"      ... and {len(r['actual_overlap']) - 10} more")
-        if r['predicted_overlap']:
-            print(f"    Predicted overlap:")
-            for prefix, files in r['predicted_overlap'].items():
-                print(f"      {prefix}: {len(files)} files")
-```
-
-### 4.4 `wf close <id>`
-
-**Preconditions:**
-- Workstream exists
-- STATUS is `done` or `merge-ready`, OR `--force` flag provided
-
-**Algorithm:**
-```python
-def wf_close(id: str, force: bool = False):
-    ws = load_workstream(id)
-
-    if ws.status not in ("done", "merge-ready") and not force:
-        fail(2, f"Workstream not complete. Use --force to close anyway.")
-
-    # Archive workstream
-    timestamp = now_iso().replace(":", "-")
-    archive_dir = f"{ws.project_dir}/workstreams/_closed/{id}-{timestamp}"
-
-    # Move workstream directory
-    move(ws.dir, archive_dir)
-
-    # Remove worktree (but keep branch for history)
-    run(f"git -C {ws.project.repo} worktree remove --force {ws.worktree}")
-
-    # Update ACTIVE_WORKSTREAMS.md
-    regenerate_active_workstreams()
-
-    print(f"Closed workstream: {id}")
-    print(f"  Archived to: {archive_dir}")
-```
-
-### 4.5 `wf delete <id>` (new command)
-
-Completely removes a workstream, including branch. For abandoned work.
-
-**Algorithm:**
-```python
-def wf_delete(id: str, confirm: bool = False):
-    ws = load_workstream(id)
-
-    if not confirm:
-        print(f"This will permanently delete workstream {id}")
-        print(f"  Branch: {ws.branch}")
-        print(f"  Worktree: {ws.worktree}")
-        print(f"Use --confirm to proceed")
-        return
-
-    # Remove worktree
-    if Path(ws.worktree).exists():
-        run(f"git -C {ws.project.repo} worktree remove --force {ws.worktree}")
-
-    # Delete branch (local)
-    run(f"git -C {ws.project.repo} branch -D {ws.branch}", check=False)
-
-    # Delete branch (remote) - only if not merged
-    run(f"git -C {ws.project.repo} push origin --delete {ws.branch}", check=False)
-
-    # Remove workstream directory
-    rmtree(ws.dir)
-
-    # Update ACTIVE_WORKSTREAMS.md
-    regenerate_active_workstreams()
-
-    print(f"Deleted workstream: {id}")
-```
+| Feature | Notes |
+|---------|-------|
+| Check-in Flow | The tap-to-arrive workflow |
+| Open Play Enforcement | Automated cancellation and scaling |
+| Member Notifications | Email/SMS delivery |
+| Payment Processing | Stripe/Square integration |
+| Reporting | Usage stats, financials |
+| Mobile App | Native iOS/Android |
 
 ---
 
-## 5) `wf run` — Cycle execution
+## Tech Stack Philosophy
 
-### 5.1 Stage pipeline
+**HTMX-First**: Server-rendered HTML with HTMX for interactivity. No JavaScript build pipeline, no client-side state management. The server is the source of truth, and HTMX handles partial page updates. JavaScript is only used when absolutely necessary for UX (camera capture, color pickers).
 
-```
-LOCK → LOAD → SELECT → CLARIFICATION_CHECK → IMPLEMENT → TEST → REVIEW → QA_GATE → DOCS → UPDATE_STATE → REFRESH → UNLOCK
-```
+**Type Safety End-to-End**: sqlc generates Go from SQL. templ generates Go from HTML templates. Errors caught at compile time, not runtime.
 
-For UAT (after all micro-commits done):
-```
-... → UPDATE_STATE → UAT_GATE → REFRESH → UNLOCK
-```
-
-### 5.2 Locking
-
-**MVP: Global lock**
-
-```python
-LOCK_FILE = f"{ops_dir}/locks/global.lock"
-LOCK_TIMEOUT = int(os.environ.get("AOS_LOCK_TIMEOUT", 600))
-
-def acquire_lock():
-    """Acquire global lock with timeout."""
-    lock_dir = Path(LOCK_FILE).parent
-    lock_dir.mkdir(parents=True, exist_ok=True)
-
-    # Try flock first (preferred)
-    try:
-        import fcntl
-        fd = open(LOCK_FILE, 'w')
-        start = time.time()
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                # Write PID for debugging
-                fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
-                fd.flush()
-                return fd  # Return fd to keep lock
-            except BlockingIOError:
-                if time.time() - start > LOCK_TIMEOUT:
-                    fail(3, "Lock acquisition timeout")
-                time.sleep(1)
-    except ImportError:
-        # Fallback: mkdir-based locking
-        return acquire_lock_mkdir()
-
-def acquire_lock_mkdir():
-    """Fallback locking using mkdir atomicity."""
-    lock_dir = f"{LOCK_FILE}.d"
-    start = time.time()
-
-    while True:
-        try:
-            os.mkdir(lock_dir)
-            # Write info
-            Path(f"{lock_dir}/owner").write_text(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
-            return lock_dir
-        except FileExistsError:
-            # Check for stale lock
-            try:
-                info = Path(f"{lock_dir}/owner").read_text()
-                pid = int(info.splitlines()[0])
-                if not pid_exists(pid):
-                    # Stale lock, remove it
-                    shutil.rmtree(lock_dir)
-                    continue
-            except:
-                pass
-
-            if time.time() - start > LOCK_TIMEOUT:
-                fail(3, "Lock acquisition timeout")
-            time.sleep(1)
-
-def release_lock(lock):
-    """Release lock (works with both fd and mkdir)."""
-    if isinstance(lock, str):
-        # mkdir-based
-        shutil.rmtree(lock, ignore_errors=True)
-    else:
-        # flock-based
-        import fcntl
-        fcntl.flock(lock, fcntl.LOCK_UN)
-        lock.close()
-        Path(LOCK_FILE).unlink(missing_ok=True)
-```
-
-**Lock must be released on exit (including signals):**
-```python
-import signal
-import atexit
-
-lock_handle = None
-
-def cleanup():
-    if lock_handle:
-        release_lock(lock_handle)
-
-atexit.register(cleanup)
-signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))
-signal.signal(signal.SIGINT, lambda *_: sys.exit(1))
-```
-
-**Future: Per-workstream locks**
-```
-locks/
-  global.lock           # For operations that touch multiple workstreams
-  workstream.{id}.lock  # Per-workstream lock
-  crosscutting.lock     # For changes to shared infrastructure
-```
-
-### 5.3 Run directory
-
-**Naming:**
-```
-{ops_dir}/runs/{YYYYMMDD-HHMMSS}_{project}_{workstream}_{microcommit}/
-```
-
-Example:
-```
-~/dev/myproject.ops/runs/20250115-120000_myproject_test_framework_COMMIT-TF-001/
-```
-
-**Required files:**
-| File | Description |
-|------|-------------|
-| `run_summary.md` | Human-readable summary |
-| `result.json` | Machine-readable result (schema §3.4) |
-| `commands.log` | All commands with timestamps and exit codes |
-| `env_snapshot.txt` | Tool versions |
-| `diff.patch` | Git diff used for review |
-| `claude_review.json` | Review output (schema §3.5) |
-| `test_manifest.json` | Test results (schema §3.6) |
-| `implement.log` | Codex/implementation output |
-| `stages/` | Per-stage logs (optional, for debugging) |
-
-### 5.4 Stage: LOAD
-
-```python
-def stage_load(ws_id: str) -> Context:
-    """Load and validate all configuration."""
-
-    # Load project config
-    project = load_project_config()
-    profile = load_project_profile()
-
-    # Load workstream
-    ws = load_workstream(ws_id)
-
-    # Validate worktree
-    if not Path(ws.worktree).exists():
-        fail(4, f"Worktree does not exist: {ws.worktree}")
-
-    # Validate worktree is on correct branch
-    actual_branch = run(f"git -C {ws.worktree} branch --show-current")
-    if actual_branch != ws.branch.split('/')[-1]:  # Handle feat/xxx format
-        fail(4, f"Worktree on wrong branch: {actual_branch} (expected {ws.branch})")
-
-    # Validate BASE_SHA exists
-    try:
-        run(f"git -C {ws.worktree} cat-file -e {ws.base_sha}")
-    except:
-        fail(4, f"BASE_SHA does not exist: {ws.base_sha}")
-
-    # Validate plan.md exists
-    plan_path = f"{ws.dir}/plan.md"
-    if not Path(plan_path).exists():
-        fail(4, f"Plan file missing: {plan_path}")
-
-    # Check for uncommitted changes (warning)
-    status = run(f"git -C {ws.worktree} status --porcelain")
-    if status:
-        warn(f"Uncommitted changes in worktree")
-
-    return Context(project=project, profile=profile, workstream=ws)
-```
-
-### 5.5 Stage: SELECT
-
-```python
-def stage_select(ctx: Context) -> MicroCommit:
-    """Select next micro-commit to execute."""
-
-    plan_path = f"{ctx.workstream.dir}/plan.md"
-    commits = parse_plan(plan_path)
-
-    if not commits:
-        fail(4, "No micro-commits found in plan.md")
-
-    next_commit = get_next_microcommit(commits)
-
-    if next_commit is None:
-        # All done - but check if UAT pending
-        if ctx.workstream.status != "merge-ready":
-            return None  # Signal: workstream complete, trigger UAT
-        else:
-            success("All micro-commits complete")
-
-    return next_commit
-```
-
-### 5.6 Stage: CLARIFICATION_CHECK
-
-```python
-def stage_clarification_check(ctx: Context) -> bool:
-    """Check for blocking clarifications."""
-
-    pending_dir = f"{ctx.workstream.dir}/clarifications/pending"
-
-    blocking = []
-    for clq_file in Path(pending_dir).glob("CLQ-*.json"):
-        clq = json.loads(clq_file.read_text())
-        if clq.get("urgency") == "blocking":
-            blocking.append(clq["id"])
-
-    if blocking:
-        # Update status
-        update_workstream_status(ctx.workstream, "blocked:clarification",
-                                  blocked_by=",".join(blocking))
-        fail(8, f"Blocked by clarifications: {', '.join(blocking)}")
-
-    return True
-```
-
-### 5.7 Stage: IMPLEMENT
-
-**Agent integration contract:**
-
-AOS invokes an implementation agent (Codex, Claude, or other) with:
-
-**Input:**
-```json
-{
-  "task": "implement",
-  "microcommit": {
-    "id": "COMMIT-TF-001",
-    "title": "Add requirements doc",
-    "description": "Create initial requirements documentation...",
-    "tests": ["unit"],
-    "docs": null
-  },
-  "context": {
-    "worktree": "/path/to/worktree",
-    "base_sha": "abc123",
-    "project_profile": { ... },
-    "plan_block": "### COMMIT-TF-001: Add requirements doc\n..."
-  },
-  "constraints": {
-    "max_files": 10,
-    "max_lines_changed": 200,
-    "allowed_paths": ["requirements/", "docs/"],
-    "forbidden_paths": ["secrets/", ".env"]
-  }
-}
-```
-
-**Expected behavior:**
-1. Make changes ONLY for the specified micro-commit
-2. Stay within constraints
-3. Run specified tests
-4. Create a commit with message: `{microcommit_id}: {title}`
-
-**Output:**
-```json
-{
-  "status": "success" | "failure",
-  "commit_sha": "def789" | null,
-  "files_changed": ["path/to/file1", "path/to/file2"],
-  "lines_added": 45,
-  "lines_removed": 12,
-  "tests_run": ["unit"],
-  "test_results": { "unit": "passed" },
-  "notes": "",
-  "clarification_needed": null | {
-    "question": "...",
-    "options": [...]
-  }
-}
-```
-
-**Implementation (using Claude Code CLI):**
-
-```python
-def stage_implement(ctx: Context, microcommit: MicroCommit) -> dict:
-    """Execute implementation via agent."""
-
-    # Prepare prompt
-    prompt = f"""You are implementing micro-commit {microcommit.id} in the worktree at {ctx.workstream.worktree}.
-
-## Task
-{microcommit.title}
-
-## Description
-{microcommit.block_content}
-
-## Constraints
-- Change ONLY files related to this micro-commit
-- Maximum {ctx.profile.commitsize_max_files} files
-- Maximum {ctx.profile.commitsize_max_loc} lines changed
-- Run tests: {ctx.profile.make_target_unit}
-
-## Required
-1. Implement the changes
-2. Run: make {ctx.profile.make_target_unit}
-3. If tests pass, commit with message: "{microcommit.id}: {microcommit.title}"
-
-## Output
-When done, output a JSON block:
-```json
-{{
-  "status": "success",
-  "commit_sha": "<sha>",
-  "files_changed": [...],
-  "notes": ""
-}}
-```
-
-If you encounter ambiguity requiring human input, output:
-```json
-{{
-  "status": "clarification_needed",
-  "question": "...",
-  "options": [...]
-}}
-```
-"""
-
-    # Invoke agent
-    result = run_agent(
-        prompt=prompt,
-        cwd=ctx.workstream.worktree,
-        timeout=ctx.profile.implement_timeout or 600,
-        log_file=f"{ctx.run_dir}/implement.log"
-    )
-
-    # Parse output
-    output = extract_json_from_output(result.stdout)
-
-    if output.get("status") == "clarification_needed":
-        # Create CLQ
-        create_clarification(ctx, output)
-        fail(8, "Implementation requires clarification")
-
-    if output.get("status") != "success":
-        fail(4, f"Implementation failed: {output.get('notes', 'unknown error')}")
-
-    # Verify commit was created
-    new_sha = run(f"git -C {ctx.workstream.worktree} rev-parse HEAD")
-    if new_sha == ctx.workstream.base_sha:
-        fail(4, "No commit was created")
-
-    # Verify commit message
-    msg = run(f"git -C {ctx.workstream.worktree} log -1 --format=%s")
-    if not msg.startswith(f"{microcommit.id}:"):
-        fail(4, f"Commit message doesn't start with {microcommit.id}:")
-
-    return output
-```
-
-### 5.8 Stage: TEST
-
-```python
-def stage_test(ctx: Context, microcommit: MicroCommit) -> dict:
-    """Run test suites."""
-
-    results = {
-        "suites": [],
-        "overall": "passed"
-    }
-
-    # Determine which suites to run
-    # MVP: Run all configured suites
-    suites = [
-        ("unit", ctx.profile.make_target_unit),
-        ("integration", ctx.profile.make_target_integration),
-        ("smoke", ctx.profile.make_target_smoke),
-        ("e2e", ctx.profile.make_target_e2e),
-    ]
-
-    for name, target in suites:
-        if not target:
-            results["suites"].append({
-                "name": name,
-                "status": "skipped",
-                "reason": "No target configured"
-            })
-            continue
-
-        # Check target exists in Makefile
-        if not make_target_exists(ctx.workstream.worktree, target):
-            results["suites"].append({
-                "name": name,
-                "status": "skipped",
-                "reason": f"Target '{target}' not in Makefile"
-            })
-            continue
-
-        # Run tests
-        start = time.time()
-        try:
-            output = run(
-                f"make -C {ctx.workstream.worktree} {target}",
-                timeout=ctx.profile.test_timeout or 300,
-                capture=True
-            )
-            exit_code = 0
-        except subprocess.CalledProcessError as e:
-            output = e.output
-            exit_code = e.returncode
-
-        duration = time.time() - start
-
-        suite_result = {
-            "name": name,
-            "status": "passed" if exit_code == 0 else "failed",
-            "exit_code": exit_code,
-            "duration_seconds": duration,
-            "artifacts": find_test_artifacts(ctx, name)
-        }
-
-        results["suites"].append(suite_result)
-
-        if exit_code != 0:
-            results["overall"] = "failed"
-
-    # Write test manifest
-    write_json(f"{ctx.run_dir}/test_manifest.json", {
-        "version": 1,
-        "generated": now_iso(),
-        "suites": results["suites"]
-    })
-
-    if results["overall"] == "failed":
-        fail(5, "Tests failed")
-
-    return results
-
-def make_target_exists(worktree: str, target: str) -> bool:
-    """Check if Make target exists."""
-    try:
-        run(f"make -C {worktree} -n {target}", capture=True)
-        return True
-    except:
-        return False
-
-def find_test_artifacts(ctx: Context, suite: str) -> dict:
-    """Find test artifacts for a suite."""
-    base = f"{ctx.workstream.worktree}/test-results/{ctx.project.name}/{suite}"
-    return {
-        "summary_json": f"{base}/summary.json" if Path(f"{base}/summary.json").exists() else None,
-        "junit_xml": f"{base}/junit.xml" if Path(f"{base}/junit.xml").exists() else None,
-    }
-```
-
-### 5.9 Stage: REVIEW
-
-```python
-def stage_review(ctx: Context, microcommit: MicroCommit) -> dict:
-    """Run Claude Code review on diff."""
-
-    # Generate diff
-    diff = run(f"git -C {ctx.workstream.worktree} diff {ctx.workstream.base_sha}..HEAD")
-    diff_path = f"{ctx.run_dir}/diff.patch"
-    Path(diff_path).write_text(diff)
-
-    # Prepare review prompt
-    prompt = f"""Review this code change for micro-commit {microcommit.id}: {microcommit.title}
-
-## Requirements
-{microcommit.block_content}
-
-## Diff
-{diff}
-
-## Review Criteria
-1. Does the implementation match the requirements?
-2. Are there any bugs or security issues?
-3. Are there missing tests?
-4. Is documentation needed and present?
-
-## Output Format
-Respond with ONLY a JSON object:
-```json
-{{
-  "version": 1,
-  "decision": "approve" | "request_changes",
-  "blockers": [
-    {{"file": "path", "line": 123, "issue": "description", "severity": "critical|major|minor", "fix_hint": "suggestion"}}
-  ],
-  "required_changes": ["change 1", "change 2"],
-  "suggestions": ["suggestion 1"],
-  "documentation": {{
-    "required": true|false,
-    "present": true|false,
-    "quality": "adequate|good|needs_work"
-  }},
-  "notes": "overall assessment"
-}}
-```
-"""
-
-    # Invoke Claude
-    result = run_claude(
-        prompt=prompt,
-        output_format="json",
-        timeout=60,
-        log_file=f"{ctx.run_dir}/review.log"
-    )
-
-    # Parse and validate JSON
-    try:
-        review = json.loads(result)
-    except json.JSONDecodeError as e:
-        fail(6, f"Review returned invalid JSON: {e}")
-
-    # Validate schema
-    if "decision" not in review:
-        fail(6, "Review missing 'decision' field")
-
-    if review["decision"] not in ("approve", "request_changes"):
-        fail(6, f"Invalid decision: {review['decision']}")
-
-    # Write review
-    write_json(f"{ctx.run_dir}/claude_review.json", review)
-
-    # Check result
-    if review["decision"] == "request_changes":
-        blockers = review.get("blockers", [])
-        required = review.get("required_changes", [])
-
-        if blockers or required:
-            update_workstream_status(ctx.workstream, "blocked:review")
-            fail(6, f"Review requested changes: {len(blockers)} blockers, {len(required)} required changes")
-
-    return review
-```
-
-### 5.10 Stage: QA_GATE
-
-```python
-def stage_qa_gate(ctx: Context) -> bool:
-    """Validate test outputs and review."""
-
-    # Check test manifest exists
-    manifest_path = f"{ctx.run_dir}/test_manifest.json"
-    if not Path(manifest_path).exists():
-        fail(7, "Test manifest missing")
-
-    manifest = json.loads(Path(manifest_path).read_text())
-
-    for suite in manifest["suites"]:
-        if suite["status"] == "skipped":
-            continue
-
-        artifacts = suite.get("artifacts", {})
-
-        # Validate summary.json if present
-        if artifacts.get("summary_json"):
-            try:
-                json.loads(Path(artifacts["summary_json"]).read_text())
-            except:
-                fail(7, f"Invalid summary.json for {suite['name']}")
-
-        # Validate junit.xml exists for unit tests
-        if suite["name"] == "unit" and suite["status"] == "passed":
-            if not artifacts.get("junit_xml") or not Path(artifacts["junit_xml"]).exists():
-                warn(f"junit.xml missing for unit tests")
-            else:
-                # Basic XML validation
-                content = Path(artifacts["junit_xml"]).read_text()
-                if "<testsuite" not in content or "<testcase" not in content:
-                    fail(7, "junit.xml appears malformed")
-
-    # Check review exists and is valid
-    review_path = f"{ctx.run_dir}/claude_review.json"
-    if not Path(review_path).exists():
-        fail(7, "Review JSON missing")
-
-    review = json.loads(Path(review_path).read_text())
-    if review.get("decision") != "approve":
-        fail(7, "Review did not approve")
-
-    return True
-```
-
-### 5.11 Stage: DOCS (new)
-
-```python
-def stage_docs(ctx: Context, microcommit: MicroCommit) -> bool:
-    """Validate and update documentation."""
-
-    # Check if docs are required for this commit
-    review_path = f"{ctx.run_dir}/claude_review.json"
-    review = json.loads(Path(review_path).read_text())
-
-    doc_status = review.get("documentation", {})
-
-    if doc_status.get("required") and not doc_status.get("present"):
-        warn("Documentation required but not present")
-        # Don't fail - this is tracked for future
-
-    # If E2E tests ran, check for screenshots
-    manifest = json.loads(Path(f"{ctx.run_dir}/test_manifest.json").read_text())
-    e2e_suite = next((s for s in manifest["suites"] if s["name"] == "e2e"), None)
-
-    if e2e_suite and e2e_suite["status"] == "passed":
-        screenshots = e2e_suite.get("artifacts", {}).get("screenshots", [])
-        if screenshots:
-            # Update doc asset manifest
-            update_doc_assets(ctx, screenshots)
-
-    return True
-
-def update_doc_assets(ctx: Context, screenshots: list):
-    """Update documentation asset manifest with new screenshots."""
-
-    manifest_path = f"{ctx.workstream.worktree}/docs/assets/manifest.json"
-
-    if Path(manifest_path).exists():
-        manifest = json.loads(Path(manifest_path).read_text())
-    else:
-        manifest = {"version": 1, "generated": now_iso(), "assets": [], "orphaned": []}
-
-    for screenshot in screenshots:
-        # Check if already tracked
-        existing = next((a for a in manifest["assets"] if a["path"] == screenshot), None)
-
-        if existing:
-            existing["created"] = now_iso()
-            existing["workstream"] = ctx.workstream.id
-        else:
-            manifest["assets"].append({
-                "path": screenshot,
-                "created": now_iso(),
-                "source": f"e2e:{ctx.microcommit.id}",
-                "referenced_by": [],
-                "workstream": ctx.workstream.id,
-                "commit": ctx.microcommit.id
-            })
-
-    manifest["generated"] = now_iso()
-    write_json(manifest_path, manifest)
-```
-
-### 5.12 Stage: UPDATE_STATE
-
-```python
-def stage_update_state(ctx: Context, microcommit: MicroCommit):
-    """Update workstream state after successful cycle."""
-
-    # Mark micro-commit done
-    mark_done(f"{ctx.workstream.dir}/plan.md", microcommit.id)
-
-    # Get new commit SHA
-    new_sha = run(f"git -C {ctx.workstream.worktree} rev-parse HEAD")
-
-    # Update meta.env
-    update_env(f"{ctx.workstream.dir}/meta.env", {
-        "LAST_RUN_ID": ctx.run_id,
-        "LAST_COMMIT_SHA": new_sha,
-        "LAST_RESULT": "passed",
-        "STATUS": "implement",  # Will be updated if all done
-        "LAST_REFRESHED": now_iso()
-    })
-
-    # Check if all micro-commits done
-    commits = parse_plan(f"{ctx.workstream.dir}/plan.md")
-    next_commit = get_next_microcommit(commits)
-
-    if next_commit is None:
-        # All implementation done - move to UAT
-        update_env(f"{ctx.workstream.dir}/meta.env", {
-            "STATUS": "uat:pending"
-        })
-        # Generate UAT request
-        generate_uat_request(ctx)
-```
-
-### 5.13 Stage: UAT_GATE (triggered after all micro-commits)
-
-```python
-def stage_uat_gate(ctx: Context) -> bool:
-    """Check UAT status before allowing merge."""
-
-    passed_dir = f"{ctx.workstream.dir}/uat/passed"
-    pending_dir = f"{ctx.workstream.dir}/uat/pending"
-    failed_dir = f"{ctx.workstream.dir}/uat/failed"
-
-    passed = list(Path(passed_dir).glob("UAT-*.json"))
-    pending = list(Path(pending_dir).glob("UAT-*.json"))
-    failed = list(Path(failed_dir).glob("UAT-*.json"))
-
-    if failed:
-        update_workstream_status(ctx.workstream, "uat:failed")
-        fail(8, f"UAT failed: {[f.stem for f in failed]}")
-
-    if pending:
-        update_workstream_status(ctx.workstream, "uat:pending")
-        fail(8, f"UAT pending: {[f.stem for f in pending]}")
-
-    if not passed:
-        # Generate UAT if none exists
-        generate_uat_request(ctx)
-        fail(8, "UAT required but none defined")
-
-    # All passed
-    update_workstream_status(ctx.workstream, "merge-ready")
-    return True
-
-def generate_uat_request(ctx: Context):
-    """Generate UAT request from requirements."""
-
-    # Find requirements linked to this workstream
-    # (This is a simplified version - real implementation would parse requirements)
-
-    uat_id = f"UAT-{ctx.workstream.id.upper()[:3]}-001"
-
-    uat = {
-        "version": 1,
-        "id": uat_id,
-        "status": "pending",
-        "created": now_iso(),
-        "completed": None,
-        "workstream": ctx.workstream.id,
-        "requirements": [],  # TODO: extract from plan/stories
-        "scenarios": [],     # TODO: generate from acceptance criteria
-        "result": None,
-        "validated_by": None,
-        "issues": []
-    }
-
-    write_json(f"{ctx.workstream.dir}/uat/pending/{uat_id}.json", uat)
-
-    # Also write human-readable version
-    write_uat_markdown(ctx, uat)
-```
+**Embedded Database**: SQLite for zero-ops single-facility deployments. Turso (edge-distributed SQLite) available for multi-region scaling without changing application code.
 
 ---
 
-## 6) Exit codes
-
-| Code | Name | Description |
-|------|------|-------------|
-| 0 | SUCCESS | Operation completed successfully |
-| 1 | ERROR_GENERAL | Unspecified error |
-| 2 | ERROR_CONFIG | Configuration error (missing files, invalid format) |
-| 3 | ERROR_LOCK | Lock acquisition failed (timeout) |
-| 4 | ERROR_IMPLEMENT | Implementation failed (agent error, no commit) |
-| 5 | ERROR_TEST | Tests failed |
-| 6 | ERROR_REVIEW | Review failed (invalid JSON, request_changes) |
-| 7 | ERROR_QA | QA gate failed (missing artifacts, validation) |
-| 8 | ERROR_BLOCKED | Workstream blocked (clarification, UAT pending) |
-| 9 | ERROR_INTERNAL | Internal error (unexpected exception) |
-
-**Exit code in scripts:**
-```bash
-case $? in
-    0) echo "Success" ;;
-    2) echo "Check your configuration files" ;;
-    3) echo "Another process holds the lock" ;;
-    4) echo "Implementation failed - check implement.log" ;;
-    5) echo "Tests failed - check test results" ;;
-    6) echo "Review requested changes" ;;
-    7) echo "QA validation failed" ;;
-    8) echo "Workstream blocked - human action required" ;;
-    *) echo "Error: $?" ;;
-esac
-```
-
----
-
-## 7) Logging
-
-### 7.1 `commands.log` format
-
-```
-[2025-01-15T12:00:00Z] [CWD:/path/to/worktree] [CMD:git status] [EXIT:0]
-[2025-01-15T12:00:01Z] [CWD:/path/to/worktree] [CMD:make test-unit] [EXIT:0]
---- STDOUT ---
-Running tests...
-All tests passed.
---- END STDOUT ---
-[2025-01-15T12:01:30Z] [CWD:/path/to/worktree] [CMD:git commit -m "..."] [EXIT:0]
-```
-
-**Implementation:**
-```python
-def run_logged(cmd: str, cwd: str, log_file: str, **kwargs):
-    """Run command with full logging."""
-
-    timestamp = datetime.now().isoformat()
-
-    with open(log_file, 'a') as f:
-        f.write(f"[{timestamp}] [CWD:{cwd}] [CMD:{cmd}]\n")
-
-        result = subprocess.run(
-            cmd, shell=True, cwd=cwd,
-            capture_output=True, text=True, **kwargs
-        )
-
-        f.write(f"[EXIT:{result.returncode}]\n")
-
-        if result.stdout:
-            f.write("--- STDOUT ---\n")
-            f.write(result.stdout)
-            f.write("\n--- END STDOUT ---\n")
-
-        if result.stderr:
-            f.write("--- STDERR ---\n")
-            f.write(result.stderr)
-            f.write("\n--- END STDERR ---\n")
-
-        f.write("\n")
-
-    return result
-```
-
-### 7.2 `env_snapshot.txt` format
-
-```
-# Environment Snapshot
-# Generated: 2025-01-15T12:00:00Z
-
-## System
-OS: Linux 5.15.0
-Shell: /bin/bash
-
-## Tools
-git: 2.39.0
-node: 20.10.0
-npm: 10.2.0
-python: 3.11.0
-make: GNU Make 4.3
-
-## Claude Code
-claude --version: claude-code 1.0.0
-
-## Docker (if available)
-docker: Docker version 24.0.0
-
-## Environment (non-secret)
-AOS_LOG_LEVEL: info
-AOS_PROJECT: myproject
-```
-
-### 7.3 Structured logging (optional enhancement)
-
-For machine parsing, optionally write `run.jsonl`:
-
-```jsonl
-{"ts":"2025-01-15T12:00:00Z","stage":"load","status":"start"}
-{"ts":"2025-01-15T12:00:01Z","stage":"load","status":"complete","duration":0.5}
-{"ts":"2025-01-15T12:00:01Z","stage":"select","status":"start"}
-{"ts":"2025-01-15T12:00:01Z","stage":"select","status":"complete","microcommit":"COMMIT-TF-001"}
-...
-```
-
----
-
-## 8) Test framework contract
-
-### 8.1 Make targets (default)
-
-AOS expects these targets if using Make:
-```makefile
-test-unit:        # Fast unit tests
-test-integration: # Integration tests (may need services)
-test-smoke:       # Quick sanity checks
-test-e2e:         # End-to-end tests (slowest)
-```
-
-### 8.2 Alternative runners
-
-If not using Make, configure in `project_profile.env`:
-```env
-# Disable Make, use direct commands
-MAKEFILE_PATH=
-TEST_CMD_UNIT="npm run test:unit"
-TEST_CMD_INTEGRATION="npm run test:integration"
-TEST_CMD_SMOKE=""
-TEST_CMD_E2E="npm run test:e2e"
-```
-
-### 8.3 Test output contract
-
-All test suites MUST produce:
-```
-test-results/{project}/{suite}/
-  summary.json    # Required: {"passed": N, "failed": N, "skipped": N}
-  junit.xml       # Required for unit tests
-  coverage/       # Optional
-  screenshots/    # Optional (E2E)
-```
-
-**summary.json schema:**
-```json
-{
-  "passed": 42,
-  "failed": 0,
-  "skipped": 3,
-  "total": 45,
-  "duration_ms": 12345
-}
-```
-
----
-
-## 9) Interview script
-
-### 9.1 `wf interview` behavior
-
-**Interactive mode (default):**
-```
-$ wf interview
-
-=== AOS Project Interview ===
-
-This will configure your project for AOS. Press Ctrl+C to abort.
-
-1. Product repository path
-   [default: /home/user/dev/myproject]:
-
-2. Default branch name
-   [default: main]:
-
-3. Makefile location (relative to repo root)
-   [default: Makefile]:
-
-4. Test targets (leave blank to skip):
-   - Unit tests target [default: test-unit]:
-   - Integration tests target [default: test-integration]:
-   - Smoke tests target [default: test-smoke]:
-   - E2E tests target [default: test-e2e]:
-
-5. Documentation path (relative to repo root)
-   [default: docs]:
-
-6. HITL mode (strict/stage-only/exceptions/off)
-   [default: strict]:
-
-7. Raw requirements paths (space-separated)
-   [default: requirements/raw]:
-
-Writing project_profile.env... done
-Writing project_profile.md... done
-
-Project configured successfully!
-```
-
-**Non-interactive mode:**
-```bash
-wf interview --non-interactive \
-  --repo-path /path/to/repo \
-  --default-branch main \
-  --make-target-unit test-unit \
-  --hitl-mode strict
-```
-
-### 9.2 Validation
-
-- `REPO_PATH`: Must exist and be a git repository
-- `MAKEFILE_PATH`: If provided, must exist
-- `HITL_MODE`: Must be one of: `strict`, `stage-only`, `exceptions`, `off`
-- Paths: Must not contain `..` or absolute paths outside repo
-
----
-
-## 10) Golden run scenarios
-
-### 10.1 Happy path: Single micro-commit cycle
-
-**Preconditions:**
-```bash
-# Workflow repo exists
-ls ~/dev/myproject.ops/workflow/
-
-# Project configured
-cat ~/dev/myproject.ops/workflow/projects/myproject/project.env
-cat ~/dev/myproject.ops/workflow/projects/myproject/project_profile.env
-
-# Workstream exists with one undone micro-commit
-wf new tf "Test framework" "mk/ tests/"
-# plan.md has: ### COMMIT-TF-001: Add test harness
-#              Done: [ ]
-```
-
-**Execution:**
-```bash
-wf run tf --once
-```
-
-**Expected results (MUST):**
-1. Exit code: `0`
-2. Run directory created: `~/dev/myproject.ops/runs/YYYYMMDD-HHMMSS_myproject_tf_COMMIT-TF-001/`
-3. Run directory contains:
-   - `result.json` with `"status": "passed"`
-   - `commands.log` with all executed commands
-   - `env_snapshot.txt` with tool versions
-   - `diff.patch` with the changes
-   - `claude_review.json` with `"decision": "approve"`
-   - `test_manifest.json` with test results
-4. Worktree has new commit starting with `COMMIT-TF-001:`
-5. `plan.md` updated: `Done: [x]`
-6. `meta.env` updated with `LAST_RUN_ID`, `LAST_COMMIT_SHA`
-7. `touched_files.txt` updated
-8. `ACTIVE_WORKSTREAMS.md` updated
-
-### 10.2 Failure: Tests fail
-
-**Setup:** Same as 10.1, but `make test-unit` will fail.
-
-**Expected:**
-1. Exit code: `5`
-2. `result.json`: `"status": "failed"`, `"failed_stage": "test"`
-3. `plan.md`: Still `Done: [ ]` (not marked done)
-4. `meta.env`: `STATUS=blocked:test`
-
-### 10.3 Failure: Review requests changes
-
-**Setup:** Same as 10.1, but Claude returns `"decision": "request_changes"`.
-
-**Expected:**
-1. Exit code: `6`
-2. `result.json`: `"status": "failed"`, `"failed_stage": "review"`
-3. `claude_review.json`: Contains blockers
-4. `meta.env`: `STATUS=blocked:review`
-
-### 10.4 Blocked: Clarification needed
-
-**Setup:** Workstream has pending CLQ with `urgency: blocking`.
-
-**Expected:**
-1. Exit code: `8`
-2. `result.json`: `"status": "blocked"`, `"blocked_reason": "CLQ-001"`
-3. No implementation attempted
-4. `meta.env`: `STATUS=blocked:clarification`
-
-### 10.5 Complete: All micro-commits done, UAT pending
-
-**Setup:** All micro-commits marked `Done: [x]`.
-
-**Expected:**
-1. Exit code: `8` (blocked for UAT)
-2. `meta.env`: `STATUS=uat:pending`
-3. UAT request generated in `uat/pending/`
-
-### 10.6 Loop until blocked
-
-```bash
-wf run tf --loop
-```
-
-**Expected:**
-- Runs cycles until:
-  - All micro-commits done (then blocks for UAT), or
-  - Tests fail, or
-  - Review requests changes, or
-  - Clarification raised
-- Each cycle creates its own run directory
-
----
-
-## 11) Self-testing requirements
-
-### 11.1 Unit tests (REQUIRED)
-
-Location: `orchestrator/tests/unit/`
-
-| Test file | Coverage |
-|-----------|----------|
-| `test_envparse.py` | Safe env parsing, forbidden patterns |
-| `test_planparse.py` | Micro-commit extraction, done detection |
-| `test_schemas.py` | JSON schema validation |
-| `test_conflicts.py` | Overlap computation |
-| `test_locking.py` | Lock acquire/release |
-
-### 11.2 Integration tests (REQUIRED)
-
-Location: `orchestrator/tests/integration/`
-
-**Test fixture:** A minimal git repo with:
-- Simple Makefile with test targets
-- Fake test output generators
-- Sample plan.md
-
-| Test | Description |
-|------|-------------|
-| `test_wf_new.py` | Create workstream, verify all files |
-| `test_wf_run_once.py` | Run single cycle, verify output |
-| `test_wf_run_fail_test.py` | Verify test failure handling |
-| `test_wf_run_fail_review.py` | Verify review failure handling |
-| `test_wf_clarification.py` | Verify CLQ blocking |
-| `test_wf_uat.py` | Verify UAT flow |
-
-### 11.3 Running tests
-
-```bash
-# Run all tests
-make test-aos
-
-# Run unit tests only
-pytest orchestrator/tests/unit/
-
-# Run integration tests only
-pytest orchestrator/tests/integration/
-```
-
----
-
-## 12) Implementation boundaries
-
-### 12.1 AOS MUST NEVER
-
-- Commit files to product repo outside of designated worktree
-- Commit workflow metadata to product repo
-- Run `rm -rf` on repository roots or home directories
-- Print secret environment variables or API keys
-- Execute commands as root/sudo unless explicitly configured
-- Modify `.git/config` in product repo
-- Push to remote without explicit user action
-- Run `git push --force` ever
-- Access files outside of: worktree, workflow repo, ops directory
-
-### 12.2 AOS MUST ALWAYS
-
-- Create a run directory for every `wf run` invocation
-- Write `result.json` even on failure
-- Write `commands.log` for all executed commands
-- Release locks on exit (including SIGTERM, SIGINT)
-- Validate all external input (env files, JSON, user input)
-- Use safe parsing for configuration files
-- Check preconditions before destructive operations
-- Preserve git history (no force operations)
-
-### 12.3 Clarification on "product repo" vs "workflow repo"
-
-- **Product repo** (`REPO_PATH`): The actual software being built. AOS only writes here via the worktree, and only during IMPLEMENT stage.
-
-- **Workflow repo** (`AOS_WORKFLOW_REPO`): This repository. AOS writes plans, meta, CLQs, UAT files, etc. here.
-
-- **Ops directory** (`AOS_OPS_DIR`): Untracked runtime data. Worktrees, run logs, caches, secrets live here.
-
----
-
-## 13) Agent SDK integration (future)
-
-This section is a placeholder for Anthropic Agents SDK integration.
-
-### 13.1 Agent topology (planned)
-
-```
-Orchestrator (AOS)
-├── Developer Agent (Codex/Claude)
-│   └── Tools: file_read, file_write, bash, git
-├── Reviewer Agent (Claude)
-│   └── Tools: file_read, diff_analyze
-├── PM Agent (Claude) [future]
-│   └── Tools: requirements_parse, story_generate
-└── QA Agent [future]
-    └── Tools: test_run, coverage_check
-```
-
-### 13.2 Tool schemas (planned)
-
-To be defined when Agents SDK integration begins.
-
----
-
-## APPENDIX A — Quick reference
-
-### A.1 CLI commands
-
-```bash
-# Project management
-wf interview                    # Configure project
-wf list                         # List active workstreams
-
-# Workstream lifecycle
-wf new <id> "<title>" "<paths>" # Create workstream
-wf status <id>                  # Show status
-wf refresh [<id>]               # Update touched files
-wf conflicts <id>               # Check for conflicts
-wf run <id> --once              # Run one cycle
-wf run <id> --loop              # Run until blocked
-wf merge <id>                   # Merge to main (if ready)
-wf close <id>                   # Archive workstream
-wf delete <id> --confirm        # Delete workstream
-
-# Clarifications
-wf clarify list                 # List pending
-wf clarify show <CLQ-id>        # View details
-wf clarify answer <CLQ-id>      # Answer question
-
-# UAT
-wf uat list                     # List pending
-wf uat show <UAT-id>            # View details
-wf uat pass <UAT-id>            # Mark passed
-wf uat fail <UAT-id>            # Mark failed
-
-# Documentation
-wf docs status                  # Show coverage
-wf docs cleanup                 # Remove orphaned assets
-```
-
-### A.2 Status reference
-
-```
-planning           → Working on plan
-implement          → Running micro-commits
-blocked:clarify    → Waiting for CLQ answers
-blocked:review     → Review requested changes
-blocked:test       → Tests failing
-docs               → Documentation stage
-uat:pending        → Waiting for UAT
-uat:failed         → UAT failed
-merge-ready        → All gates passed
-done               → Merged and closed
-```
-
-### A.3 Exit codes reference
-
-```
-0 = success
-1 = general error
-2 = config error
-3 = lock timeout
-4 = implement failed
-5 = tests failed
-6 = review failed
-7 = QA gate failed
-8 = blocked (CLQ/UAT)
-9 = internal error
-```
-
----
-
-*End of specification.*
+## Terminology
+
+| Term | Definition |
+|------|------------|
+| **Facility** | Physical location with courts, a club |
+| **Organization** | Business entity owning one or more facilities |
+| **Member** | Customer using the facility (guest through premium) |
+| **Staff** | Employee operating the facility |
+| **Court** | Bookable playing surface |
+| **Reservation** | Time block on one or more courts |
+| **Open Play** | Drop-in session with rotation rules |
+| **Theme** | Color scheme for facility branding |
+| **Waiver** | Liability agreement required for play |
+| **Soft Delete** | Mark as deleted but preserve history |

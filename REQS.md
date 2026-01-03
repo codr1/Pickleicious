@@ -479,11 +479,13 @@ Stored as iCalendar RRULE compatible format.
 
 > **GitHub Issue #32:** Open play cancellation and auto-scaling
 
+<!-- BEGIN WIP: STORY-0005 -->
 **Requirements:**
 - Cancel open play if fewer than X reservations by cutoff time
 - Auto-scale number of courts based on signups (not all-or-nothing)
 - Rule: Number of players per court for open play
 - Ability to auto-scale up if demand increases
+<!-- END WIP -->
 
 **Team Configuration:**
 - Total number of teams
@@ -516,6 +518,26 @@ Stored as iCalendar RRULE compatible format.
 | Pro Session | Accent color, distinctive pattern |
 | Tournament | Primary→Secondary gradient |
 | Maintenance | Tertiary, diagonal stripes |
+
+### 6.9 Calendar Interactions (Planned)
+
+These calendar interactions are designed but not yet implemented:
+
+**Views:**
+- Week View: One court across a week for spotting patterns
+- Month View: Overview of all reservations
+- Agenda View: Chronological list of upcoming reservations
+
+**Interactions:**
+- Click empty slot: Create new reservation
+- Click existing reservation: View details, edit
+- Drag reservation: Reschedule within constraints
+- Hover over reservation: Quick preview of participants
+
+**Constraints:**
+- Respect operating hours (slots outside hours grayed/non-bookable)
+- Prevent double-booking
+- Validate against court availability
 
 ---
 
@@ -856,7 +878,9 @@ This section documents features that are standard in competing pickleball/sports
 |---------|----------|---------|
 | Booking Confirmation | Email, SMS | Reservation details, court, time |
 | 24-Hour Reminder | Email, SMS, Push | Upcoming reservation reminder |
+<!-- BEGIN WIP: STORY-0005 -->
 | Cancellation Notice | Email, SMS | Confirmation of cancellation |
+<!-- END WIP -->
 | Waitlist Promotion | Email, SMS | Spot opened, action required |
 | Payment Receipt | Email | Transaction confirmation |
 | Membership Renewal | Email | Upcoming renewal reminder |
@@ -1160,7 +1184,9 @@ This section documents features that are standard in competing pickleball/sports
 | Open Play Sessions | Scheduled drop-in times |
 | Skill-Based Sessions | Beginner, intermediate, advanced |
 | Sign-Up Visibility | See who else is signed up |
+<!-- BEGIN WIP: STORY-0005 -->
 | Auto-Court Assignment | Balance player count per court |
+<!-- END WIP -->
 | Rotation System | Fair play time distribution |
 
 **Guest Conversion:**
