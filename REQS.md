@@ -220,20 +220,16 @@ Separate billing table for payment data:
 | `user_id` | FK→users | Links to auth record |
 | `first_name` | TEXT | First name |
 | `last_name` | TEXT | Last name |
-<!-- BEGIN WIP: STORY-0006 -->
 | `home_facility_id` | FK→facilities | NULL for corporate admins |
-<!-- END WIP -->
 | `role` | TEXT | Role identifier |
 
 **Staff Roles:**
-<!-- BEGIN WIP: STORY-0006 -->
 | Role | Description | Scope |
 |------|-------------|-------|
 | `admin` | Full system access | Corporate or facility |
 | `manager` | Facility management | Single facility |
 | `desk` | Front desk operations | Single facility |
 | `pro` | Teaching professional | Single facility |
-<!-- END WIP -->
 
 ---
 
@@ -1535,7 +1531,6 @@ features:
 
 ### 11.5 Middleware Stack
 
-<!-- BEGIN WIP: STORY-0006 -->
 ```go
 handler := api.ChainMiddleware(
     router,
@@ -1545,7 +1540,6 @@ handler := api.ChainMiddleware(
     api.WithContentType,  // Default Accept header
 )
 ```
-<!-- END WIP -->
 
 ### 11.6 API Routes
 
