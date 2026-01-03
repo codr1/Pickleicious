@@ -573,9 +573,6 @@ These calendar interactions are designed but not yet implemented:
 
 **Acceptance Criteria (from #18):**
 - [ ] Define color usage guide for each component
-<!-- BEGIN WIP: STORY-0007 -->
-- [ ] Define contrast requirements for all text elements
-<!-- END WIP -->
 - [ ] Define hover/active state behaviors
 - [ ] Define transition animations
 - [ ] Create component preview layout
@@ -610,9 +607,6 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Primary buttons using Accent (#66FCF1)
 - [ ] Secondary buttons using Secondary (#1F2833)
 - [ ] Calendar slot states with proper colors
-<!-- BEGIN WIP: STORY-0007 -->
-- [ ] All text elements meet WCAG AA contrast
-<!-- END WIP -->
 - [ ] Hover and active states defined
 - [ ] Theme preview demonstrates all components
 
@@ -638,9 +632,6 @@ function transformColor(color: string, mode: 'light' | 'dark'): string {
 - [ ] Generate light variant from dark theme
 - [ ] Preserve relative contrast relationships
 - [ ] Maintain theme's character
-<!-- BEGIN WIP: STORY-0007 -->
-- [ ] Ensure WCAG compliance in both variants
-<!-- END WIP -->
 - [ ] Handle backgrounds, text, borders, shadows
 - [ ] Support @prefers-color-scheme media query
 - [ ] Manual override capability
