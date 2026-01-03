@@ -36,9 +36,21 @@ const (
 )
 
 var (
-	queries     *dbgen.Queries
+	queries     themeQueries
 	queriesOnce sync.Once
 )
+
+type themeQueries interface {
+	models.ThemeQueries
+	CountFacilityThemeName(ctx context.Context, arg dbgen.CountFacilityThemeNameParams) (int64, error)
+	CountFacilityThemeNameExcludingID(ctx context.Context, arg dbgen.CountFacilityThemeNameExcludingIDParams) (int64, error)
+	CountFacilityThemes(ctx context.Context, facilityID sql.NullInt64) (int64, error)
+	CountThemeUsage(ctx context.Context, themeID sql.NullInt64) (int64, error)
+	CreateTheme(ctx context.Context, arg dbgen.CreateThemeParams) (dbgen.Theme, error)
+	DeleteTheme(ctx context.Context, id int64) (int64, error)
+	UpdateTheme(ctx context.Context, arg dbgen.UpdateThemeParams) (dbgen.Theme, error)
+	UpsertActiveThemeID(ctx context.Context, arg dbgen.UpsertActiveThemeIDParams) (int64, error)
+}
 
 type themeRequest struct {
 	FacilityID     *int64 `json:"facilityId"`
@@ -968,7 +980,7 @@ func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEdito
 	}
 }
 
-func loadQueries() *dbgen.Queries {
+func loadQueries() themeQueries {
 	return queries
 }
 
