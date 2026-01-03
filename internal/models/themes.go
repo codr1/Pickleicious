@@ -48,6 +48,13 @@ type Theme struct {
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
+type ThemeQueries interface {
+	ListSystemThemes(ctx context.Context) ([]dbgen.Theme, error)
+	ListFacilityThemes(ctx context.Context, facilityID sql.NullInt64) ([]dbgen.Theme, error)
+	GetActiveThemeID(ctx context.Context, facilityID int64) (int64, error)
+	GetTheme(ctx context.Context, id int64) (dbgen.Theme, error)
+}
+
 func DefaultTheme() Theme {
 	return Theme{
 		Name:           "",
@@ -102,7 +109,7 @@ func (t Theme) Validate() error {
 	return nil
 }
 
-func GetSystemThemes(ctx context.Context, queries *dbgen.Queries) ([]Theme, error) {
+func GetSystemThemes(ctx context.Context, queries ThemeQueries) ([]Theme, error) {
 	rows, err := queries.ListSystemThemes(ctx)
 	if err != nil {
 		return nil, err
@@ -110,7 +117,7 @@ func GetSystemThemes(ctx context.Context, queries *dbgen.Queries) ([]Theme, erro
 	return themesFromDB(rows), nil
 }
 
-func GetFacilityThemes(ctx context.Context, queries *dbgen.Queries, facilityID int64) ([]Theme, error) {
+func GetFacilityThemes(ctx context.Context, queries ThemeQueries, facilityID int64) ([]Theme, error) {
 	rows, err := queries.ListFacilityThemes(ctx, sql.NullInt64{
 		Int64: facilityID,
 		Valid: true,
@@ -121,7 +128,7 @@ func GetFacilityThemes(ctx context.Context, queries *dbgen.Queries, facilityID i
 	return themesFromDB(rows), nil
 }
 
-func GetActiveTheme(ctx context.Context, queries *dbgen.Queries, facilityID int64) (*Theme, error) {
+func GetActiveTheme(ctx context.Context, queries ThemeQueries, facilityID int64) (*Theme, error) {
 	activeThemeID, err := queries.GetActiveThemeID(ctx, facilityID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
