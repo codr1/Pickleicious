@@ -1,0 +1,16 @@
+=== RUN   TestOpenPlayRuleHandlersCRUD
+--- PASS: TestOpenPlayRuleHandlersCRUD (0.00s)
+=== RUN   TestOpenPlayRuleCreateValidation
+=== RUN   TestOpenPlayRuleCreateValidation/missing_min_participants
+=== RUN   TestOpenPlayRuleCreateValidation/negative_cancellation_cutoff
+=== RUN   TestOpenPlayRuleCreateValidation/min_courts_greater_than_max_courts
+=== RUN   TestOpenPlayRuleCreateValidation/min_participants_exceeds_capacity
+--- PASS: TestOpenPlayRuleCreateValidation (0.00s)
+    --- PASS: TestOpenPlayRuleCreateValidation/missing_min_participants (0.00s)
+    --- PASS: TestOpenPlayRuleCreateValidation/negative_cancellation_cutoff (0.00s)
+    --- PASS: TestOpenPlayRuleCreateValidation/min_courts_greater_than_max_courts (0.00s)
+    --- PASS: TestOpenPlayRuleCreateValidation/min_participants_exceeds_capacity (0.00s)
+=== RUN   TestOpenPlaySessionAutoScaleToggle
+--- PASS: TestOpenPlaySessionAutoScaleToggle (0.00s)
+PASS
+ok  	github.com/codr1/Pickleicious/internal/api/openplay	0.022s

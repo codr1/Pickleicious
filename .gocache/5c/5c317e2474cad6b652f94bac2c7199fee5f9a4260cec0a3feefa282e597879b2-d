@@ -1,0 +1,4 @@
+./editor_templ.go
+./layout_templ.go
+./list_templ.go
+./types.go

@@ -244,7 +244,7 @@ CREATE TABLE open_play_audit_log (
     after_state TEXT,
     reason TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (action IN ('scale_up', 'scale_down', 'cancelled')),
+    CHECK (action IN ('scale_up', 'scale_down', 'cancelled', 'auto_scale_override', 'auto_scale_rule_disabled')),
     FOREIGN KEY (session_id) REFERENCES open_play_sessions(id)
 );
 

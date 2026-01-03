@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -18,6 +19,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog/log"
 
+	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	openplaytempl "github.com/codr1/Pickleicious/internal/templates/components/openplay"
@@ -26,18 +28,24 @@ import (
 
 var (
 	queries     *dbgen.Queries
+	store       *appdb.DB
 	queriesOnce sync.Once
 )
 
-const openPlayQueryTimeout = 5 * time.Second
+const (
+	openPlayQueryTimeout              = 5 * time.Second
+	openPlayAuditAutoScaleOverride    = "auto_scale_override"
+	openPlayAuditAutoScaleRuleDisable = "auto_scale_rule_disabled"
+)
 
 // InitHandlers must be called during server startup before handling requests.
-func InitHandlers(q *dbgen.Queries) {
-	if q == nil {
+func InitHandlers(database *appdb.DB) {
+	if database == nil {
 		return
 	}
 	queriesOnce.Do(func() {
-		queries = q
+		queries = database.Queries
+		store = database
 	})
 }
 
@@ -468,6 +476,140 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	sessionID, err := openPlaySessionIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := facilityIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var payload openPlaySessionAutoScaleToggleRequest
+	if err := decodeJSON(r, &payload); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
+	defer cancel()
+
+	var updatedSession dbgen.OpenPlaySession
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		session, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+			ID:         sessionID,
+			FacilityID: facilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+			}
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+		}
+
+		rule, err := qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: facilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return handlerError{status: http.StatusNotFound, message: "Open play rule not found", err: err}
+			}
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play rule", err: err}
+		}
+
+		nextOverride := !rule.AutoScaleEnabled
+		if session.AutoScaleOverride.Valid {
+			nextOverride = !session.AutoScaleOverride.Bool
+		}
+
+		updatedSession, err = qtx.UpdateSessionAutoScaleOverride(ctx, dbgen.UpdateSessionAutoScaleOverrideParams{
+			ID:                sessionID,
+			FacilityID:        facilityID,
+			AutoScaleOverride: sql.NullBool{Bool: nextOverride, Valid: true},
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+			}
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to update open play session", err: err}
+		}
+
+		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditAutoScaleOverride, map[string]any{
+			"auto_scale_override": auditBoolValue(session.AutoScaleOverride),
+		}, map[string]any{
+			"auto_scale_override": auditBoolValue(updatedSession.AutoScaleOverride),
+		}, sql.NullString{}); err != nil {
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play session auto scale override", err: err}
+		}
+
+		if payload.DisableForRule {
+			_, err := qtx.UpdateOpenPlayRule(ctx, dbgen.UpdateOpenPlayRuleParams{
+				ID:                        rule.ID,
+				FacilityID:                rule.FacilityID,
+				Name:                      rule.Name,
+				MinParticipants:           rule.MinParticipants,
+				MaxParticipantsPerCourt:   rule.MaxParticipantsPerCourt,
+				CancellationCutoffMinutes: rule.CancellationCutoffMinutes,
+				AutoScaleEnabled:          false,
+				MinCourts:                 rule.MinCourts,
+				MaxCourts:                 rule.MaxCourts,
+			})
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return handlerError{status: http.StatusNotFound, message: "Open play rule not found", err: err}
+				}
+				return handlerError{status: http.StatusInternalServerError, message: "Failed to update open play rule", err: err}
+			}
+
+			if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditAutoScaleRuleDisable, map[string]any{
+				"auto_scale_enabled": rule.AutoScaleEnabled,
+			}, map[string]any{
+				"auto_scale_enabled": false,
+			}, sql.NullString{String: "disable_for_rule", Valid: true}); err != nil {
+				return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play rule auto scale change", err: err}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		var herr handlerError
+		if errors.As(err, &herr) {
+			if herr.status == http.StatusInternalServerError {
+				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			}
+			http.Error(w, herr.message, herr.status)
+			return
+		}
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to update open play session auto scale override")
+		http.Error(w, "Failed to update open play session", http.StatusInternalServerError)
+		return
+	}
+
+	if err := writeJSON(w, http.StatusOK, updatedSession); err != nil {
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play session response")
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
+}
+
 func facilityIDFromRequest(r *http.Request) (int64, error) {
 	queryID := strings.TrimSpace(r.URL.Query().Get("facility_id"))
 	formID := ""
@@ -524,6 +666,10 @@ func loadQueries() *dbgen.Queries {
 	return queries
 }
 
+func loadDB() *appdb.DB {
+	return store
+}
+
 func openPlayRuleIDFromRequest(r *http.Request) (int64, error) {
 	pathID := strings.TrimSpace(r.PathValue("id"))
 	if pathID == "" {
@@ -534,6 +680,22 @@ func openPlayRuleIDFromRequest(r *http.Request) (int64, error) {
 		return 0, fmt.Errorf("invalid rule ID")
 	}
 	return id, nil
+}
+
+func openPlaySessionIDFromRequest(r *http.Request) (int64, error) {
+	pathID := strings.TrimSpace(r.PathValue("id"))
+	if pathID == "" {
+		return 0, fmt.Errorf("invalid session ID")
+	}
+	id, err := strconv.ParseInt(pathID, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid session ID")
+	}
+	return id, nil
+}
+
+type openPlaySessionAutoScaleToggleRequest struct {
+	DisableForRule bool `json:"disable_for_rule"`
 }
 
 func parseIntField(r *http.Request, name string) (int64, error) {
@@ -565,6 +727,91 @@ type fieldError struct {
 
 func (e fieldError) Error() string {
 	return fmt.Sprintf("%s %s", e.Field, e.Reason)
+}
+
+func decodeJSON(r *http.Request, dst any) error {
+	if r.Body == nil {
+		return fmt.Errorf("missing request body")
+	}
+	defer r.Body.Close()
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("invalid JSON body")
+	}
+	return nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) error {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	if err := encoder.Encode(payload); err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, err := w.Write(buf.Bytes())
+	return err
+}
+
+type handlerError struct {
+	status  int
+	message string
+	err     error
+}
+
+func (e handlerError) Error() string {
+	return e.message
+}
+
+func (e handlerError) Unwrap() error {
+	return e.err
+}
+
+func auditBoolValue(value sql.NullBool) any {
+	if value.Valid {
+		return value.Bool
+	}
+	return nil
+}
+
+func createOpenPlayAuditEntry(ctx context.Context, q *dbgen.Queries, sessionID int64, action string, beforeState, afterState map[string]any, reason sql.NullString) error {
+	before, err := marshalAuditState(beforeState)
+	if err != nil {
+		return err
+	}
+	after, err := marshalAuditState(afterState)
+	if err != nil {
+		return err
+	}
+	_, err = q.CreateOpenPlayAuditLog(ctx, dbgen.CreateOpenPlayAuditLogParams{
+		SessionID:   sessionID,
+		Action:      action,
+		BeforeState: before,
+		AfterState:  after,
+		Reason:      reason,
+	})
+	if err != nil {
+		return fmt.Errorf("create audit log: %w", err)
+	}
+	return nil
+}
+
+func marshalAuditState(state map[string]any) (sql.NullString, error) {
+	if len(state) == 0 {
+		return sql.NullString{}, nil
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return sql.NullString{}, fmt.Errorf("marshal audit state: %w", err)
+	}
+	return sql.NullString{String: string(data), Valid: true}, nil
 }
 
 func validateOpenPlayRuleInput(minParticipants, maxParticipantsPerCourt, cancellationCutoffMinutes, minCourts, maxCourts int64) error {

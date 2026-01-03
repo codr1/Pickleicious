@@ -1,0 +1,5 @@
+./layout_templ.go
+./rule_detail_templ.go
+./rule_form_templ.go
+./rules_list_templ.go
+./types.go

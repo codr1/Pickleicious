@@ -1,0 +1,14 @@
+./cognito.sql.go
+./courts.sql.go
+./db.go
+./facility_themes.sql.go
+./members.sql.go
+./models.go
+./open_play.sql.go
+./open_play_enforcement.sql.go
+./open_play_sessions.sql.go
+./querier.go
+./schedules.sql.go
+./staff.sql.go
+./themes.sql.go
+./users.sql.go

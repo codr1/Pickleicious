@@ -94,6 +94,16 @@ RETURNING id, facility_id, open_play_rule_id, start_time, end_time, status,
     current_court_count, auto_scale_override, cancelled_at, cancellation_reason,
     created_at, updated_at;
 
+-- name: UpdateSessionAutoScaleOverride :one
+UPDATE open_play_sessions
+SET auto_scale_override = @auto_scale_override,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+  AND facility_id = @facility_id
+RETURNING id, facility_id, open_play_rule_id, start_time, end_time, status,
+    current_court_count, auto_scale_override, cancelled_at, cancellation_reason,
+    created_at, updated_at;
+
 -- name: CreateOpenPlayAuditLog :one
 INSERT INTO open_play_audit_log (
     session_id,

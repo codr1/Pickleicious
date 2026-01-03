@@ -4,21 +4,27 @@ package openplay
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/codr1/Pickleicious/internal/db"
+	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 )
 
 func setupOpenPlayTest(t *testing.T) (*db.DB, int64) {
 	t.Helper()
 
-	dbPath := filepath.Join(t.TempDir(), "open_play.db")
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "open_play.db")
 	database, err := db.New(dbPath)
 	if err != nil {
 		t.Fatalf("create db: %v", err)
@@ -57,7 +63,11 @@ func setupOpenPlayTest(t *testing.T) (*db.DB, int64) {
 		t.Fatalf("facility id: %v", err)
 	}
 
-	InitHandlers(database.Queries)
+	queriesOnce = sync.Once{}
+	queries = nil
+	store = nil
+	InitHandlers(database)
+
 	return database, facilityID
 }
 
@@ -271,5 +281,148 @@ func TestOpenPlayRuleCreateValidation(t *testing.T) {
 				t.Fatalf("message %q missing in: %s", tc.wantMessage, recorder.Body.String())
 			}
 		})
+	}
+}
+
+func TestOpenPlaySessionAutoScaleToggle(t *testing.T) {
+	database, facilityID := setupOpenPlayTest(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	rule, err := database.Queries.CreateOpenPlayRule(ctx, dbgen.CreateOpenPlayRuleParams{
+		FacilityID:                facilityID,
+		Name:                      "Auto Scale Rule",
+		MinParticipants:           4,
+		MaxParticipantsPerCourt:   8,
+		CancellationCutoffMinutes: 30,
+		AutoScaleEnabled:          true,
+		MinCourts:                 1,
+		MaxCourts:                 2,
+	})
+	if err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	session, err := database.Queries.CreateOpenPlaySession(ctx, dbgen.CreateOpenPlaySessionParams{
+		FacilityID:         facilityID,
+		OpenPlayRuleID:     rule.ID,
+		StartTime:          now.Add(2 * time.Hour),
+		EndTime:            now.Add(3 * time.Hour),
+		Status:             "scheduled",
+		CurrentCourtCount:  1,
+		AutoScaleOverride:  sql.NullBool{},
+		CancelledAt:        sql.NullTime{},
+		CancellationReason: sql.NullString{},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	toggleReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/api/v1/open-play-sessions/%d/auto-scale?facility_id=%d", session.ID, facilityID),
+		strings.NewReader(`{"disable_for_rule":false}`),
+	)
+	toggleReq.Header.Set("Content-Type", "application/json")
+	toggleReq.SetPathValue("id", fmt.Sprintf("%d", session.ID))
+	toggleRecorder := httptest.NewRecorder()
+	HandleOpenPlaySessionAutoScaleToggle(toggleRecorder, toggleReq)
+
+	if toggleRecorder.Code != http.StatusOK {
+		t.Fatalf("toggle status: %d", toggleRecorder.Code)
+	}
+
+	var updated dbgen.OpenPlaySession
+	if err := json.NewDecoder(toggleRecorder.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !updated.AutoScaleOverride.Valid || updated.AutoScaleOverride.Bool {
+		t.Fatalf("expected override to be set to false, got %+v", updated.AutoScaleOverride)
+	}
+
+	logs, err := database.Queries.ListOpenPlayAuditLog(ctx, dbgen.ListOpenPlayAuditLogParams{
+		SessionID:  session.ID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		t.Fatalf("list audit logs: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 audit log, got %d", len(logs))
+	}
+	if logs[0].Action != openPlayAuditAutoScaleOverride {
+		t.Fatalf("unexpected audit action: %s", logs[0].Action)
+	}
+
+	ruleTwo, err := database.Queries.CreateOpenPlayRule(ctx, dbgen.CreateOpenPlayRuleParams{
+		FacilityID:                facilityID,
+		Name:                      "Disable Rule",
+		MinParticipants:           4,
+		MaxParticipantsPerCourt:   8,
+		CancellationCutoffMinutes: 30,
+		AutoScaleEnabled:          true,
+		MinCourts:                 1,
+		MaxCourts:                 2,
+	})
+	if err != nil {
+		t.Fatalf("create second rule: %v", err)
+	}
+
+	sessionTwo, err := database.Queries.CreateOpenPlaySession(ctx, dbgen.CreateOpenPlaySessionParams{
+		FacilityID:         facilityID,
+		OpenPlayRuleID:     ruleTwo.ID,
+		StartTime:          now.Add(4 * time.Hour),
+		EndTime:            now.Add(5 * time.Hour),
+		Status:             "scheduled",
+		CurrentCourtCount:  1,
+		AutoScaleOverride:  sql.NullBool{},
+		CancelledAt:        sql.NullTime{},
+		CancellationReason: sql.NullString{},
+	})
+	if err != nil {
+		t.Fatalf("create second session: %v", err)
+	}
+
+	disableReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/api/v1/open-play-sessions/%d/auto-scale?facility_id=%d", sessionTwo.ID, facilityID),
+		strings.NewReader(`{"disable_for_rule":true}`),
+	)
+	disableReq.Header.Set("Content-Type", "application/json")
+	disableReq.SetPathValue("id", fmt.Sprintf("%d", sessionTwo.ID))
+	disableRecorder := httptest.NewRecorder()
+	HandleOpenPlaySessionAutoScaleToggle(disableRecorder, disableReq)
+
+	if disableRecorder.Code != http.StatusOK {
+		t.Fatalf("disable status: %d", disableRecorder.Code)
+	}
+
+	updatedRule, err := database.Queries.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+		ID:         ruleTwo.ID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		t.Fatalf("get updated rule: %v", err)
+	}
+	if updatedRule.AutoScaleEnabled {
+		t.Fatal("expected auto scale to be disabled for rule")
+	}
+
+	logs, err = database.Queries.ListOpenPlayAuditLog(ctx, dbgen.ListOpenPlayAuditLogParams{
+		SessionID:  sessionTwo.ID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		t.Fatalf("list audit logs for disable: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 audit logs, got %d", len(logs))
+	}
+	actions := map[string]bool{}
+	for _, entry := range logs {
+		actions[entry.Action] = true
+	}
+	if !actions[openPlayAuditAutoScaleOverride] || !actions[openPlayAuditAutoScaleRuleDisable] {
+		t.Fatalf("expected audit actions for override and rule disable, got %v", actions)
 	}
 }

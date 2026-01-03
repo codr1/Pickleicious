@@ -38,7 +38,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		api.WithContentType,
 	)
 
-	openplayapi.InitHandlers(database.Queries)
+	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	if err := scheduler.Init(); err != nil {
@@ -183,6 +183,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		}
 		openplayapi.HandleOpenPlayRuleEdit(w, r)
 	})
+	mux.HandleFunc("/api/v1/open-play-sessions/{id}/auto-scale", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: openplayapi.HandleOpenPlaySessionAutoScaleToggle,
+	}))
 
 	// Theme admin page
 	mux.HandleFunc("/admin/themes", themes.HandleThemesPage)
