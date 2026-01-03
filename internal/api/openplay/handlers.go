@@ -18,6 +18,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog/log"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	openplaytempl "github.com/codr1/Pickleicious/internal/templates/components/openplay"
@@ -61,7 +62,9 @@ func HandleOpenPlayRulesPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	rules, err := q.ListOpenPlayRules(ctx, facilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch open play rules")
@@ -100,7 +103,9 @@ func HandleOpenPlayRulesList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	rules, err := q.ListOpenPlayRules(ctx, facilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to list open play rules")
@@ -121,6 +126,9 @@ func HandleOpenPlayRuleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	rule := dbgen.OpenPlayRule{FacilityID: facilityID}
 	component := openplaytempl.OpenPlayRuleForm(openplaytempl.NewOpenPlayRule(rule), facilityID)
 	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
@@ -150,6 +158,9 @@ func HandleOpenPlayRuleEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
@@ -241,7 +252,9 @@ func HandleOpenPlayRuleCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	rule, err := q.CreateOpenPlayRule(ctx, dbgen.CreateOpenPlayRuleParams{
 		FacilityID:                facilityID,
 		Name:                      name,
@@ -292,7 +305,9 @@ func HandleOpenPlayRuleDetail(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	rule, err := q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
 		ID:         ruleID,
 		FacilityID: facilityID,
@@ -387,7 +402,9 @@ func HandleOpenPlayRuleUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	rule, err := q.UpdateOpenPlayRule(ctx, dbgen.UpdateOpenPlayRuleParams{
 		ID:                        ruleID,
 		FacilityID:                facilityID,
@@ -444,7 +461,9 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
 	deleted, err := q.DeleteOpenPlayRule(ctx, dbgen.DeleteOpenPlayRuleParams{
 		ID:         ruleID,
 		FacilityID: facilityID,
@@ -466,6 +485,38 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 	if !renderHTMLComponent(r.Context(), w, component, headers, "Failed to render delete response", "Failed to render response") {
 		return
 	}
+}
+
+func requireFacilityAccess(w http.ResponseWriter, r *http.Request, facilityID int64) bool {
+	logger := log.Ctx(r.Context())
+	user := authz.UserFromContext(r.Context())
+	if err := authz.RequireFacilityAccess(r.Context(), facilityID); err != nil {
+		switch {
+		case errors.Is(err, authz.ErrUnauthenticated):
+			logEvent := logger.Warn().Int64("facility_id", facilityID)
+			if user != nil {
+				logEvent = logEvent.Int64("user_id", user.ID)
+			}
+			logEvent.Msg("Facility access denied: unauthenticated")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		case errors.Is(err, authz.ErrForbidden):
+			logEvent := logger.Warn().Int64("facility_id", facilityID)
+			if user != nil {
+				logEvent = logEvent.Int64("user_id", user.ID)
+			}
+			logEvent.Msg("Facility access denied: forbidden")
+			http.Error(w, "Forbidden", http.StatusForbidden)
+		default:
+			logEvent := logger.Error().Int64("facility_id", facilityID).Err(err)
+			if user != nil {
+				logEvent = logEvent.Int64("user_id", user.ID)
+			}
+			logEvent.Msg("Facility access denied: error")
+			http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
+		}
+		return false
+	}
+	return true
 }
 
 func facilityIDFromRequest(r *http.Request) (int64, error) {

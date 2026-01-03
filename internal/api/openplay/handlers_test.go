@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/db"
 )
 
@@ -61,6 +62,16 @@ func setupOpenPlayTest(t *testing.T) (*db.DB, int64) {
 	return database, facilityID
 }
 
+func withAuthUser(req *http.Request, facilityID int64) *http.Request {
+	homeFacilityID := facilityID
+	user := &authz.AuthUser{
+		ID:             1,
+		IsStaff:        true,
+		HomeFacilityID: &homeFacilityID,
+	}
+	return req.WithContext(authz.ContextWithUser(req.Context(), user))
+}
+
 func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 	database, facilityID := setupOpenPlayTest(t)
 	ctx := context.Background()
@@ -79,6 +90,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 		fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID),
 		strings.NewReader(createForm.Encode()),
 	)
+	createReq = withAuthUser(createReq, facilityID)
 	createReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	createRecorder := httptest.NewRecorder()
 	HandleOpenPlayRuleCreate(createRecorder, createReq)
@@ -104,6 +116,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 		fmt.Sprintf("/open-play-rules?facility_id=%d", facilityID),
 		nil,
 	)
+	pageReq = withAuthUser(pageReq, facilityID)
 	pageRecorder := httptest.NewRecorder()
 	HandleOpenPlayRulesPage(pageRecorder, pageReq)
 	if pageRecorder.Code != http.StatusOK {
@@ -118,6 +131,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 		fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID),
 		nil,
 	)
+	listReq = withAuthUser(listReq, facilityID)
 	listRecorder := httptest.NewRecorder()
 	HandleOpenPlayRulesList(listRecorder, listReq)
 	if listRecorder.Code != http.StatusOK {
@@ -132,6 +146,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 		fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", ruleID, facilityID),
 		nil,
 	)
+	detailReq = withAuthUser(detailReq, facilityID)
 	detailReq.SetPathValue("id", fmt.Sprintf("%d", ruleID))
 	detailRecorder := httptest.NewRecorder()
 	HandleOpenPlayRuleDetail(detailRecorder, detailReq)
@@ -156,6 +171,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 		fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", ruleID, facilityID),
 		strings.NewReader(updateForm.Encode()),
 	)
+	updateReq = withAuthUser(updateReq, facilityID)
 	updateReq.SetPathValue("id", fmt.Sprintf("%d", ruleID))
 	updateReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	updateRecorder := httptest.NewRecorder()
@@ -172,6 +188,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 		fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", ruleID, facilityID),
 		nil,
 	)
+	deleteReq = withAuthUser(deleteReq, facilityID)
 	deleteReq.SetPathValue("id", fmt.Sprintf("%d", ruleID))
 	deleteRecorder := httptest.NewRecorder()
 	HandleOpenPlayRuleDelete(deleteRecorder, deleteReq)
@@ -184,6 +201,7 @@ func TestOpenPlayRuleHandlersCRUD(t *testing.T) {
 	}
 
 	redirectReq := httptest.NewRequest(http.MethodGet, expectedRedirect, nil)
+	redirectReq = withAuthUser(redirectReq, facilityID)
 	redirectRecorder := httptest.NewRecorder()
 	HandleOpenPlayRulesPage(redirectRecorder, redirectReq)
 	if redirectRecorder.Code != http.StatusOK {
@@ -260,6 +278,7 @@ func TestOpenPlayRuleCreateValidation(t *testing.T) {
 				fmt.Sprintf("/api/v1/open-play-rules?facility_id=%d", facilityID),
 				strings.NewReader(tc.form.Encode()),
 			)
+			req = withAuthUser(req, facilityID)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			recorder := httptest.NewRecorder()
 			HandleOpenPlayRuleCreate(recorder, req)
