@@ -139,19 +139,19 @@ func GetActiveTheme(ctx context.Context, queries *dbgen.Queries, facilityID int6
 		}
 		return nil, err
 	}
-	theme := themeFromDB(row)
+	theme := ThemeFromDB(row)
 	return &theme, nil
 }
 
 func themesFromDB(rows []dbgen.Theme) []Theme {
 	results := make([]Theme, 0, len(rows))
 	for _, row := range rows {
-		results = append(results, themeFromDB(row))
+		results = append(results, ThemeFromDB(row))
 	}
 	return results
 }
 
-func themeFromDB(row dbgen.Theme) Theme {
+func ThemeFromDB(row dbgen.Theme) Theme {
 	var facilityID *int64
 	if row.FacilityID.Valid {
 		id := row.FacilityID.Int64
