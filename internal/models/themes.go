@@ -55,6 +55,9 @@ type ThemeQueries interface {
 	GetTheme(ctx context.Context, id int64) (dbgen.Theme, error)
 }
 
+// DefaultTheme returns a Theme populated with the package's default color values and empty name/system fields.
+//
+ // The Theme's PrimaryColor, SecondaryColor, TertiaryColor, AccentColor, and HighlightColor are set to the corresponding package default constants.
 func DefaultTheme() Theme {
 	return Theme{
 		Name:           "",
@@ -109,6 +112,8 @@ func (t Theme) Validate() error {
 	return nil
 }
 
+// GetSystemThemes retrieves all system-level themes from the data store.
+// It returns a slice of domain Theme converted from database rows, or an error if the query fails.
 func GetSystemThemes(ctx context.Context, queries ThemeQueries) ([]Theme, error) {
 	rows, err := queries.ListSystemThemes(ctx)
 	if err != nil {
@@ -117,6 +122,8 @@ func GetSystemThemes(ctx context.Context, queries ThemeQueries) ([]Theme, error)
 	return themesFromDB(rows), nil
 }
 
+// GetFacilityThemes retrieves themes associated with the given facility ID.
+// It returns a slice of Theme for that facility, or an error if the underlying query fails.
 func GetFacilityThemes(ctx context.Context, queries ThemeQueries, facilityID int64) ([]Theme, error) {
 	rows, err := queries.ListFacilityThemes(ctx, sql.NullInt64{
 		Int64: facilityID,
@@ -128,6 +135,9 @@ func GetFacilityThemes(ctx context.Context, queries ThemeQueries, facilityID int
 	return themesFromDB(rows), nil
 }
 
+// GetActiveTheme retrieves the currently active Theme for the given facility ID.
+// It returns a pointer to the Theme when an active theme exists, or (nil, nil) when no active theme is configured or the referenced theme row is not found.
+// Any other database errors encountered while obtaining the active theme ID or the theme row are returned.
 func GetActiveTheme(ctx context.Context, queries ThemeQueries, facilityID int64) (*Theme, error) {
 	activeThemeID, err := queries.GetActiveThemeID(ctx, facilityID)
 	if err != nil {
@@ -150,6 +160,8 @@ func GetActiveTheme(ctx context.Context, queries ThemeQueries, facilityID int64)
 	return &theme, nil
 }
 
+// themesFromDB converts a slice of dbgen.Theme rows into a slice of domain Theme values.
+// The returned slice contains the corresponding Theme for each input row in the same order.
 func themesFromDB(rows []dbgen.Theme) []Theme {
 	results := make([]Theme, 0, len(rows))
 	for _, row := range rows {
@@ -158,6 +170,8 @@ func themesFromDB(rows []dbgen.Theme) []Theme {
 	return results
 }
 
+// ThemeFromDB converts a dbgen.Theme row into a domain Theme.
+// It maps all fields directly and translates a sql.NullInt64 FacilityID into a *int64, using nil when the DB value is invalid.
 func ThemeFromDB(row dbgen.Theme) Theme {
 	var facilityID *int64
 	if row.FacilityID.Valid {

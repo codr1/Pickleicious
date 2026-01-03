@@ -128,7 +128,12 @@ func HandleThemeNew(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// /api/v1/themes/{id}
+// HandleThemeDetail serves requests for a single theme resource and either returns its JSON representation or renders the theme editor component.
+//
+// HandleThemeDetail validates the theme ID path parameter and an optional facility_id query parameter.
+// It responds with 400 for invalid parameters or if a non-system theme does not belong to the provided facility,
+// 404 if the theme is not found, and 500 for internal errors. For non-HX requests it writes a 200 JSON payload
+// containing the theme; for HX requests it renders the HTML theme editor component.
 func HandleThemeDetail(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -234,6 +239,10 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"themes": themes})
 }
 
+// HandleThemeCreate creates a new (non-system) theme for a facility from the request payload.
+// It validates the request, enforces per-facility theme limits and name uniqueness, and persists the theme.
+// On success it responds with 201 and the created theme as JSON, or with an HX trigger/feedback when the request is an HX request.
+// Responds with 400 for invalid input, 403 for attempts to create system themes, 404 if the facility does not exist, 409 for name or limit conflicts, and 500 for internal errors.
 func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -334,6 +343,11 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, models.ThemeFromDB(created))
 }
 
+// HandleThemeUpdate handles HTTP requests to update an existing non-system theme.
+// 
+// It validates the request payload, ensures the theme is not a system theme and that the facility ID is unchanged, enforces name uniqueness within the facility, applies the update in the database, and returns the updated theme as JSON. For HX requests it triggers a themes list refresh and returns an HTML feedback fragment.
+// 
+// Possible HTTP responses include 200 (updated theme or HX feedback), 204 (none), 400 (bad request/validation), 403 (forbidden for system themes or disallowed updates), 404 (theme or facility not found), 409 (name conflict), and 500 (internal server error).
 func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -444,6 +458,15 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, models.ThemeFromDB(updated))
 }
 
+// HandleThemeDelete deletes the theme identified by the request path and writes the appropriate HTTP response.
+// 
+// It rejects deletion of system themes, prevents deletion while the theme is in use, and returns:
+// - 400 for an invalid theme ID,
+// - 404 if the theme is not found,
+// - 403 if the theme is a system theme,
+// - 409 if the theme is in use or constrained by a foreign key,
+// - 500 for internal errors.
+// For HX requests it emits an HX trigger and an HTML feedback block; for non-HX requests it responds with 204 No Content on success.
 func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -517,6 +540,10 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// HandleThemeClone clones an existing theme into the specified facility and writes the appropriate HTTP response.
+// It validates the request and facility, enforces per-facility theme limits and name uniqueness, creates the cloned theme,
+// and responds with 201 and the created theme (or HTML feedback for HX requests); it returns relevant HTTP error statuses
+// for invalid input, not-found resources, conflicts, or internal errors.
 func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -640,6 +667,14 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, models.ThemeFromDB(created))
 }
 
+// HandleFacilityThemeSet sets the active theme for the facility identified in the request path
+// using the theme_id provided in the request body or form.
+// It validates that a theme_id is present and that non-system themes belong to the facility,
+// then upserts the facility's active theme record.
+//
+// On success it returns 204 No Content for regular requests or writes an HX feedback block and
+// triggers a themes list refresh for HX requests. It writes 400 for invalid input or ownership
+// mismatch, 404 when the theme or facility is not found, and 500 for internal server errors.
 func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -712,6 +747,8 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// facilityIDFromQuery extracts and validates the "facility_id" query parameter from the request URL.
+// It returns the parsed positive int64 facility ID, or an error if the parameter is missing or not a positive integer.
 func facilityIDFromQuery(r *http.Request) (int64, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get(facilityIDQueryKey))
 	if raw == "" {
@@ -916,6 +953,9 @@ func newThemeEditorData(facilityID int64) themetempl.ThemeEditorData {
 	return themeEditorData(models.DefaultTheme(), facilityID)
 }
 
+// themeEditorData creates a ThemeEditorData for the provided theme and facility.
+// The returned data associates the theme with the facility and marks the editor
+// read-only when the theme is a system theme.
 func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEditorData {
 	return themetempl.ThemeEditorData{
 		Theme:      themetempl.NewTheme(theme, 0),
@@ -924,6 +964,7 @@ func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEdito
 	}
 }
 
+// loadQueries returns the package-level themeQueries instance used by handlers.
 func loadQueries() themeQueries {
 	return queries
 }
