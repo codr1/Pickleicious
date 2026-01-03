@@ -20,6 +20,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	themetempl "github.com/codr1/Pickleicious/internal/templates/components/themes"
@@ -189,7 +190,10 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
 	systemThemes, err := models.GetSystemThemes(ctx, q)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to list system themes")
@@ -266,7 +270,10 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, *req.FacilityID) {
+		return
+	}
+
 	facilityIDParam := sql.NullInt64{Int64: *req.FacilityID, Valid: true}
 	count, err := q.CountFacilityThemes(ctx, facilityIDParam)
 	if err != nil {
@@ -356,7 +363,6 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
 	existing, err := q.GetTheme(ctx, themeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -378,6 +384,10 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	facilityID := existing.FacilityID.Int64
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
 	theme := models.Theme{
 		FacilityID:     &facilityID,
 		IsSystem:       false,
@@ -451,7 +461,6 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
 	existing, err := q.GetTheme(ctx, themeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -464,6 +473,15 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing.IsSystem {
 		http.Error(w, "System themes are read-only", http.StatusForbidden)
+		return
+	}
+	if !existing.FacilityID.Valid {
+		logger.Error().Int64("theme_id", themeID).Msg("Facility theme missing facility id")
+		http.Error(w, "Invalid theme data", http.StatusInternalServerError)
+		return
+	}
+
+	if !requireFacilityAccess(w, r, existing.FacilityID.Int64) {
 		return
 	}
 
@@ -535,7 +553,6 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
 	source, err := q.GetTheme(ctx, themeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -544,6 +561,10 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Error().Err(err).Int64("theme_id", themeID).Msg("Failed to fetch theme for clone")
 		http.Error(w, "Failed to load theme", http.StatusInternalServerError)
+		return
+	}
+
+	if !requireFacilityAccess(w, r, *req.FacilityID) {
 		return
 	}
 
@@ -657,7 +678,10 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	// TODO: enforce facility-level authorization once auth middleware is wired.
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
 	theme, err := q.GetTheme(ctx, req.ThemeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -719,6 +743,38 @@ func themeFromDB(row dbgen.Theme) models.Theme {
 		CreatedAt:      row.CreatedAt,
 		UpdatedAt:      row.UpdatedAt,
 	}
+}
+
+func requireFacilityAccess(w http.ResponseWriter, r *http.Request, facilityID int64) bool {
+	logger := log.Ctx(r.Context())
+	user := authz.UserFromContext(r.Context())
+	if err := authz.RequireFacilityAccess(r.Context(), facilityID); err != nil {
+		switch {
+		case errors.Is(err, authz.ErrUnauthenticated):
+			logEvent := logger.Warn().Int64("facility_id", facilityID)
+			if user != nil {
+				logEvent = logEvent.Int64("user_id", user.ID)
+			}
+			logEvent.Msg("Facility access denied: unauthenticated")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		case errors.Is(err, authz.ErrForbidden):
+			logEvent := logger.Warn().Int64("facility_id", facilityID)
+			if user != nil {
+				logEvent = logEvent.Int64("user_id", user.ID)
+			}
+			logEvent.Msg("Facility access denied: forbidden")
+			http.Error(w, "Forbidden", http.StatusForbidden)
+		default:
+			logEvent := logger.Error().Int64("facility_id", facilityID).Err(err)
+			if user != nil {
+				logEvent = logEvent.Int64("user_id", user.ID)
+			}
+			logEvent.Msg("Facility access denied: error")
+			http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
+		}
+		return false
+	}
+	return true
 }
 
 func facilityIDFromQuery(r *http.Request) (int64, error) {
