@@ -21,10 +21,11 @@ import (
 	"github.com/codr1/Pickleicious/internal/db"
 	"github.com/codr1/Pickleicious/internal/models"
 	"github.com/codr1/Pickleicious/internal/request"
+	"github.com/codr1/Pickleicious/internal/scheduler"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
-func newServer(config *config.Config, database *db.DB) *http.Server {
+func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	router := http.NewServeMux()
 
 	// Setup middleware chain
@@ -39,6 +40,9 @@ func newServer(config *config.Config, database *db.DB) *http.Server {
 	openplay.InitHandlers(database.Queries)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
+	if err := scheduler.Init(); err != nil {
+		return nil, fmt.Errorf("initialize scheduler: %w", err)
+	}
 
 	// Register routes
 	registerRoutes(router, database)
@@ -49,7 +53,7 @@ func newServer(config *config.Config, database *db.DB) *http.Server {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
-	}
+	}, nil
 }
 
 func methodHandler(handlers map[string]http.HandlerFunc) http.HandlerFunc {

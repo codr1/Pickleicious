@@ -6,6 +6,7 @@ go 1.24.0
 require (
 	github.com/a-h/templ v0.3.960
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.57.17
+	github.com/go-co-op/gocron/v2 v2.7.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
@@ -21,7 +22,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.16 // indirect
 	github.com/aws/smithy-go v1.24.0 // indirect
+	github.com/jonboulle/clockwork v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
+	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f // indirect
 	golang.org/x/sys v0.38.0 // indirect
 )
