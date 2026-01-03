@@ -1,3 +1,4 @@
+# Build system: Taskfile (replaced legacy CMake)
 version: "3"
 
 vars:
