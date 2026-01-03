@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,6 +29,10 @@ type Config struct {
 	} `yaml:"app"`
 
 	Database DatabaseConfig `yaml:"database"`
+
+	OpenPlay struct {
+		EnforcementInterval string `yaml:"enforcement_interval"`
+	} `yaml:"open_play"`
 
 	Features struct {
 		EnableMetrics bool `yaml:"enable_metrics"`
@@ -76,6 +81,13 @@ func (c *Config) Validate() error {
 	}
 	if c.Database.Driver == "" {
 		return fmt.Errorf("database driver is required")
+	}
+	if c.OpenPlay.EnforcementInterval == "" {
+		return fmt.Errorf("open play enforcement interval is required")
+	}
+	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	if _, err := cronParser.Parse(c.OpenPlay.EnforcementInterval); err != nil {
+		return fmt.Errorf("open play enforcement interval must be a valid cron expression: %w", err)
 	}
 
 	// Validate based on database driver

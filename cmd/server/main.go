@@ -17,6 +17,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
+	"github.com/codr1/Pickleicious/internal/scheduler"
 )
 
 func setupLogger(environment string) {
@@ -90,7 +91,14 @@ func main() {
 	log.Info().Int("user_count", count).Msg("Found users in database")
 
 	// Create server instance
-	server := newServer(config, database)
+	server, err := newServer(config, database)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize server")
+	}
+	if err := scheduler.Start(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to start scheduler")
+	}
+	log.Info().Msg("Scheduler started")
 
 	// Setup graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -117,6 +125,9 @@ func main() {
 		defer cancel()
 
 		log.Info().Msg("Shutting down server")
+		if err := scheduler.Stop(); err != nil {
+			log.Error().Err(err).Msg("Failed to stop scheduler")
+		}
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("shutdown error: %w", err)
 		}
