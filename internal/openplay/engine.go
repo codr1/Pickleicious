@@ -43,66 +43,113 @@ func (e *Engine) EvaluateSessionsApproachingCutoff(ctx context.Context, facility
 		comparisonTime = time.Now()
 	}
 
-	logger := log.With().
+	logger := log.Ctx(ctx).With().
 		Str("component", "openplay_engine").
 		Int64("facility_id", facilityID).
 		Time("comparison_time", comparisonTime).
 		Logger()
 	logger.Info().Msg("Evaluating open play sessions approaching cutoff")
 
-	sessions, err := e.db.Queries.ListOpenPlaySessionsApproachingCutoff(ctx, dbgen.ListOpenPlaySessionsApproachingCutoffParams{
-		FacilityID:     facilityID,
-		ComparisonTime: comparisonTime,
-	})
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to list open play sessions approaching cutoff")
-		return fmt.Errorf("list open play sessions approaching cutoff: %w", err)
-	}
-
-	logger.Info().Int("session_count", len(sessions)).Msg("Found open play sessions approaching cutoff")
-	for _, session := range sessions {
-		sessionLogger := logger.With().
-			Int64("session_id", session.ID).
-			Int64("open_play_rule_id", session.OpenPlayRuleID).
-			Time("start_time", session.StartTime).
-			Time("end_time", session.EndTime).
-			Logger()
-
-		rule, err := e.db.Queries.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
-			ID:         session.OpenPlayRuleID,
-			FacilityID: session.FacilityID,
+	err := e.db.RunInTx(ctx, func(txdb *db.DB) error {
+		sessions, err := txdb.Queries.ListOpenPlaySessionsApproachingCutoff(ctx, dbgen.ListOpenPlaySessionsApproachingCutoffParams{
+			FacilityID:     facilityID,
+			ComparisonTime: comparisonTime,
 		})
 		if err != nil {
-			sessionLogger.Error().Err(err).Msg("Failed to load open play rule")
-			return fmt.Errorf("load open play rule %d: %w", session.OpenPlayRuleID, err)
+			logger.Error().Err(err).Msg("Failed to list open play sessions approaching cutoff")
+			return fmt.Errorf("list open play sessions approaching cutoff: %w", err)
 		}
 
-		sessionLogger.Debug().
-			Str("status", session.Status).
-			Int64("current_court_count", session.CurrentCourtCount).
-			Msg("Evaluating open play session")
+		logger.Info().Int("session_count", len(sessions)).Msg("Found open play sessions approaching cutoff")
+		for _, session := range sessions {
+			sessionLogger := logger.With().
+				Int64("session_id", session.ID).
+				Int64("open_play_rule_id", session.OpenPlayRuleID).
+				Time("start_time", session.StartTime).
+				Time("end_time", session.EndTime).
+				Logger()
 
-		cancelled, err := e.CancelUndersubscribedSession(ctx, session, rule)
-		if err != nil {
-			sessionLogger.Error().Err(err).Msg("Failed to evaluate cancellation")
-			return err
-		}
-		if cancelled {
-			sessionLogger.Info().Msg("Cancelled open play session due to undersubscription")
-			continue
-		}
+			rule, err := txdb.Queries.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+				ID:         session.OpenPlayRuleID,
+				FacilityID: session.FacilityID,
+			})
+			if err != nil {
+				sessionLogger.Error().Err(err).Msg("Failed to load open play rule")
+				return fmt.Errorf("load open play rule %d: %w", session.OpenPlayRuleID, err)
+			}
 
-		if _, err := e.ScaleSessionCourts(ctx, session, rule); err != nil {
-			sessionLogger.Error().Err(err).Msg("Failed to scale open play courts")
-			return err
+			sessionLogger.Debug().
+				Str("status", session.Status).
+				Int64("current_court_count", session.CurrentCourtCount).
+				Msg("Evaluating open play session")
+
+			cancelled, err := e.cancelUndersubscribedSession(ctx, txdb.Queries, session, rule)
+			if err != nil {
+				sessionLogger.Error().Err(err).Msg("Failed to evaluate cancellation")
+				return err
+			}
+			if cancelled {
+				continue
+			}
+
+			_, err = e.scaleSessionCourts(ctx, txdb.Queries, session, rule)
+			if err != nil {
+				sessionLogger.Error().Err(err).Msg("Failed to scale open play courts")
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to enforce open play sessions approaching cutoff")
+		return err
 	}
 
 	return nil
 }
 
 func (e *Engine) CancelUndersubscribedSession(ctx context.Context, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
-	logger := log.With().
+	var cancelled bool
+	err := e.db.RunInTx(ctx, func(txdb *db.DB) error {
+		var err error
+		cancelled, err = e.cancelUndersubscribedSession(ctx, txdb.Queries, session, rule)
+		return err
+	})
+	if err != nil {
+		log.Ctx(ctx).
+			Error().
+			Err(err).
+			Int64("session_id", session.ID).
+			Int64("facility_id", session.FacilityID).
+			Int64("open_play_rule_id", session.OpenPlayRuleID).
+			Msg("Failed to evaluate cancellation in transaction")
+		return false, err
+	}
+	return cancelled, nil
+}
+
+func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
+	var scaled bool
+	err := e.db.RunInTx(ctx, func(txdb *db.DB) error {
+		var err error
+		scaled, err = e.scaleSessionCourts(ctx, txdb.Queries, session, rule)
+		return err
+	})
+	if err != nil {
+		log.Ctx(ctx).
+			Error().
+			Err(err).
+			Int64("session_id", session.ID).
+			Int64("facility_id", session.FacilityID).
+			Int64("open_play_rule_id", session.OpenPlayRuleID).
+			Msg("Failed to evaluate scaling in transaction")
+		return false, err
+	}
+	return scaled, nil
+}
+
+func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
+	logger := log.Ctx(ctx).With().
 		Str("component", "openplay_engine").
 		Int64("session_id", session.ID).
 		Int64("facility_id", session.FacilityID).
@@ -110,18 +157,13 @@ func (e *Engine) CancelUndersubscribedSession(ctx context.Context, session dbgen
 		Logger()
 
 	if session.Status != "scheduled" {
-		logger.Debug().Str("status", session.Status).Msg("Skipping cancellation check for non-scheduled session")
+		logger.Debug().
+			Str("status", session.Status).
+			Str("decision", "skip_cancellation").
+			Msg("Skipping cancellation check for non-scheduled session")
 		return false, nil
 	}
 
-	tx, err := e.db.DB.BeginTx(ctx, nil)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to start cancellation transaction")
-		return false, fmt.Errorf("begin cancel transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	queries := dbgen.New(tx)
 	reservationID, err := lookupOpenPlayReservationID(ctx, queries, session)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to find open play reservation")
@@ -138,6 +180,7 @@ func (e *Engine) CancelUndersubscribedSession(ctx context.Context, session dbgen
 		logger.Debug().
 			Int64("signups", signups).
 			Int64("min_participants", rule.MinParticipants).
+			Str("decision", "retain_session").
 			Msg("Open play session meets minimum participants")
 		return false, nil
 	}
@@ -221,22 +264,18 @@ func (e *Engine) CancelUndersubscribedSession(ctx context.Context, session dbgen
 		return false, fmt.Errorf("create cancel notification for session %d: %w", session.ID, err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		logger.Error().Err(err).Msg("Failed to commit cancellation transaction")
-		return false, fmt.Errorf("commit cancel transaction: %w", err)
-	}
-
 	logger.Info().
 		Int64("signups", signups).
 		Int64("min_participants", rule.MinParticipants).
 		Int("released_courts", len(existingCourts)).
+		Str("decision", "cancelled").
 		Msg("Cancelled open play session")
 
 	return true, nil
 }
 
-func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
-	logger := log.With().
+func (e *Engine) scaleSessionCourts(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
+	logger := log.Ctx(ctx).With().
 		Str("component", "openplay_engine").
 		Int64("session_id", session.ID).
 		Int64("facility_id", session.FacilityID).
@@ -244,7 +283,10 @@ func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlayS
 		Logger()
 
 	if session.Status != "scheduled" {
-		logger.Debug().Str("status", session.Status).Msg("Skipping scaling for non-scheduled session")
+		logger.Debug().
+			Str("status", session.Status).
+			Str("decision", "skip_scaling").
+			Msg("Skipping scaling for non-scheduled session")
 		return false, nil
 	}
 
@@ -253,18 +295,12 @@ func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlayS
 		autoScaleEnabled = session.AutoScaleOverride.Bool
 	}
 	if !autoScaleEnabled {
-		logger.Debug().Msg("Auto-scale disabled for open play session")
+		logger.Debug().
+			Str("decision", "auto_scale_disabled").
+			Msg("Auto-scale disabled for open play session")
 		return false, nil
 	}
 
-	tx, err := e.db.DB.BeginTx(ctx, nil)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to start scaling transaction")
-		return false, fmt.Errorf("begin scale transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	queries := dbgen.New(tx)
 	reservationID, err := lookupOpenPlayReservationID(ctx, queries, session)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to find open play reservation")
@@ -291,6 +327,7 @@ func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlayS
 			Int64("signups", signups).
 			Int64("desired_courts", desiredCourts).
 			Int64("existing_courts", existingCount).
+			Str("decision", "no_scale_needed").
 			Msg("Open play session already at desired court count")
 		return false, nil
 	}
@@ -326,14 +363,12 @@ func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlayS
 		}); err != nil {
 			return false, fmt.Errorf("create capped scaling notification for session %d: %w", session.ID, err)
 		}
-		if err := tx.Commit(); err != nil {
-			return false, fmt.Errorf("commit capped scaling transaction: %w", err)
-		}
 		logger.Info().
 			Int64("signups", signups).
 			Int64("desired_courts", desiredCourts).
 			Int64("available_courts", int64(len(availableCourts))).
 			Int64("current_courts", existingCount).
+			Str("decision", "availability_capped").
 			Msg("Open play session scaling capped by availability")
 		return true, nil
 	}
@@ -385,16 +420,13 @@ func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlayS
 		return false, fmt.Errorf("create scaling notification for session %d: %w", session.ID, err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("commit scaling transaction: %w", err)
-	}
-
 	logger.Info().
 		Int64("signups", signups).
 		Int64("desired_courts", desiredCourts).
 		Int64("current_courts", existingCount).
 		Int64("target_courts", updatedSession.CurrentCourtCount).
 		Str("scale_action", scaleAction).
+		Str("decision", "scaled").
 		Msg("Scaled open play session courts")
 
 	return true, nil

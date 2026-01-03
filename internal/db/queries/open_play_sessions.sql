@@ -1,3 +1,10 @@
+-- name: ListDistinctFacilitiesWithScheduledSessions :many
+SELECT DISTINCT facility_id
+FROM open_play_sessions
+WHERE status = 'scheduled'
+  AND start_time > @comparison_time
+ORDER BY facility_id;
+
 -- name: ListOpenPlaySessionsApproachingCutoff :many
 SELECT open_play_sessions.id,
     open_play_sessions.facility_id,

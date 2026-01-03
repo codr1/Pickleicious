@@ -15,11 +15,12 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
-	"github.com/codr1/Pickleicious/internal/api/openplay"
+	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
 	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
 	"github.com/codr1/Pickleicious/internal/models"
+	openplayengine "github.com/codr1/Pickleicious/internal/openplay"
 	"github.com/codr1/Pickleicious/internal/request"
 	"github.com/codr1/Pickleicious/internal/scheduler"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
@@ -37,11 +38,19 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		api.WithContentType,
 	)
 
-	openplay.InitHandlers(database.Queries)
+	openplayapi.InitHandlers(database.Queries)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
+	}
+
+	openplayEngine, err := openplayengine.NewEngine(database)
+	if err != nil {
+		return nil, fmt.Errorf("initialize open play engine: %w", err)
+	}
+	if err := registerOpenPlayEnforcementJob(config, database, openplayEngine); err != nil {
+		return nil, fmt.Errorf("register open play enforcement job: %w", err)
 	}
 
 	// Register routes
@@ -150,29 +159,29 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/courts/calendar", courts.HandleCalendarView)
 
 	// Open play rules
-	mux.HandleFunc("/open-play-rules", openplay.HandleOpenPlayRulesPage)
+	mux.HandleFunc("/open-play-rules", openplayapi.HandleOpenPlayRulesPage)
 	mux.HandleFunc("/api/v1/open-play-rules", methodHandler(map[string]http.HandlerFunc{
-		http.MethodGet:  openplay.HandleOpenPlayRulesList,
-		http.MethodPost: openplay.HandleOpenPlayRuleCreate,
+		http.MethodGet:  openplayapi.HandleOpenPlayRulesList,
+		http.MethodPost: openplayapi.HandleOpenPlayRuleCreate,
 	}))
 	mux.HandleFunc("/api/v1/open-play-rules/new", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		openplay.HandleOpenPlayRuleNew(w, r)
+		openplayapi.HandleOpenPlayRuleNew(w, r)
 	})
 	mux.HandleFunc("/api/v1/open-play-rules/{id}", methodHandler(map[string]http.HandlerFunc{
-		http.MethodGet:    openplay.HandleOpenPlayRuleDetail,
-		http.MethodPut:    openplay.HandleOpenPlayRuleUpdate,
-		http.MethodDelete: openplay.HandleOpenPlayRuleDelete,
+		http.MethodGet:    openplayapi.HandleOpenPlayRuleDetail,
+		http.MethodPut:    openplayapi.HandleOpenPlayRuleUpdate,
+		http.MethodDelete: openplayapi.HandleOpenPlayRuleDelete,
 	}))
 	mux.HandleFunc("/api/v1/open-play-rules/{id}/edit", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		openplay.HandleOpenPlayRuleEdit(w, r)
+		openplayapi.HandleOpenPlayRuleEdit(w, r)
 	})
 
 	// Theme admin page
@@ -224,4 +233,59 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/members/restore", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: members.HandleRestoreDecision,
 	}))
+}
+
+func registerOpenPlayEnforcementJob(cfg *config.Config, database *db.DB, engine *openplayengine.Engine) error {
+	if cfg == nil || database == nil || engine == nil {
+		return fmt.Errorf("open play enforcement job requires config, database, and engine")
+	}
+
+	jobName := "openplay_enforcement"
+	cronExpr := cfg.OpenPlay.EnforcementInterval
+	jobLogger := log.With().
+		Str("component", "openplay_enforcement_job").
+		Str("job_name", jobName).
+		Str("cron", cronExpr).
+		Logger()
+
+	_, err := scheduler.AddJob(jobName, cronExpr, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		ctx = jobLogger.WithContext(ctx)
+
+		comparisonTime := time.Now()
+		facilityIDs, err := listOpenPlayEnforcementFacilities(ctx, database, comparisonTime)
+		if err != nil {
+			jobLogger.Error().Err(err).Msg("Failed to list facilities for open play enforcement")
+			return
+		}
+		if len(facilityIDs) == 0 {
+			jobLogger.Debug().Msg("No facilities with scheduled open play sessions")
+			return
+		}
+
+		for _, facilityID := range facilityIDs {
+			facilityLogger := jobLogger.With().Int64("facility_id", facilityID).Logger()
+			facilityCtx := facilityLogger.WithContext(ctx)
+			if err := engine.EvaluateSessionsApproachingCutoff(facilityCtx, facilityID, comparisonTime); err != nil {
+				facilityLogger.Error().Err(err).Msg("Open play enforcement run failed")
+				continue
+			}
+			facilityLogger.Debug().Msg("Open play enforcement run completed")
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("add open play enforcement job: %w", err)
+	}
+
+	jobLogger.Info().Msg("Open play enforcement job registered")
+	return nil
+}
+
+func listOpenPlayEnforcementFacilities(ctx context.Context, database *db.DB, comparisonTime time.Time) ([]int64, error) {
+	facilityIDs, err := database.Queries.ListDistinctFacilitiesWithScheduledSessions(ctx, comparisonTime)
+	if err != nil {
+		return nil, fmt.Errorf("query open play facilities: %w", err)
+	}
+	return facilityIDs, nil
 }

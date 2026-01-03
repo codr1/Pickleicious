@@ -8,6 +8,9 @@ database:
   driver: "sqlite"
   filename: "build/db/pickleicious.db"
 
+open_play:
+  enforcement_interval: "*/5 * * * *"
+
 features:
   enable_metrics: false
   enable_tracing: false
