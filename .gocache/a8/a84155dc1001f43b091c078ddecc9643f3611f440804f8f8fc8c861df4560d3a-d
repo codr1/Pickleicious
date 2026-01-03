@@ -1,7 +1,0 @@
-./billing_templ.go
-./edit_form_templ.go
-./list_templ.go
-./new_form_templ.go
-./photo_templ.go
-./restore_prompt_templ.go
-./types.go
