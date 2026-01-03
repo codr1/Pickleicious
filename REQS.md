@@ -59,7 +59,9 @@
 - Migrate to Go-centric build tool (Mage, Task, or just Makefile with go commands)
 - Single source of truth for configuration
 - Simpler developer experience: `go run`, `go test`, `go build`
+<!-- BEGIN WIP: STORY-0009 -->
 - Remove cmake/, CMakeLists.txt complexity
+<!-- END WIP -->
 
 ---
 
