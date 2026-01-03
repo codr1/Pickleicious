@@ -147,7 +147,7 @@ func HandleThemeDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	theme := themeFromDB(row)
+	theme := models.ThemeFromDB(row)
 	facilityID, err := facilityIDFromQuery(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -319,7 +319,7 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, themeFromDB(created))
+	writeJSON(w, http.StatusCreated, models.ThemeFromDB(created))
 }
 
 func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
@@ -429,7 +429,7 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, themeFromDB(updated))
+	writeJSON(w, http.StatusOK, models.ThemeFromDB(updated))
 }
 
 func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
@@ -625,7 +625,7 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, themeFromDB(created))
+	writeJSON(w, http.StatusCreated, models.ThemeFromDB(created))
 }
 
 func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
@@ -698,27 +698,6 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func themeFromDB(row dbgen.Theme) models.Theme {
-	var facilityID *int64
-	if row.FacilityID.Valid {
-		id := row.FacilityID.Int64
-		facilityID = &id
-	}
-	return models.Theme{
-		ID:             row.ID,
-		FacilityID:     facilityID,
-		Name:           row.Name,
-		IsSystem:       row.IsSystem,
-		PrimaryColor:   row.PrimaryColor,
-		SecondaryColor: row.SecondaryColor,
-		TertiaryColor:  row.TertiaryColor,
-		AccentColor:    row.AccentColor,
-		HighlightColor: row.HighlightColor,
-		CreatedAt:      row.CreatedAt,
-		UpdatedAt:      row.UpdatedAt,
-	}
 }
 
 func facilityIDFromQuery(r *http.Request) (int64, error) {
