@@ -224,12 +224,14 @@ Separate billing table for payment data:
 | `role` | TEXT | Role identifier |
 
 **Staff Roles:**
+<!-- BEGIN WIP: STORY-0006 -->
 | Role | Description | Scope |
 |------|-------------|-------|
 | `admin` | Full system access | Corporate or facility |
 | `manager` | Facility management | Single facility |
 | `desk` | Front desk operations | Single facility |
 | `pro` | Teaching professional | Single facility |
+<!-- END WIP -->
 
 ---
 
