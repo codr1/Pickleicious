@@ -1,0 +1,30 @@
+name: PR checks
+
+# TODO(#29): expand to full CI/CD when ready.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  pr-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+      - name: Install generate tools
+        run: |
+          go install github.com/a-h/templ/cmd/templ@latest
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - name: Generate
+        run: task generate
+      - name: Smoke tests
+        run: task test:smoke
