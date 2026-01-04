@@ -433,35 +433,6 @@ Supports recurring reservations:
 
 Stored as iCalendar RRULE compatible format.
 
-<!-- BEGIN WIP: STORY-0012 -->
-### 6.5 Reservation Entity
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | INTEGER PK | Reservation ID |
-| `facility_id` | FK | Facility reference |
-| `reservation_type_id` | FK | Type lookup |
-| `recurrence_rule_id` | FK | NULL if one-time |
-| `primary_member_id` | FK | Booking owner |
-| `pro_id` | FK | Staff pro (for lessons) |
-| `start_time` | DATETIME | Start timestamp |
-| `end_time` | DATETIME | End timestamp |
-| `is_open_event` | BOOLEAN | Open for sign-ups |
-| `teams_per_court` | INTEGER | Team configuration |
-| `people_per_team` | INTEGER | Team size |
-
-### 6.6 Multi-Court & Multi-Participant Support
-
-**Junction Tables:**
-
-`reservation_courts`:
-- One reservation can span multiple courts
-- Example: Tournament uses courts 1-4
-
-`reservation_participants`:
-- Multiple members can join a reservation
-- Beyond the primary member
-<!-- END WIP -->
 
 ### 6.7 Open Play Rules (NEW)
 
@@ -480,9 +451,6 @@ Stored as iCalendar RRULE compatible format.
 - Hours: 6:00 AM to 10:00 PM (16 slots)
 - Date navigation: Previous/Next/Today
 - View modes: Work Week, Week, Month (selector ready)
-<!-- BEGIN WIP: STORY-0012 -->
-- Click-to-book: Opens modal at court/time intersection
-<!-- END WIP -->
 
 **Visual Grid:**
 ```
@@ -493,16 +461,6 @@ Stored as iCalendar RRULE compatible format.
 22:00   [      ] [      ] [      ] [      ] [      ] [      ] [      ] [      ]
 ```
 
-<!-- BEGIN WIP: STORY-0012 -->
-**Slot States (Planned):**
-| State | Color Treatment |
-|-------|-----------------|
-| Available | Highlight color, subtle gradient |
-| Game | Standard slot color |
-| Pro Session | Accent color, distinctive pattern |
-| Tournament | Primary→Secondary gradient |
-| Maintenance | Tertiary, diagonal stripes |
-<!-- END WIP -->
 
 ### 6.9 Calendar Interactions (Planned)
 
@@ -513,18 +471,6 @@ These calendar interactions are designed but not yet implemented:
 - Month View: Overview of all reservations
 - Agenda View: Chronological list of upcoming reservations
 
-<!-- BEGIN WIP: STORY-0012 -->
-**Interactions:**
-- Click empty slot: Create new reservation
-- Click existing reservation: View details, edit
-- Drag reservation: Reschedule within constraints
-- Hover over reservation: Quick preview of participants
-
-**Constraints:**
-- Respect operating hours (slots outside hours grayed/non-bookable)
-- Prevent double-booking
-- Validate against court availability
-<!-- END WIP -->
 
 ---
 
@@ -2182,11 +2128,6 @@ handler := api.ChainMiddleware(
 | `courts` | Court definitions |
 | `reservation_types` | Booking type lookup |
 | `recurrence_rules` | Recurring patterns |
-<!-- BEGIN WIP: STORY-0012 -->
-| `reservations` | Booking records |
-| `reservation_courts` | Multi-court junction |
-| `reservation_participants` | Multi-member junction |
-<!-- END WIP -->
 | `cognito_config` | Per-org auth settings |
 
 ### 14.2 Key Constraints
@@ -2197,10 +2138,6 @@ handler := api.ChainMiddleware(
 - `courts(facility_id, court_number)` - UNIQUE
 - `operating_hours(facility_id, day_of_week)` - UNIQUE
 - `member_photos.member_id` - UNIQUE INDEX
-<!-- BEGIN WIP: STORY-0012 -->
-- `reservation_courts(reservation_id, court_id)` - UNIQUE
-- `reservation_participants(reservation_id, member_id)` - UNIQUE
-<!-- END WIP -->
 
 ---
 
