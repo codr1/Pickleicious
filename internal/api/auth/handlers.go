@@ -267,8 +267,20 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := CreateSession(w, user.ID); err != nil {
-		logger.Error().Err(err).Msg("Failed to create auth session")
+	var homeFacilityID *int64
+	if user.HomeFacilityID.Valid {
+		id := user.HomeFacilityID.Int64
+		homeFacilityID = &id
+	}
+
+	authUser := &authz.AuthUser{
+		ID:             user.ID,
+		IsStaff:        user.IsStaff,
+		HomeFacilityID: homeFacilityID,
+	}
+
+	if err := SetAuthCookie(w, r, authUser); err != nil {
+		logger.Error().Err(err).Msg("Failed to set auth session")
 		http.Error(w, "Failed to start session", http.StatusInternalServerError)
 		return
 	}
