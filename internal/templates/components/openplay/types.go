@@ -1,6 +1,8 @@
 package openplay
 
 import (
+	"strings"
+
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 )
 
@@ -19,6 +21,49 @@ func NewOpenPlayRules(rows []dbgen.OpenPlayRule) []OpenPlayRule {
 		rules[i] = NewOpenPlayRule(row)
 	}
 	return rules
+}
+
+type OpenPlayParticipant struct {
+	dbgen.ListOpenPlayParticipantsRow
+}
+
+func NewOpenPlayParticipant(row dbgen.ListOpenPlayParticipantsRow) OpenPlayParticipant {
+	return OpenPlayParticipant{ListOpenPlayParticipantsRow: row}
+}
+
+func NewOpenPlayParticipants(rows []dbgen.ListOpenPlayParticipantsRow) []OpenPlayParticipant {
+	participants := make([]OpenPlayParticipant, len(rows))
+	for i, row := range rows {
+		participants[i] = NewOpenPlayParticipant(row)
+	}
+	return participants
+}
+
+func (p OpenPlayParticipant) HasPhoto() bool {
+	return p.PhotoUrl.Valid && strings.TrimSpace(p.PhotoUrl.String) != ""
+}
+
+func (p OpenPlayParticipant) PhotoURL() string {
+	if p.HasPhoto() {
+		return strings.TrimSpace(p.PhotoUrl.String)
+	}
+	return ""
+}
+
+func (p OpenPlayParticipant) Initials() string {
+	first := strings.TrimSpace(p.FirstName)
+	last := strings.TrimSpace(p.LastName)
+	if first == "" || last == "" {
+		return ""
+	}
+	return firstInitial(first) + firstInitial(last)
+}
+
+func firstInitial(name string) string {
+	for _, r := range name {
+		return string(r)
+	}
+	return ""
 }
 
 const (

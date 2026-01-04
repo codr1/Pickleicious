@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/htmx"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -779,6 +780,9 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if htmx.IsRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshOpenPlayParticipants")
+	}
 	if err := writeJSON(w, http.StatusCreated, participant); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play participant response")
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
@@ -871,6 +875,9 @@ func HandleRemoveParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if htmx.IsRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshOpenPlayParticipants")
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -927,6 +934,28 @@ func HandleListParticipants(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to list open play participants")
 		http.Error(w, "Failed to list participants", http.StatusInternalServerError)
+		return
+	}
+
+	if htmx.IsRequest(r) {
+		rule, err := q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: facilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Open play rule not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to fetch open play rule")
+			http.Error(w, "Failed to load open play rule", http.StatusInternalServerError)
+			return
+		}
+
+		component := openplaytempl.OpenPlayParticipantsList(openplaytempl.NewOpenPlayParticipants(participants), rule.MinParticipants)
+		if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play participants list", "Failed to render participants list") {
+			return
+		}
 		return
 	}
 

@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/htmx"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	themetempl "github.com/codr1/Pickleicious/internal/templates/components/themes"
@@ -171,7 +172,7 @@ func HandleThemeDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isHXRequest(r) {
+	if !htmx.IsRequest(r) {
 		writeJSON(w, http.StatusOK, theme)
 		return
 	}
@@ -221,7 +222,7 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	themes := append(systemThemes, facilityThemes...)
-	if isHXRequest(r) {
+	if htmx.IsRequest(r) {
 		activeThemeID, err := q.GetActiveThemeID(ctx, facilityID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
@@ -332,7 +333,7 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHXRequest(r) {
+	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
 		writeThemeFeedback(w, http.StatusCreated, "Theme created.")
 		return
@@ -445,7 +446,7 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHXRequest(r) {
+	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
 		writeThemeFeedback(w, http.StatusOK, "Theme updated.")
 		return
@@ -526,7 +527,7 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHXRequest(r) {
+	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
 		writeThemeFeedback(w, http.StatusOK, "Theme deleted.")
 		return
@@ -652,7 +653,7 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHXRequest(r) {
+	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
 		writeThemeFeedback(w, http.StatusCreated, "Theme cloned.")
 		return
@@ -727,7 +728,7 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHXRequest(r) {
+	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
 		writeThemeFeedback(w, http.StatusOK, "Active theme updated.")
 		return
@@ -890,10 +891,6 @@ func decodeFacilityThemeRequest(r *http.Request) (facilityThemeRequest, error) {
 
 func isJSONRequest(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json")
-}
-
-func isHXRequest(r *http.Request) bool {
-	return strings.EqualFold(r.Header.Get("HX-Request"), "true")
 }
 
 func parseOptionalInt64Field(raw string, field string) (*int64, error) {
