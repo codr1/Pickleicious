@@ -2,6 +2,7 @@ package auth
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,6 +28,9 @@ type CognitoConfig struct {
 var queries *dbgen.Queries
 var limiter *rate.Limiter
 var appConfig *config.Config
+
+// Used to mask timing differences when a user record does not exist.
+const dummyPasswordHash = "$2a$10$6bhr8BjYp8rXJejsIExR7uOrcalHplR0RnnoSJk5mZXv5fNru2udi"
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(q *dbgen.Queries, cfg *config.Config) {
@@ -185,13 +189,13 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 	identifier := r.FormValue("identifier")
 	password := r.FormValue("password")
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+	if identifier == "" || password == "" {
+		http.Error(w, "Identifier and password are required", http.StatusBadRequest)
 		return
 	}
 
-	if identifier == "" || password == "" {
-		http.Error(w, "Identifier and password are required", http.StatusBadRequest)
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 
@@ -212,9 +216,32 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement password verification
-	logger.Error().Msg("Staff login not implemented")
-	http.Error(w, "Staff login not implemented", http.StatusNotImplemented)
+	isEmail := strings.Contains(identifier, "@")
+	var user dbgen.User
+	var err error
+
+	if isEmail {
+		user, err = queries.GetUserByEmail(r.Context(), sql.NullString{String: identifier, Valid: true})
+	} else {
+		user, err = queries.GetUserByPhone(r.Context(), sql.NullString{String: identifier, Valid: true})
+	}
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_ = VerifyPassword(dummyPasswordHash, password)
+		} else {
+			logger.Error().Err(err).Msg("Database error during staff login")
+		}
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	if !user.IsStaff || !user.LocalAuthEnabled || !user.PasswordHash.Valid || !VerifyPassword(user.PasswordHash.String, password) {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
