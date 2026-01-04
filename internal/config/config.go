@@ -79,6 +79,9 @@ func (c *Config) Validate() error {
 	if c.App.Port == 0 {
 		return fmt.Errorf("app port is required")
 	}
+	if c.App.SecretKey == "" {
+		return fmt.Errorf("app secret key is required")
+	}
 	if c.Database.Driver == "" {
 		return fmt.Errorf("database driver is required")
 	}

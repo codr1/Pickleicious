@@ -9,6 +9,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
+	"github.com/codr1/Pickleicious/internal/api/auth"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 )
 
 type Middleware func(http.Handler) http.Handler
@@ -79,6 +82,24 @@ func WithContentType(next http.Handler) http.Handler {
 		if r.Header.Get("Accept") == "" {
 			r.Header.Set("Accept", "text/html")
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func WithAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, err := auth.UserFromRequest(w, r)
+		if err != nil {
+			log.Ctx(r.Context()).Warn().Err(err).Msg("Failed to load auth session")
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if user != nil {
+			ctx := authz.ContextWithUser(r.Context(), user)
+			r = r.WithContext(ctx)
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }
