@@ -44,15 +44,6 @@
 ## 0. INFRASTRUCTURE DEBT (Priority)
 
 ### 0.1 Comprehensive Test Infrastructure
-<!-- BEGIN WIP: STORY-0010 -->
-**Problem**: Server startup can fail without any test catching it. Current tests only cover handlers in isolation.
-
-**Required**:
-- E2E tests that start the actual server binary
-- Smoke tests for server startup (db connection, migrations applied, tables exist)
-- Integration tests that use real database with migrations
-- CI gate that runs smoke tests on every PR
-<!-- END WIP -->
 
 ### 0.2 Build System Modernization
 **Problem**: CMake/Make build system is overly complex for a Go project and causes confusion (e.g., dead `DB_PATH` variables, multiple indirections).
@@ -2117,11 +2108,6 @@ handler := api.ChainMiddleware(
 
 **Planned Workflows:**
 
-<!-- BEGIN WIP: STORY-0010 -->
-1. **Check Tests**
-   - Run on push to main and PRs
-   - `npm test` / `go test`
-<!-- END WIP -->
 
 2. **Dependency Management**
    - Weekly vulnerability audit
