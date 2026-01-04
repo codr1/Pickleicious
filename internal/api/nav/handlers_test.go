@@ -5,31 +5,23 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/testutil"
 )
 
 func TestHandleSearch(t *testing.T) {
 	t.Helper()
 
-	dbPath := filepath.Join(t.TempDir(), "search.db")
-	database, err := db.New(dbPath)
-	if err != nil {
-		t.Fatalf("create db: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = database.Close()
-	})
+	database := testutil.NewTestDB(t)
 
 	InitHandlers(database.Queries)
 
 	ctx := context.Background()
-	_, err = database.Queries.CreateMember(ctx, dbgen.CreateMemberParams{
+	_, err := database.Queries.CreateMember(ctx, dbgen.CreateMemberParams{
 		FirstName:       "Alice",
 		LastName:        "Smith",
 		Email:           sql.NullString{String: "alice@example.com", Valid: true},
