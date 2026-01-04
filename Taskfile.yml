@@ -78,6 +78,7 @@ tasks:
     deps:
       - generate
       - css
+      - db:migrate
     cmds:
       - go run ./cmd/server
 
@@ -88,6 +89,7 @@ tasks:
     deps:
       - generate
       - css
+      - db:migrate
     cmds:
       - air -c .air.toml
 
