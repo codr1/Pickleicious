@@ -71,7 +71,7 @@ Secrets loaded from environment: `APP_SECRET_KEY`, `DATABASE_AUTH_TOKEN`.
 
 ## Database
 
-SQLite with embedded migrations via golang-migrate. Foreign keys enabled by default (`_fk=1` DSN parameter).
+SQLite with embedded migrations via golang-migrate. Foreign keys enabled by default (`_fk=1` DSN parameter automatically appended).
 
 ### Core Tables
 
@@ -198,7 +198,7 @@ Per-session `auto_scale_override` can disable auto-scaling for individual sessio
 
 Package: `internal/testutil`
 
-`NewTestDB(t)` creates a temporary SQLite database with migrations applied. Automatically cleans up on test completion.
+`NewTestDB(t)` creates a temporary SQLite database with migrations applied. Automatically cleans up on test completion. Foreign keys are enabled by default.
 
 ### Smoke Tests
 
