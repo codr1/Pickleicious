@@ -13,13 +13,11 @@ tasks:
     desc: Generate templ and sqlc code
     cmds:
       - templ generate
-      - cmd: sqlc generate
-        dir: internal/db
+      - cmd: bash -c "cd internal/db && sqlc generate"
   generate-sqlc:
     desc: Generate sqlc code
     cmds:
-      - cmd: sqlc generate
-        dir: internal/db
+      - cmd: bash -c "cd internal/db && sqlc generate"
 
   build:
     desc: Build the server binary
@@ -41,6 +39,8 @@ tasks:
 
   test:
     desc: Run Go tests
+    deps:
+      - generate-sqlc
     cmds:
       - go test ./...
 
