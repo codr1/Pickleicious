@@ -44,6 +44,7 @@
 ## 0. INFRASTRUCTURE DEBT (Priority)
 
 ### 0.1 Comprehensive Test Infrastructure
+<!-- BEGIN WIP: STORY-0010 -->
 **Problem**: Server startup can fail without any test catching it. Current tests only cover handlers in isolation.
 
 **Required**:
@@ -51,6 +52,7 @@
 - Smoke tests for server startup (db connection, migrations applied, tables exist)
 - Integration tests that use real database with migrations
 - CI gate that runs smoke tests on every PR
+<!-- END WIP -->
 
 ### 0.2 Build System Modernization
 **Problem**: CMake/Make build system is overly complex for a Go project and causes confusion (e.g., dead `DB_PATH` variables, multiple indirections).
@@ -1020,6 +1022,49 @@ This section documents features that are standard in competing pickleball/sports
 | Package Pricing | Full camp vs. daily rate |
 | Materials Included | Equipment rental in price |
 
+**Coach Marketplace & Discovery:**
+
+A self-service marketplace where members discover and book coaches directly, reducing front-desk overhead while increasing lesson bookings.
+
+| Feature | Description |
+|---------|-------------|
+| Coach Profiles | Rich profiles with photo, bio, playing history, teaching philosophy |
+| Specialties & Certifications | PPR/IPTPA certified, specialty areas (serves, dinking, strategy) |
+| Skill Level Focus | Coaches indicate which levels they prefer teaching (beginner, intermediate, advanced) |
+| Availability Calendar | Coaches set their own available hours; real-time visibility |
+| Instant Booking | Members book directly without staff intervention |
+| Rating & Reviews | 5-star ratings with written reviews from past students |
+| Response Time Badge | Shows coach's typical response time to booking requests |
+| Featured Coaches | Facility can highlight top coaches or new instructors |
+
+**Coach Search & Filtering:**
+| Filter | Description |
+|--------|-------------|
+| Availability | "Available this week", specific date/time |
+| Specialty | Serve improvement, strategy, beginner basics, competitive play |
+| Price Range | Budget-friendly to premium coaching |
+| Rating | Minimum star rating filter |
+| Teaching Style | Video analysis, drilling, game-based, technical |
+| Language | For multilingual facilities |
+
+**Coach Onboarding:**
+| Feature | Description |
+|---------|-------------|
+| Self-Registration | Coaches apply through portal |
+| Credential Verification | Upload certifications for admin review |
+| Background Check Integration | Link to third-party verification services |
+| Trial Period | New coaches marked as "New" for first 30 days |
+| Commission Settings | Per-coach commission rates or flat fees |
+
+**Coach Analytics:**
+| Metric | Description |
+|--------|-------------|
+| Booking Rate | % of available slots booked |
+| Student Retention | Repeat booking rate |
+| Revenue Generated | Total and per-lesson averages |
+| Rating Trends | Rating over time |
+| Cancellation Rate | Coach and student cancellations |
+
 ### 9.8 Reporting & Analytics Dashboard
 
 **Court Utilization:**
@@ -1328,6 +1373,501 @@ This section documents features that are standard in competing pickleball/sports
 | Photo Documentation | Visual issue records |
 | Compliance Tracking | Regulatory requirements |
 
+### 9.19 Player Matchmaking & Social Features
+
+> **Competitive Reference:** PickleUp, Hitch, Playtomic, CourtReserve "Player Matchmaker", DUPR social features
+> **Priority:** High - Key differentiator for member retention and community building
+
+Social features transform a facility from a transactional booking platform into a community hub. Players who find regular partners have significantly higher retention rates.
+
+**Player Discovery:**
+| Feature | Description |
+|---------|-------------|
+| Player Profiles | Photo, bio, playing style, availability preferences |
+| Skill Level Display | DUPR rating or self-assessed level prominently shown |
+| Play Style Tags | "Aggressive", "Strategic", "Social", "Competitive" |
+| Availability Status | "Looking to play today", "Available weekends", etc. |
+| Home Facility | Primary location for multi-facility orgs |
+| Playing History | How long playing, frequency, preferred formats |
+
+**Matchmaking Engine:**
+| Feature | Description |
+|---------|-------------|
+| Skill-Based Matching | Suggest players within 0.5 rating points |
+| Schedule Compatibility | Match players with overlapping availability |
+| Location Proximity | Prioritize players at same facility |
+| Play Style Compatibility | Match complementary or similar styles |
+| Gender Preferences | Filter for men's, women's, or mixed play |
+| Age Range Filtering | Optional age-based matching |
+
+**Connection & Invitations:**
+| Feature | Description |
+|---------|-------------|
+| Send Play Request | "Want to play Tuesday at 6pm?" with one click |
+| Buddy List | Save favorite partners for quick invitations |
+| Group Creation | Form regular playing groups (e.g., "Tuesday Night Crew") |
+| Broadcast Invite | "I have a court at 4pm, need 3 players" |
+| Response Tracking | Yes/No/Maybe with automatic tallying |
+| Invite Expiration | Auto-expire unanswered invites |
+
+**Communication:**
+| Feature | Description |
+|---------|-------------|
+| In-App Messaging | Direct messages between members (opt-in) |
+| Group Chat | Chat threads for playing groups |
+| Activity Feed | See when buddies book courts or join events |
+| Privacy Controls | Control who can message you, see your schedule |
+| Block/Report | Safety features for unwanted contact |
+
+**Social Visibility:**
+| Feature | Description |
+|---------|-------------|
+| "Who's Playing" | See who else is signed up for open play |
+| Court Activity | Live view of who's currently playing |
+| Leaderboards | Optional competitive rankings within facility |
+| Achievement Badges | "100 games played", "Early Bird", "Social Butterfly" |
+| New Member Spotlight | Help new members find their first partners |
+
+**Opt-In Preferences:**
+| Setting | Options |
+|---------|---------|
+| Profile Visibility | Public / Members Only / Private |
+| Matchmaking Participation | Active / Passive / Off |
+| Contact Preferences | Anyone / Buddies Only / None |
+| Activity Sharing | Share play activity with buddies or keep private |
+
+### 9.20 Round Robin & Open Play Engine
+
+> **Competitive Reference:** Pickleheads Round Robin Tool, USAPA Rotation Charts, TopDog, PlayMore AI
+> **Priority:** High - Core functionality for recreational facilities
+> **Related:** GitHub Issue #32 (Open play cancellation rules)
+
+Open play and round robins are the bread-and-butter of recreational pickleball. A sophisticated rotation engine removes staff burden while ensuring fair, fun play for all participants.
+
+**Session Types:**
+| Type | Description |
+|------|-------------|
+| Traditional Round Robin | Each player/team plays every other player/team once |
+| Rotating Partners ("Popcorn") | Partners change each round; maximize mixing |
+| King/Queen of the Court | Winners stay, losers rotate off |
+| Ladder Play | Skill-based progression up/down courts |
+| Swiss System | Match players with similar win records |
+| Flex Play | Drop-in/drop-out with dynamic court assignment |
+
+**Rotation Algorithms:**
+| Algorithm | Best For | Description |
+|-----------|----------|-------------|
+| Circle Method | Even players | Classic round robin rotation |
+| Balanced Rotation | Mixed skill | Weight matchups by rating differential |
+| Random Shuffle | Social play | Randomize each round for variety |
+| Skill Clustering | Large groups | Group by skill, rotate within clusters |
+| Partner Variety | Doubles | Ensure each player partners with every other |
+
+**Player Management:**
+| Feature | Description |
+|---------|-------------|
+| Check-In Queue | Players check in; system adds to rotation |
+| Late Arrival Handling | Insert new players without disrupting flow |
+| Early Departure | Graceful removal with rebalancing |
+| Substitute Players | Fill spots when players leave mid-session |
+| Waitlist Integration | Auto-add from waitlist when spots open |
+| No-Show Timeout | Remove from queue if not present at court |
+
+**Court Assignment:**
+| Feature | Description |
+|---------|-------------|
+| Auto-Assignment | System assigns players to courts each round |
+| Court Balancing | Distribute skill levels across courts |
+| Rest Rotation | Ensure players get breaks in large groups |
+| Bye Handling | Fair distribution when odd number of players |
+| Court Preferences | Honor accessibility or skill-level court preferences |
+
+**Scoring & Standings:**
+| Feature | Description |
+|---------|-------------|
+| Score Entry | Self-report via mobile or kiosk |
+| Real-Time Standings | Live leaderboard during session |
+| Point Differential | Track margin of victory |
+| Head-to-Head Records | Personal stats vs. each opponent |
+| Session Summary | Email recap with stats after session |
+| DUPR Submission | Optional auto-submit to DUPR |
+
+**Timing & Announcements:**
+| Feature | Description |
+|---------|-------------|
+| Round Timer | Configurable game length (e.g., 15 min rounds) |
+| Audio Announcements | "Round ending in 2 minutes", "New round starting" |
+| Court Assignments Display | Show next matchups on screens or mobile |
+| Rotation Alerts | Push notification when your game is ready |
+| Overtime Rules | What happens if game runs long |
+
+**Configuration Options:**
+| Setting | Options |
+|---------|---------|
+| Format | Round robin / Rotating partners / King of court |
+| Games per Round | 1, 2, or 3 games per matchup |
+| Scoring | Rally scoring, traditional, timed |
+| Skill Restrictions | Open / Level-restricted (e.g., 3.0-3.5 only) |
+| Gender Format | Open / Men's / Women's / Mixed |
+| Max Players | Per-session cap with waitlist overflow |
+| Min Players | Cancel threshold with auto-notification |
+
+**Staff Tools:**
+| Feature | Description |
+|---------|-------------|
+| Override Matchups | Manual adjustment when needed |
+| Force Court Assignment | Place specific players together |
+| Pause/Resume | Stop rotation for announcements |
+| Print Bracket | Printable rotation schedule |
+| Session Templates | Save configurations for recurring sessions |
+
+### 9.21 Challenge Ladder System
+
+> **Competitive Reference:** Global Pickleball Network, TopDog Challenge Ladders, R2 Sports
+> **Priority:** High - Self-sustaining engagement with minimal staff oversight
+
+Challenge ladders are player-driven competition systems where participants challenge each other directly, submit their own scores, and rankings update automatically. Once configured, they essentially run themselves.
+
+**Ladder Types:**
+| Type | Description |
+|------|-------------|
+| Open Challenge | Challenge anyone within X positions above you |
+| Tiered Ladder | Divisions (A/B/C) with promotion/relegation |
+| Points-Based | Accumulate points; rankings by total points |
+| ELO-Style | Rating adjusts based on opponent strength |
+| Seasonal | Reset periodically with finals for top players |
+| Doubles Ladder | Team-based challenge ladder |
+
+**Challenge Rules:**
+| Rule | Description |
+|------|-------------|
+| Challenge Range | How many positions up can you challenge (e.g., 3 spots) |
+| Challenge Frequency | Max challenges per week (e.g., 2 per player) |
+| Response Deadline | Days to accept/decline challenge (e.g., 3 days) |
+| Default Win | Challenged player who doesn't respond loses by default |
+| Decline Limits | Max declines before forced match or penalty |
+| Re-Challenge Cooldown | Days before challenging same player again |
+
+**Ranking Algorithms:**
+| Algorithm | Description |
+|-----------|-------------|
+| Position Swap | Winner takes loser's position if higher |
+| Weighted Swap | Bigger jump for beating higher-ranked opponent |
+| Points Accumulation | Win = X points, bonus for upset |
+| ELO Rating | Mathematical rating based on expected vs. actual results |
+| Activity Decay | Inactive players drift down over time |
+| Win Streak Bonus | Extra ranking boost for consecutive wins |
+| Head-to-Head Tiebreaker | Direct matchup history breaks ties |
+
+**Match Scheduling:**
+| Feature | Description |
+|---------|-------------|
+| Challenge Request | Send challenge via app with proposed times |
+| Availability Sharing | Show your open slots to potential challengers |
+| Court Auto-Booking | System books court when match is scheduled |
+| Reminder Notifications | Automated reminders before match |
+| Reschedule Workflow | Request/approve time changes |
+| Match Deadline | Complete match within X days of challenge |
+
+**Score Reporting:**
+| Feature | Description |
+|---------|-------------|
+| Self-Report | Players submit their own scores |
+| Dual Confirmation | Both players must confirm result |
+| Dispute Resolution | Flag discrepancies for admin review |
+| Photo Proof | Optional score sheet photo upload |
+| DUPR Sync | Auto-submit verified results to DUPR |
+
+**Standings & Visibility:**
+| Feature | Description |
+|---------|-------------|
+| Live Leaderboard | Real-time ranking display |
+| Movement Arrows | Show who's rising/falling |
+| Match History | Full history of all ladder matches |
+| Player Stats | W/L record, win %, streak, avg margin |
+| Recent Activity | Who challenged whom, recent results |
+| Inactive Indicator | Flag players who haven't played recently |
+
+**Seasons & Events:**
+| Feature | Description |
+|---------|-------------|
+| Season Length | Define ladder seasons (e.g., quarterly) |
+| Season Reset | Full reset or partial position reset |
+| Playoff Qualification | Top X players qualify for season-end tournament |
+| Prize/Recognition | Badges, prizes for season winners |
+| Historical Archives | Past season standings preserved |
+
+**Administration:**
+| Feature | Description |
+|---------|-------------|
+| Ladder Creation Wizard | Easy setup with templates |
+| Rule Configuration | All challenge rules adjustable |
+| Player Management | Add/remove players, handle disputes |
+| Activity Reports | Identify inactive players, popular matchups |
+| Announcement System | Post updates to ladder participants |
+| Auto-Cleanup | Archive completed seasons, prune inactive players |
+
+### 9.22 AI-Powered Features
+
+> **Competitive Reference:** Wellyx AI marketing, PlayMore AI matchmaking
+> **Priority:** Medium - Nice-to-have enhancement layer
+
+AI capabilities can enhance personalization, automate routine decisions, and surface insights that would be impossible to derive manually.
+
+**Smart Matchmaking:**
+| Feature | Description |
+|---------|-------------|
+| Compatibility Scoring | ML model predicts good partner/opponent matches |
+| Play Style Analysis | Infer style from game history and behavior |
+| Optimal Pairing | Suggest doubles partners for balanced teams |
+| Skill Progression Prediction | Estimate player improvement trajectory |
+| Churn Risk Detection | Flag members at risk of not returning |
+
+**Intelligent Scheduling:**
+| Feature | Description |
+|---------|-------------|
+| Demand Prediction | Forecast busy times based on historical data |
+| Dynamic Pricing Suggestions | Recommend price adjustments for utilization |
+| Staff Scheduling Optimization | Suggest staffing levels by predicted demand |
+| Court Maintenance Timing | Recommend maintenance windows with least impact |
+| Event Timing Recommendations | Best times to schedule leagues, clinics |
+
+**Personalized Recommendations:**
+| Feature | Description |
+|---------|-------------|
+| "Players Like You" | Recommend partners based on similar members |
+| Event Suggestions | Personalized event recommendations |
+| Lesson Recommendations | Suggest coaches/lessons based on improvement areas |
+| Content Personalization | Tailor emails and notifications to interests |
+| Optimal Booking Times | Suggest times when preferred courts/partners available |
+
+**Marketing Automation:**
+| Feature | Description |
+|---------|-------------|
+| Smart Segmentation | Auto-segment members by behavior patterns |
+| Send Time Optimization | Deliver messages when most likely to engage |
+| Subject Line Optimization | A/B test and learn best messaging |
+| Win-Back Campaigns | Automated re-engagement for lapsed members |
+| Upsell Targeting | Identify members likely to upgrade |
+
+**Operational Intelligence:**
+| Feature | Description |
+|---------|-------------|
+| Anomaly Detection | Flag unusual patterns (fraud, abuse, errors) |
+| Review Sentiment Analysis | Categorize feedback as positive/negative/neutral |
+| FAQ Auto-Response | Answer common questions automatically |
+| Predictive Maintenance | Flag equipment likely to need service |
+| Revenue Forecasting | Project future revenue based on trends |
+
+**Natural Language Features:**
+| Feature | Description |
+|---------|-------------|
+| Voice Booking | "Book a court tomorrow at 6pm" |
+| Chat Assistant | Answer member questions about schedules, rules |
+| Smart Search | Understand natural language queries |
+| Automated Summaries | Generate session recaps, performance reports |
+
+### 9.23 Autonomous & Unstaffed Operations
+
+> **Competitive Reference:** PodPlay autonomous tier, Pickle Parlor, Pickleball 365, Rhombus/Latitude Security
+> **Priority:** Medium - Significant cost savings for right facility types
+> **Best For:** Smaller facilities (2-6 courts), off-peak hours, 24/7 operations
+
+Autonomous operation enables facilities to run with minimal or zero on-site staff, dramatically reducing labor costs while enabling 24/7 access. This model is growing rapidly, with facilities reporting up to 90% reduction in staffing needs.
+
+**Access Control Integration:**
+| Feature | Description |
+|---------|-------------|
+| Smart Lock Integration | RemoteLock, Salto, Kisi, August compatible |
+| PIN Code Access | Unique codes per booking or member |
+| Mobile Unlock | One-tap door unlock in app |
+| QR Code Entry | Scan to enter |
+| Geofenced Auto-Unlock | Door unlocks when member approaches |
+| Access Scheduling | Door only unlocks during booked time window |
+| Emergency Override | Staff can remotely lock/unlock |
+
+**Booking-Triggered Automation:**
+| Feature | Description |
+|---------|-------------|
+| Automatic Door Access | Unlock X minutes before booking starts |
+| Lighting Control | Courts lights on/off with bookings |
+| HVAC Scheduling | Climate control synced to occupancy |
+| Court Power | Ball machines, scoreboards activate with booking |
+| Music/Ambiance | Automated audio system control |
+| Access Revocation | Auto-lock after booking ends + grace period |
+
+**Remote Monitoring:**
+| Feature | Description |
+|---------|-------------|
+| Camera Integration | Live view of all courts and common areas |
+| Motion Detection | Alert on activity outside booked times |
+| Occupancy Counting | Track number of people present |
+| Incident Recording | Auto-save clips on triggered events |
+| Two-Way Audio | Staff can speak to members via speakers |
+| Remote Assistance | Video call with support agent |
+
+**Self-Service Operations:**
+| Feature | Description |
+|---------|-------------|
+| Kiosk Check-In | Self-service terminal for walk-ins |
+| Equipment Lockers | Smart lockers for rental paddles, balls |
+| Vending Integration | Snack/beverage machines |
+| Self-Checkout Pro Shop | Scan and pay without staff |
+| Waiver Kiosk | Complete waivers on-site |
+| Payment Terminal | Accept payments 24/7 |
+
+**Automated Communication:**
+| Feature | Description |
+|---------|-------------|
+| Pre-Arrival Instructions | Email/SMS with access codes, rules |
+| Voice Announcements | "Your session ends in 5 minutes" |
+| Emergency Broadcasts | Facility-wide audio announcements |
+| Violation Warnings | "Please return equipment to designated area" |
+| Session Reminders | "Court 3, your next booking starts in 10 minutes" |
+
+**Security & Safety:**
+| Feature | Description |
+|---------|-------------|
+| 24/7 Monitoring Center | Remote security team watches cameras |
+| Panic Button | Emergency alert in app and on-site |
+| Incident Response | Protocol for security, medical, facility issues |
+| Trespasser Detection | Alert on unrecognized individuals |
+| Damage Documentation | Photo/video evidence of facility damage |
+| Insurance Integration | Incident reports for claims |
+
+**Hybrid Operations:**
+| Feature | Description |
+|---------|-------------|
+| Staffed Hours | Full service during peak times |
+| Autonomous Hours | Unstaffed during early morning, late night |
+| Transition Alerts | Notify members when switching modes |
+| Staff Override | On-call staff can intervene remotely |
+| Graduated Rollout | Start autonomous during low-risk hours |
+
+**Member Experience:**
+| Feature | Description |
+|---------|-------------|
+| Tutorial Videos | How to use autonomous features |
+| In-App Help | Chat/call support from app |
+| Feedback Collection | Rate autonomous experience after visit |
+| Issue Reporting | Report problems with photos |
+| Lost & Found | Log lost items for later retrieval |
+
+**Financial Impact:**
+| Metric | Typical Result |
+|--------|----------------|
+| Staffing Reduction | Up to 90% reduction |
+| Operating Hours | 24/7 vs. 16-18 hours staffed |
+| Revenue Increase | 20-40% from extended hours |
+| Break-Even Point | Lower revenue threshold for profitability |
+| Technology Investment | Higher upfront, lower ongoing |
+
+### 9.24 Video Replay & Digital Scoreboards
+
+> **Competitive Reference:** PodPlay video replays, PlaySight, TopDog digital scoreboards
+> **Priority:** Low - Premium feature for differentiation
+> **Integration:** DUPR score submission, streaming platforms
+
+Video technology and digital scoreboards create a premium, professional experience that justifies higher pricing and attracts serious players. These features also enable automated score reporting to rating systems like DUPR.
+
+**Digital Scoreboard System:**
+| Feature | Description |
+|---------|-------------|
+| Court-Side Displays | Large screens visible to players and spectators |
+| Mobile Scoring | Players update score from phones |
+| Physical Buttons | Dedicated scoring buttons on each court |
+| Voice Scoring | "Score: 11-9" voice commands |
+| Auto-Detection | Computer vision detects points (advanced) |
+| Real-Time Sync | All displays update instantly |
+
+**Score Display Features:**
+| Feature | Description |
+|---------|-------------|
+| Player Names | Show player/team names |
+| Game Score | Current game score prominently displayed |
+| Match Score | Games won in match |
+| Server Indicator | Visual cue for serving team |
+| Timeout Counter | Track remaining timeouts |
+| Game Timer | Optional timed games display |
+| Side-Out Indicator | Track side-outs for rally scoring |
+
+**DUPR Integration:**
+| Feature | Description |
+|---------|-------------|
+| DUPR Account Linking | Connect member profiles to DUPR |
+| One-Button Submit | Submit match result to DUPR after game |
+| Auto-Submit Option | Automatically send all scores to DUPR |
+| Match Verification | Both players confirm before submission |
+| Rating Display | Show current DUPR ratings on scoreboard |
+| Rating Prediction | "If you win, your new rating will be..." |
+
+**Video Recording:**
+| Feature | Description |
+|---------|-------------|
+| Continuous Recording | Record all court activity |
+| Per-Court Cameras | Individual camera per court |
+| Multi-Angle | Multiple cameras for different views |
+| Auto-Start/Stop | Recording synced to booking times |
+| Cloud Storage | Secure cloud storage with retention policies |
+| Local Backup | On-site backup for reliability |
+
+**Video Replay:**
+| Feature | Description |
+|---------|-------------|
+| Instant Replay | Review last point on court-side display |
+| Full Game Access | Watch entire game after session |
+| Highlight Clips | Auto-generate highlight moments |
+| Slow Motion | Variable speed playback |
+| Frame-by-Frame | Precise analysis of technique |
+| Mobile Access | Watch replays on phone |
+
+**Sharing & Social:**
+| Feature | Description |
+|---------|-------------|
+| One-Click Sharing | Share clips to social media |
+| Branded Overlays | Facility logo/branding on videos |
+| Custom Graphics | Player names, scores overlaid |
+| Download Options | MP4 download for personal use |
+| Privacy Controls | Players control who can access their videos |
+| Highlight Reels | Auto-generated best-of compilations |
+
+**Live Streaming:**
+| Feature | Description |
+|---------|-------------|
+| Court Streaming | Live stream any court |
+| Multi-Court View | Facility-wide overview stream |
+| Public/Private | Control who can view streams |
+| Platform Integration | Stream to YouTube, Facebook, Twitch |
+| Commentary Support | Audio input for play-by-play |
+| Delay Options | Configurable stream delay |
+
+**Player Analysis:**
+| Feature | Description |
+|---------|-------------|
+| Shot Tracking | Track shot types and locations |
+| Movement Analysis | Analyze court coverage patterns |
+| Performance Stats | Unforced errors, winners, etc. |
+| Progress Over Time | Compare games across sessions |
+| Coach Review | Share videos with coach for analysis |
+| Benchmarking | Compare stats to skill-level averages |
+
+**Hardware Options:**
+| Tier | Components | Use Case |
+|------|------------|----------|
+| Basic | Tablet scorekeeping, no video | Budget-friendly |
+| Standard | Fixed cameras, basic scoreboard | Most facilities |
+| Premium | Multi-angle, AI tracking, large displays | High-end venues |
+| Portable | Mobile camera kits for events | Tournaments |
+
+**Content Management:**
+| Feature | Description |
+|---------|-------------|
+| Automatic Cleanup | Delete old recordings per retention policy |
+| Favorite Clips | Members save favorite moments |
+| Search | Find games by date, opponent, court |
+| Collections | Organize clips into folders |
+| Storage Tiers | Member storage limits by membership level |
+
 ---
 
 ## 10. NAVIGATION & UI FRAMEWORK
@@ -1566,9 +2106,11 @@ handler := api.ChainMiddleware(
 
 **Planned Workflows:**
 
+<!-- BEGIN WIP: STORY-0010 -->
 1. **Check Tests**
    - Run on push to main and PRs
    - `npm test` / `go test`
+<!-- END WIP -->
 
 2. **Dependency Management**
    - Weekly vulnerability audit
