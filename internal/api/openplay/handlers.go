@@ -75,7 +75,7 @@ func HandleOpenPlayRulesPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	rules, err := q.ListOpenPlayRules(ctx, facilityID)
@@ -116,7 +116,7 @@ func HandleOpenPlayRulesList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	rules, err := q.ListOpenPlayRules(ctx, facilityID)
@@ -139,7 +139,7 @@ func HandleOpenPlayRuleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	rule := dbgen.OpenPlayRule{FacilityID: facilityID}
@@ -171,7 +171,7 @@ func HandleOpenPlayRuleEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
@@ -265,7 +265,7 @@ func HandleOpenPlayRuleCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	rule, err := q.CreateOpenPlayRule(ctx, dbgen.CreateOpenPlayRuleParams{
@@ -318,7 +318,7 @@ func HandleOpenPlayRuleDetail(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	rule, err := q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
@@ -415,7 +415,7 @@ func HandleOpenPlayRuleUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	rule, err := q.UpdateOpenPlayRule(ctx, dbgen.UpdateOpenPlayRuleParams{
@@ -474,7 +474,7 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 	deleted, err := q.DeleteOpenPlayRule(ctx, dbgen.DeleteOpenPlayRuleParams{
@@ -498,38 +498,6 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 	if !renderHTMLComponent(r.Context(), w, component, headers, "Failed to render delete response", "Failed to render response") {
 		return
 	}
-}
-
-func requireFacilityAccess(w http.ResponseWriter, r *http.Request, facilityID int64) bool {
-	logger := log.Ctx(r.Context())
-	user := authz.UserFromContext(r.Context())
-	if err := authz.RequireFacilityAccess(r.Context(), facilityID); err != nil {
-		switch {
-		case errors.Is(err, authz.ErrUnauthenticated):
-			logEvent := logger.Warn().Int64("facility_id", facilityID)
-			if user != nil {
-				logEvent = logEvent.Int64("user_id", user.ID)
-			}
-			logEvent.Msg("Facility access denied: unauthenticated")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		case errors.Is(err, authz.ErrForbidden):
-			logEvent := logger.Warn().Int64("facility_id", facilityID)
-			if user != nil {
-				logEvent = logEvent.Int64("user_id", user.ID)
-			}
-			logEvent.Msg("Facility access denied: forbidden")
-			http.Error(w, "Forbidden", http.StatusForbidden)
-		default:
-			logEvent := logger.Error().Int64("facility_id", facilityID).Err(err)
-			if user != nil {
-				logEvent = logEvent.Int64("user_id", user.ID)
-			}
-			logEvent.Msg("Facility access denied: error")
-			http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
-		}
-		return false
-	}
-	return true
 }
 
 func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request) {
@@ -556,7 +524,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 	}
 
 	var payload openPlaySessionAutoScaleToggleRequest
-	if err := decodeJSON(r, &payload); err != nil {
+	if err := apiutil.DecodeJSON(r, &payload); err != nil {
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
@@ -575,9 +543,9 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play session not found", Err: err}
 			}
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play session", Err: err}
 		}
 
 		rule, err := qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
@@ -586,9 +554,9 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return handlerError{status: http.StatusNotFound, message: "Open play rule not found", err: err}
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
 			}
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play rule", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play rule", Err: err}
 		}
 
 		nextOverride := !rule.AutoScaleEnabled
@@ -603,9 +571,9 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play session not found", Err: err}
 			}
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to update open play session", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to update open play session", Err: err}
 		}
 
 		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditAutoScaleOverride, map[string]any{
@@ -613,7 +581,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		}, map[string]any{
 			"auto_scale_override": auditBoolValue(auditSession.AutoScaleOverride),
 		}, sql.NullString{}); err != nil {
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play session auto scale override", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log open play session auto scale override", Err: err}
 		}
 
 		if payload.DisableForRule {
@@ -630,9 +598,9 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 			})
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return handlerError{status: http.StatusNotFound, message: "Open play rule not found", err: err}
+					return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
 				}
-				return handlerError{status: http.StatusInternalServerError, message: "Failed to update open play rule", err: err}
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to update open play rule", Err: err}
 			}
 
 			if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditAutoScaleRuleDisable, map[string]any{
@@ -640,7 +608,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 			}, map[string]any{
 				"auto_scale_enabled": false,
 			}, sql.NullString{String: "disable_for_rule", Valid: true}); err != nil {
-				return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play rule auto scale change", err: err}
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log open play rule auto scale change", Err: err}
 			}
 		}
 
@@ -651,12 +619,12 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 	if err != nil {
-		var herr handlerError
+		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
-			if herr.status == http.StatusInternalServerError {
-				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("session_id", sessionID).Msg(herr.Message)
 			}
-			http.Error(w, herr.message, herr.status)
+			http.Error(w, herr.Message, herr.Status)
 			return
 		}
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to update open play session auto scale override")
@@ -666,7 +634,6 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 
 	if err := writeJSON(w, http.StatusOK, responseSession); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play session response")
-		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
 	}
 }
@@ -1127,11 +1094,11 @@ type openPlayParticipantRequest struct {
 func parseIntField(r *http.Request, name string) (int64, error) {
 	value := strings.TrimSpace(r.FormValue(name))
 	if value == "" {
-		return 0, fieldError{Field: name, Reason: "is required"}
+		return 0, apiutil.FieldError{Field: name, Reason: "is required"}
 	}
 	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
-		return 0, fieldError{Field: name, Reason: "must be a number"}
+		return 0, apiutil.FieldError{Field: name, Reason: "must be a number"}
 	}
 	return parsed, nil
 }
@@ -1144,60 +1111,6 @@ func parseBoolField(r *http.Request, name string) bool {
 	default:
 		return false
 	}
-}
-
-type fieldError struct {
-	Field  string
-	Reason string
-}
-
-func (e fieldError) Error() string {
-	return fmt.Sprintf("%s %s", e.Field, e.Reason)
-}
-
-func decodeJSON(r *http.Request, dst any) error {
-	if r.Body == nil {
-		return fmt.Errorf("missing request body")
-	}
-	defer r.Body.Close()
-
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(dst); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("invalid JSON body")
-	}
-	return nil
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) error {
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	if err := encoder.Encode(payload); err != nil {
-		return err
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_, err := w.Write(buf.Bytes())
-	return err
-}
-
-type handlerError struct {
-	status  int
-	message string
-	err     error
-}
-
-func (e handlerError) Error() string {
-	return e.message
-}
-
-func (e handlerError) Unwrap() error {
-	return e.err
 }
 
 func auditBoolValue(value sql.NullBool) any {
@@ -1243,19 +1156,19 @@ func marshalAuditState(state map[string]any) (sql.NullString, error) {
 func validateOpenPlayRuleInput(minParticipants, maxParticipantsPerCourt, cancellationCutoffMinutes, minCourts, maxCourts int64) error {
 	switch {
 	case minParticipants <= 0:
-		return fieldError{Field: "min_participants", Reason: "must be greater than 0"}
+		return apiutil.FieldError{Field: "min_participants", Reason: "must be greater than 0"}
 	case maxParticipantsPerCourt <= 0:
-		return fieldError{Field: "max_participants_per_court", Reason: "must be greater than 0"}
+		return apiutil.FieldError{Field: "max_participants_per_court", Reason: "must be greater than 0"}
 	case cancellationCutoffMinutes < 0:
-		return fieldError{Field: "cancellation_cutoff_minutes", Reason: "must be 0 or greater"}
+		return apiutil.FieldError{Field: "cancellation_cutoff_minutes", Reason: "must be 0 or greater"}
 	case minCourts <= 0:
-		return fieldError{Field: "min_courts", Reason: "must be greater than 0"}
+		return apiutil.FieldError{Field: "min_courts", Reason: "must be greater than 0"}
 	case maxCourts <= 0:
-		return fieldError{Field: "max_courts", Reason: "must be greater than 0"}
+		return apiutil.FieldError{Field: "max_courts", Reason: "must be greater than 0"}
 	case minCourts > maxCourts:
-		return fieldError{Field: "min_courts", Reason: "must be less than or equal to max_courts"}
+		return apiutil.FieldError{Field: "min_courts", Reason: "must be less than or equal to max_courts"}
 	case minParticipants > maxParticipantsPerCourt*minCourts:
-		return fieldError{Field: "min_participants", Reason: "must be less than or equal to max_participants_per_court * min_courts"}
+		return apiutil.FieldError{Field: "min_participants", Reason: "must be less than or equal to max_participants_per_court * min_courts"}
 	default:
 		return nil
 	}

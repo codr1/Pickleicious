@@ -5,11 +5,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -203,7 +201,7 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 
@@ -236,7 +234,9 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"themes": themes})
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"themes": themes}); err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to write themes list response")
+	}
 }
 
 func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +283,7 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, *req.FacilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, *req.FacilityID) {
 		return
 	}
 
@@ -339,7 +339,9 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, models.ThemeFromDB(created))
+	if err := apiutil.WriteJSON(w, http.StatusCreated, models.ThemeFromDB(created)); err != nil {
+		logger.Error().Err(err).Int64("facility_id", *req.FacilityID).Msg("Failed to write theme create response")
+	}
 }
 
 func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
@@ -397,7 +399,7 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	facilityID := existing.FacilityID.Int64
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 
@@ -452,7 +454,9 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, models.ThemeFromDB(updated))
+	if err := apiutil.WriteJSON(w, http.StatusOK, models.ThemeFromDB(updated)); err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Int64("theme_id", themeID).Msg("Failed to write theme update response")
+	}
 }
 
 func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
@@ -494,7 +498,7 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, existing.FacilityID.Int64) {
+	if !apiutil.RequireFacilityAccess(w, r, existing.FacilityID.Int64) {
 		return
 	}
 
@@ -577,7 +581,7 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, *req.FacilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, *req.FacilityID) {
 		return
 	}
 
@@ -659,7 +663,9 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, models.ThemeFromDB(created))
+	if err := apiutil.WriteJSON(w, http.StatusCreated, models.ThemeFromDB(created)); err != nil {
+		logger.Error().Err(err).Int64("facility_id", *req.FacilityID).Msg("Failed to write theme clone response")
+	}
 }
 
 func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
@@ -691,7 +697,7 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 
@@ -737,38 +743,6 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func requireFacilityAccess(w http.ResponseWriter, r *http.Request, facilityID int64) bool {
-	logger := log.Ctx(r.Context())
-	user := authz.UserFromContext(r.Context())
-	if err := authz.RequireFacilityAccess(r.Context(), facilityID); err != nil {
-		switch {
-		case errors.Is(err, authz.ErrUnauthenticated):
-			logEvent := logger.Warn().Int64("facility_id", facilityID)
-			if user != nil {
-				logEvent = logEvent.Int64("user_id", user.ID)
-			}
-			logEvent.Msg("Facility access denied: unauthenticated")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		case errors.Is(err, authz.ErrForbidden):
-			logEvent := logger.Warn().Int64("facility_id", facilityID)
-			if user != nil {
-				logEvent = logEvent.Int64("user_id", user.ID)
-			}
-			logEvent.Msg("Facility access denied: forbidden")
-			http.Error(w, "Forbidden", http.StatusForbidden)
-		default:
-			logEvent := logger.Error().Int64("facility_id", facilityID).Err(err)
-			if user != nil {
-				logEvent = logEvent.Int64("user_id", user.ID)
-			}
-			logEvent.Msg("Facility access denied: error")
-			http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
-		}
-		return false
-	}
-	return true
-}
-
 func facilityIDFromQuery(r *http.Request) (int64, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get(facilityIDQueryKey))
 	if raw == "" {
@@ -805,28 +779,10 @@ func themeIDFromRequest(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func decodeJSON(r *http.Request, dst any) error {
-	if r.Body == nil {
-		return fmt.Errorf("missing request body")
-	}
-	defer r.Body.Close()
-
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(dst); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("invalid JSON body")
-	}
-	return nil
-}
-
 func decodeThemeRequest(r *http.Request) (themeRequest, error) {
 	if isJSONRequest(r) {
 		var req themeRequest
-		return req, decodeJSON(r, &req)
+		return req, apiutil.DecodeJSON(r, &req)
 	}
 
 	if err := r.ParseForm(); err != nil {
@@ -853,7 +809,7 @@ func decodeThemeRequest(r *http.Request) (themeRequest, error) {
 func decodeThemeCloneRequest(r *http.Request) (themeCloneRequest, error) {
 	if isJSONRequest(r) {
 		var req themeCloneRequest
-		return req, decodeJSON(r, &req)
+		return req, apiutil.DecodeJSON(r, &req)
 	}
 
 	if err := r.ParseForm(); err != nil {
@@ -874,7 +830,7 @@ func decodeThemeCloneRequest(r *http.Request) (themeCloneRequest, error) {
 func decodeFacilityThemeRequest(r *http.Request) (facilityThemeRequest, error) {
 	if isJSONRequest(r) {
 		var req facilityThemeRequest
-		return req, decodeJSON(r, &req)
+		return req, apiutil.DecodeJSON(r, &req)
 	}
 
 	if err := r.ParseForm(); err != nil {
@@ -929,12 +885,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func renderHTMLComponent(ctx context.Context, w http.ResponseWriter, component templ.Component, headers map[string]string, logMsg string, errMsg string) bool {

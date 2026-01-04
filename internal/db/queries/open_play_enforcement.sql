@@ -34,11 +34,6 @@ WHERE c.facility_id = @facility_id
       AND r.start_time < @end_time
       AND r.end_time > @start_time
   )
-  AND c.id NOT IN (
-    SELECT rc.court_id
-    FROM reservation_courts rc
-    WHERE rc.reservation_id = @reservation_id
-  )
 ORDER BY c.court_number;
 
 -- name: AddReservationCourt :exec

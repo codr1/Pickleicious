@@ -36,6 +36,13 @@ FROM reservations
 WHERE id = @id
   AND facility_id = @facility_id;
 
+-- name: GetReservationByID :one
+SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
+    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    is_open_event, teams_per_court, people_per_team, created_at, updated_at
+FROM reservations
+WHERE id = @id;
+
 -- name: ListReservationsByDateRange :many
 SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
     primary_user_id, pro_id, open_play_rule_id, start_time, end_time,

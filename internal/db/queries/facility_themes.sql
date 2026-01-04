@@ -13,3 +13,7 @@ WHERE id = @facility_id;
 -- name: CountThemeUsage :one
 SELECT COUNT(*) FROM facilities
 WHERE active_theme_id = @theme_id;
+
+-- name: FacilityExists :one
+SELECT COUNT(*) FROM facilities
+WHERE id = @facility_id;
