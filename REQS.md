@@ -2026,7 +2026,9 @@ pickleicious/
 | `db:migrate` | Run migrations |
 | `build` | Build server binary |
 | `build:prod` | Build server binary for production |
+<!-- BEGIN WIP: STORY-0013 -->
 | `dev` | Run development server |
+<!-- END WIP -->
 
 ### 11.4 Configuration
 
