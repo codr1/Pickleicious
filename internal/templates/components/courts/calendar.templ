@@ -3,26 +3,57 @@ package courts
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 )
 
-templ Calendar() {
+const (
+	calendarStartHour   = 6
+	calendarEndHour     = 22
+	calendarSlotHeight  = 48.0
+	defaultResvColorHex = "#6B7280"
+)
+
+type CalendarData struct {
+	DisplayDate  time.Time
+	FacilityID   int64
+	Courts       []CalendarCourt
+	Reservations []CalendarReservation
+}
+
+type CalendarCourt struct {
+	ID          int64
+	CourtNumber int64
+	Name        string
+}
+
+type CalendarReservation struct {
+	ID          int64
+	CourtNumber int64
+	StartTime   time.Time
+	EndTime     time.Time
+	TypeName    string
+	TypeColor   string
+}
+
+templ Calendar(data CalendarData) {
 	<div class="bg-white shadow-sm border border-gray-200 rounded-lg">
 		<!-- Calendar Header -->
 		<div class="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
 			<div class="flex items-center space-x-3">
-				<button 
+				<button
 					class="p-1.5 hover:bg-white rounded text-gray-600 hover:text-gray-800 border border-transparent hover:border-gray-300"
-					hx-get="/api/v1/courts/calendar?date=prev"
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, -1))) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
 					</svg>
 				</button>
-				<h2 class="text-lg font-semibold text-gray-900">{ formatDate(time.Now()) }</h2>
-				<button 
+				<h2 class="text-lg font-semibold text-gray-900">{ formatDate(data.DisplayDate) }</h2>
+				<button
 					class="p-1.5 hover:bg-white rounded text-gray-600 hover:text-gray-800 border border-transparent hover:border-gray-300"
-					hx-get="/api/v1/courts/calendar?date=next"
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, 1))) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
@@ -41,7 +72,7 @@ templ Calendar() {
 			</div>
 		</div>
 
-		<div id="calendar-content" class="overflow-x-auto" hx-get="/api/v1/courts/calendar" hx-trigger="load, refreshCourtsCalendar from:body">
+		<div id="calendar-content" class="overflow-x-auto" hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) } hx-trigger="load, refreshCourtsCalendar from:body">
 			<div class="flex min-w-full">
 				<!-- Time slots column -->
 				<div class="w-16 flex-none bg-gray-50 border-r border-gray-200">
@@ -51,31 +82,49 @@ templ Calendar() {
 
 				<!-- Courts grid -->
 				<div class="flex-1">
-					<div class="grid grid-cols-8">
-						<!-- Court headers -->
-						for i := 1; i <= 8; i++ {
-							<div class="h-12 flex items-center justify-center border-b border-gray-200 bg-gray-50 font-medium text-sm text-gray-700">
-								Court { fmt.Sprint(i) }
-							</div>
-						}
-
-						<!-- Time slots for each court -->
-						for hour := 6; hour < 22; hour++ {
-							for court := 1; court <= 8; court++ {
-								<div class="group relative">
-									<div class="absolute inset-0 border-b border-r border-gray-200"></div>
-									if hour % 2 == 0 {
-										<div class="absolute inset-0 border-t border-gray-100"></div>
-									}
-									<div 
-										class="relative h-12 hover:bg-blue-50 cursor-pointer transition-colors"
-										hx-get={ fmt.Sprintf("/api/v1/courts/booking/new?court=%d&hour=%d", court, hour) }
-										hx-target="#modal">
-									</div>
+					if len(data.Courts) == 0 {
+						<div class="p-6 text-sm text-gray-500">
+							No courts configured for this facility.
+						</div>
+					} else {
+						<div class="grid" style={ fmt.Sprintf("grid-template-columns: repeat(%d, minmax(0, 1fr));", len(data.Courts)) }>
+							<!-- Court headers -->
+							for _, court := range data.Courts {
+								<div class="h-12 flex items-center justify-center border-b border-gray-200 bg-gray-50 font-medium text-sm text-gray-700">
+									{ courtDisplayName(court) }
 								</div>
 							}
-						}
-					</div>
+						</div>
+						<div class="grid" style={ fmt.Sprintf("grid-template-columns: repeat(%d, minmax(0, 1fr));", len(data.Courts)) }>
+							<!-- Time slots and reservations for each court -->
+							for _, court := range data.Courts {
+								<div class="relative">
+									for hour := calendarStartHour; hour < calendarEndHour; hour++ {
+										<div class="group relative h-12">
+											<div class="absolute inset-0 border-b border-r border-gray-200"></div>
+											if hour % 2 == 0 {
+												<div class="absolute inset-0 border-t border-gray-100"></div>
+											}
+											<div
+												class="relative h-12 hover:bg-blue-50 cursor-pointer transition-colors"
+												hx-get={ fmt.Sprintf("/api/v1/courts/booking/new?court=%d&hour=%d", court.CourtNumber, hour) }
+												hx-target="#modal">
+											</div>
+										</div>
+									}
+									for _, reservation := range reservationsForCourt(data.Reservations, court.CourtNumber) {
+										<div
+											class="absolute left-1 right-1 rounded text-xs font-medium text-white px-2 py-1 shadow z-10 cursor-pointer"
+											style={ fmt.Sprintf("%s background-color: %s;", reservationBlockStyle(reservation, data.DisplayDate), reservationColor(reservation.TypeColor)) }
+											hx-get={ fmt.Sprintf("/api/v1/reservations/%d/edit", reservation.ID) }
+											hx-target="#modal">
+											{ reservation.TypeName }
+										</div>
+									}
+								</div>
+							}
+						</div>
+					}
 				</div>
 			</div>
 		</div>
@@ -83,7 +132,7 @@ templ Calendar() {
 }
 
 templ timeSlots() {
-	for i := 6; i < 22; i++ {
+	for i := calendarStartHour; i < calendarEndHour; i++ {
 		<div class="relative h-12 -mt-2.5">
 			<span class="absolute right-3 text-xs font-medium text-gray-500">
 				{ fmt.Sprintf("%d:00", i) }
@@ -94,4 +143,64 @@ templ timeSlots() {
 
 func formatDate(t time.Time) string {
 	return t.Format("Monday, January 2, 2006")
+}
+
+func formatDateParam(t time.Time) string {
+	return t.Format("2006-01-02")
+}
+
+func reservationsForCourt(reservations []CalendarReservation, courtNumber int64) []CalendarReservation {
+	filtered := make([]CalendarReservation, 0, len(reservations))
+	for _, reservation := range reservations {
+		if reservation.CourtNumber != courtNumber {
+			continue
+		}
+		filtered = append(filtered, reservation)
+	}
+	return filtered
+}
+
+func courtDisplayName(court CalendarCourt) string {
+	if strings.TrimSpace(court.Name) != "" {
+		return court.Name
+	}
+	return fmt.Sprintf("Court %d", court.CourtNumber)
+}
+
+func reservationBlockStyle(reservation CalendarReservation, displayDate time.Time) string {
+	dayStart := time.Date(displayDate.Year(), displayDate.Month(), displayDate.Day(), calendarStartHour, 0, 0, 0, displayDate.Location())
+	dayEnd := time.Date(displayDate.Year(), displayDate.Month(), displayDate.Day(), calendarEndHour, 0, 0, 0, displayDate.Location())
+
+	startTime := reservation.StartTime
+	endTime := reservation.EndTime
+	if startTime.Before(dayStart) {
+		startTime = dayStart
+	}
+	if endTime.After(dayEnd) {
+		endTime = dayEnd
+	}
+
+	if !endTime.After(startTime) {
+		return "display: none;"
+	}
+
+	minutesFromStart := startTime.Sub(dayStart).Minutes()
+	durationMinutes := endTime.Sub(startTime).Minutes()
+	topOffset := minutesFromStart * calendarSlotHeight / 60.0
+	height := durationMinutes * calendarSlotHeight / 60.0
+
+	return fmt.Sprintf("top: %.1fpx; height: %.1fpx;", topOffset, height)
+}
+
+var hexColorPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
+
+func reservationColor(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return defaultResvColorHex
+	}
+	if !hexColorPattern.MatchString(trimmed) {
+		return defaultResvColorHex
+	}
+	return trimmed
 }

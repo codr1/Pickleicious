@@ -53,6 +53,16 @@ WHERE facility_id = @facility_id
   AND end_time > @start_time
 ORDER BY start_time;
 
+-- name: ListReservationCourtsByDateRange :many
+SELECT rc.reservation_id, c.court_number
+FROM reservation_courts rc
+JOIN reservations r ON r.id = rc.reservation_id
+JOIN courts c ON c.id = rc.court_id
+WHERE r.facility_id = @facility_id
+  AND r.start_time < @end_time
+  AND r.end_time > @start_time
+ORDER BY rc.reservation_id, c.court_number;
+
 -- name: UpdateReservation :one
 UPDATE reservations
 SET reservation_type_id = @reservation_type_id,

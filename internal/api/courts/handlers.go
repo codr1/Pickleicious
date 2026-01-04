@@ -52,7 +52,13 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var activeTheme *models.Theme
+	displayDate := calendarDateFromRequest(r)
+	calendarData := courts.CalendarData{DisplayDate: displayDate}
 	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
+		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), courtsQueryTimeout)
 		defer cancel()
 
@@ -62,15 +68,51 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 			log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
 			activeTheme = nil
 		}
+
+		calendarData, err = buildCalendarData(ctx, q, facilityID, displayDate)
+		if err != nil {
+			log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
+			calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID}
+		}
 	}
 
-	calendar := courts.Calendar()
+	calendar := courts.Calendar(calendarData)
 	page := layouts.Base(calendar, activeTheme)
 	page.Render(r.Context(), w)
 }
 
 func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
-	component := courts.Calendar()
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	facilityID, ok := facilityIDFromBookingRequest(r)
+	if !ok {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	displayDate := calendarDateFromRequest(r)
+	ctx, cancel := context.WithTimeout(r.Context(), courtsQueryTimeout)
+	defer cancel()
+
+	calendarData, err := buildCalendarData(ctx, q, facilityID, displayDate)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
+		http.Error(w, "Failed to load calendar reservations", http.StatusInternalServerError)
+		return
+	}
+
+	component := courts.Calendar(calendarData)
 	component.Render(r.Context(), w)
 }
 
@@ -188,4 +230,98 @@ func facilityIDFromBookingRequest(r *http.Request) (int64, bool) {
 	}
 
 	return request.ParseFacilityID(parsed.Query().Get("facility_id"))
+}
+
+func calendarDateFromRequest(r *http.Request) time.Time {
+	now := time.Now()
+	dateParam := strings.TrimSpace(r.URL.Query().Get("date"))
+	if dateParam == "" {
+		return now
+	}
+
+	parsed, err := time.ParseInLocation("2006-01-02", dateParam, now.Location())
+	if err != nil {
+		return now
+	}
+
+	return parsed
+}
+
+func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, displayDate time.Time) (courts.CalendarData, error) {
+	calendarData := courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID}
+
+	courtsList, err := q.ListCourts(ctx, facilityID)
+	if err != nil {
+		return calendarData, err
+	}
+	calendarData.Courts = make([]courts.CalendarCourt, 0, len(courtsList))
+	for _, court := range courtsList {
+		calendarData.Courts = append(calendarData.Courts, courts.CalendarCourt{
+			ID:          court.ID,
+			CourtNumber: court.CourtNumber,
+			Name:        court.Name,
+		})
+	}
+
+	dayStart := time.Date(displayDate.Year(), displayDate.Month(), displayDate.Day(), 0, 0, 0, 0, displayDate.Location())
+	dayEnd := dayStart.AddDate(0, 0, 1)
+
+	reservations, err := q.ListReservationsByDateRange(ctx, dbgen.ListReservationsByDateRangeParams{
+		FacilityID: facilityID,
+		StartTime:  dayStart,
+		EndTime:    dayEnd,
+	})
+	if err != nil {
+		return calendarData, err
+	}
+
+	reservationCourts, err := q.ListReservationCourtsByDateRange(ctx, dbgen.ListReservationCourtsByDateRangeParams{
+		FacilityID: facilityID,
+		StartTime:  dayStart,
+		EndTime:    dayEnd,
+	})
+	if err != nil {
+		return calendarData, err
+	}
+
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		return calendarData, err
+	}
+
+	typeByID := make(map[int64]dbgen.ReservationType, len(reservationTypes))
+	for _, resType := range reservationTypes {
+		typeByID[resType.ID] = resType
+	}
+
+	courtsByReservation := make(map[int64][]int64, len(reservationCourts))
+	for _, row := range reservationCourts {
+		courtsByReservation[row.ReservationID] = append(courtsByReservation[row.ReservationID], row.CourtNumber)
+	}
+
+	for _, reservation := range reservations {
+		resType := typeByID[reservation.ReservationTypeID]
+		typeName := strings.TrimSpace(resType.Name)
+		if typeName == "" {
+			typeName = "Reservation"
+		}
+
+		typeColor := ""
+		if resType.Color.Valid {
+			typeColor = strings.TrimSpace(resType.Color.String)
+		}
+
+		for _, courtNumber := range courtsByReservation[reservation.ID] {
+			calendarData.Reservations = append(calendarData.Reservations, courts.CalendarReservation{
+				ID:          reservation.ID,
+				CourtNumber: courtNumber,
+				StartTime:   reservation.StartTime,
+				EndTime:     reservation.EndTime,
+				TypeName:    typeName,
+				TypeColor:   typeColor,
+			})
+		}
+	}
+
+	return calendarData, nil
 }

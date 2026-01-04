@@ -9,13 +9,20 @@ import (
 )
 
 type BookingFormData struct {
-	FacilityID       int64
-	StartTime        time.Time
-	EndTime          time.Time
-	Courts           []CourtOption
-	ReservationTypes []ReservationTypeOption
-	Members          []MemberOption
-	SelectedCourtID  int64
+	FacilityID                int64
+	StartTime                 time.Time
+	EndTime                   time.Time
+	Courts                    []CourtOption
+	ReservationTypes          []ReservationTypeOption
+	Members                   []MemberOption
+	SelectedCourtID           int64
+	SelectedReservationTypeID int64
+	PrimaryUserID             *int64
+	IsOpenEvent               bool
+	TeamsPerCourt             *int64
+	PeoplePerTeam             *int64
+	IsEdit                    bool
+	ReservationID             int64
 }
 
 type CourtOption struct {

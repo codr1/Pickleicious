@@ -2,6 +2,7 @@
 package reservations
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
 )
 
 var (
@@ -209,6 +211,124 @@ func HandleReservationsList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GET /api/v1/reservations/{id}/edit
+func HandleReservationEdit(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	reservationID, err := reservationIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid reservation ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), reservationQueryTimeout)
+	defer cancel()
+
+	reservation, err := q.GetReservationByID(ctx, reservationID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Reservation not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to fetch reservation")
+		http.Error(w, "Failed to fetch reservation", http.StatusInternalServerError)
+		return
+	}
+	facilityID := reservation.FacilityID
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	courtsList, err := q.ListCourts(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load courts")
+		http.Error(w, "Failed to load courts", http.StatusInternalServerError)
+		return
+	}
+
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to load reservation types")
+		http.Error(w, "Failed to load reservation types", http.StatusInternalServerError)
+		return
+	}
+
+	reservationCourts, err := q.ListReservationCourts(ctx, reservationID)
+	if err != nil {
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load reservation courts")
+		http.Error(w, "Failed to load reservation courts", http.StatusInternalServerError)
+		return
+	}
+
+	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		SearchTerm: nil,
+		Offset:     0,
+		Limit:      50,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to load members for booking form")
+		memberRows = nil
+	}
+
+	var selectedCourtID int64
+	if len(reservationCourts) > 0 {
+		selectedCourtID = reservationCourts[0].CourtID
+	}
+
+	var primaryUserID *int64
+	if reservation.PrimaryUserID.Valid {
+		value := reservation.PrimaryUserID.Int64
+		primaryUserID = &value
+	}
+
+	var teamsPerCourt *int64
+	if reservation.TeamsPerCourt.Valid {
+		value := reservation.TeamsPerCourt.Int64
+		teamsPerCourt = &value
+	}
+
+	var peoplePerTeam *int64
+	if reservation.PeoplePerTeam.Valid {
+		value := reservation.PeoplePerTeam.Int64
+		peoplePerTeam = &value
+	}
+
+	var buf bytes.Buffer
+	component := reservationstempl.BookingForm(reservationstempl.BookingFormData{
+		FacilityID:                facilityID,
+		StartTime:                 reservation.StartTime,
+		EndTime:                   reservation.EndTime,
+		Courts:                    reservationstempl.NewCourtOptions(courtsList),
+		ReservationTypes:          reservationstempl.NewReservationTypeOptions(reservationTypes),
+		Members:                   reservationstempl.NewMemberOptions(memberRows),
+		SelectedCourtID:           selectedCourtID,
+		SelectedReservationTypeID: reservation.ReservationTypeID,
+		PrimaryUserID:             primaryUserID,
+		IsOpenEvent:               reservation.IsOpenEvent,
+		TeamsPerCourt:             teamsPerCourt,
+		PeoplePerTeam:             peoplePerTeam,
+		IsEdit:                    true,
+		ReservationID:             reservationID,
+	})
+	if err := component.Render(r.Context(), &buf); err != nil {
+		logger.Error().Err(err).Msg("Failed to render reservation edit form")
+		http.Error(w, "Failed to render reservation edit form", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
+}
+
 // PUT /api/v1/reservations/{id}
 func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -365,6 +485,7 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
 	if err := apiutil.WriteJSON(w, http.StatusOK, updated); err != nil {
 		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write reservation response")
 		return
@@ -475,6 +596,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
 	w.WriteHeader(http.StatusNoContent)
 }
 

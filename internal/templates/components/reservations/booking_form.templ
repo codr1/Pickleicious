@@ -9,7 +9,13 @@ templ BookingForm(data BookingFormData) {
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
 		<div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-6">
 			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-semibold text-gray-900">New Reservation</h2>
+				<h2 class="text-lg font-semibold text-gray-900">
+					if data.IsEdit {
+						Edit Reservation
+					} else {
+						New Reservation
+					}
+				</h2>
 				<button
 					type="button"
 					class="text-gray-400 hover:text-gray-600"
@@ -31,12 +37,16 @@ templ BookingForm(data BookingFormData) {
 			</div>
 
 			<form
-				hx-post="/api/v1/reservations"
+				if data.IsEdit {
+					hx-put={fmt.Sprintf("/api/v1/reservations/%d", data.ReservationID)}
+				} else {
+					hx-post="/api/v1/reservations"
+				}
 				hx-indicator="#booking-form-indicator"
 				hx-swap="none"
 				hx-on::before-request="document.getElementById('booking-form-errors').classList.add('hidden');"
 				hx-on::response-error="document.getElementById('booking-form-errors').textContent = event.detail.xhr.responseText; document.getElementById('booking-form-errors').classList.remove('hidden');"
-				hx-on::after-request="if(event.detail.xhr.status === 201){document.getElementById('modal').innerHTML='';}"
+				hx-on::after-request="if(event.detail.xhr.status === 201 || event.detail.xhr.status === 200){document.getElementById('modal').innerHTML='';}"
 				class="space-y-4">
 				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)}/>
 
@@ -48,7 +58,7 @@ templ BookingForm(data BookingFormData) {
 						required
 						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
 						for _, resType := range data.ReservationTypes {
-							<option value={fmt.Sprintf("%d", resType.ID)}>{resType.Name}</option>
+							<option value={fmt.Sprintf("%d", resType.ID)} selected?={data.SelectedReservationTypeID != 0 && data.SelectedReservationTypeID == resType.ID}>{resType.Name}</option>
 						}
 					</select>
 				</div>
@@ -97,6 +107,7 @@ templ BookingForm(data BookingFormData) {
 						name="primary_user_id"
 						list="member-options"
 						placeholder="Search by member ID"
+						value={formatOptionalInt(data.PrimaryUserID)}
 						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
 					<datalist id="member-options">
 						for _, member := range data.Members {
@@ -111,6 +122,7 @@ templ BookingForm(data BookingFormData) {
 						<input
 							type="checkbox"
 							name="is_open_event"
+							checked?={data.IsOpenEvent}
 							class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
 						<span>Open play event</span>
 					</label>
@@ -122,6 +134,7 @@ templ BookingForm(data BookingFormData) {
 								id="teams_per_court"
 								name="teams_per_court"
 								min="1"
+								value={formatOptionalInt(data.TeamsPerCourt)}
 								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
 						</div>
 						<div>
@@ -131,6 +144,7 @@ templ BookingForm(data BookingFormData) {
 								id="people_per_team"
 								name="people_per_team"
 								min="1"
+								value={formatOptionalInt(data.PeoplePerTeam)}
 								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
 						</div>
 					</div>
@@ -147,10 +161,21 @@ templ BookingForm(data BookingFormData) {
 					<button
 						type="submit"
 						class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700">
-						Create
+						if data.IsEdit {
+							Update
+						} else {
+							Create
+						}
 					</button>
 				</div>
 			</form>
 		</div>
 	</div>
+}
+
+func formatOptionalInt(value *int64) string {
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *value)
 }

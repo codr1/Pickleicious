@@ -185,6 +185,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		http.MethodGet:  reservations.HandleReservationsList,
 		http.MethodPost: reservations.HandleReservationCreate,
 	}))
+	mux.HandleFunc("/api/v1/reservations/{id}/edit", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: reservations.HandleReservationEdit,
+	}))
 	mux.HandleFunc("/api/v1/reservations/{id}", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut:    reservations.HandleReservationUpdate,
 		http.MethodDelete: reservations.HandleReservationDelete,
