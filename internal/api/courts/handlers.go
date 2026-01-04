@@ -4,8 +4,6 @@ package courts
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,6 +16,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/models"
 	"github.com/codr1/Pickleicious/internal/request"
 	"github.com/codr1/Pickleicious/internal/templates/components/courts"
+	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 	"github.com/rs/zerolog/log"
 )
@@ -123,6 +122,16 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		SearchTerm: nil,
+		Offset:     0,
+		Limit:      50,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to load members for booking form")
+		memberRows = nil
+	}
+
 	var selectedCourtID int64
 	if courtNumber > 0 {
 		for _, court := range courtsList {
@@ -134,59 +143,20 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
-	buf.WriteString(`<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">`)
-	buf.WriteString(`<div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-6">`)
-	buf.WriteString(`<div class="flex items-center justify-between mb-4">`)
-	buf.WriteString(`<h2 class="text-lg font-semibold text-gray-900">New Reservation</h2>`)
-	buf.WriteString(`<button type="button" class="text-gray-400 hover:text-gray-600" onclick="document.getElementById('modal').innerHTML=''">`)
-	buf.WriteString(`<span class="sr-only">Close</span>&times;</button></div>`)
-	buf.WriteString(`<form hx-post="/api/v1/reservations" hx-target="#modal" hx-swap="innerHTML" class="space-y-4">`)
-	buf.WriteString(fmt.Sprintf(`<input type="hidden" name="facility_id" value="%d"/>`, facilityID))
-
-	buf.WriteString(`<div>`)
-	buf.WriteString(`<label class="block text-sm font-medium text-gray-700">Reservation type</label>`)
-	buf.WriteString(`<select name="reservation_type_id" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">`)
-	for _, resType := range reservationTypes {
-		buf.WriteString(fmt.Sprintf(`<option value="%d">%s</option>`, resType.ID, html.EscapeString(resType.Name)))
+	component := reservationstempl.BookingForm(reservationstempl.BookingFormData{
+		FacilityID:        facilityID,
+		StartTime:         startTime,
+		EndTime:           endTime,
+		Courts:            reservationstempl.NewCourtOptions(courtsList),
+		ReservationTypes:  reservationstempl.NewReservationTypeOptions(reservationTypes),
+		Members:           reservationstempl.NewMemberOptions(memberRows),
+		SelectedCourtID:   selectedCourtID,
+	})
+	if err := component.Render(r.Context(), &buf); err != nil {
+		logger.Error().Err(err).Msg("Failed to render booking form")
+		http.Error(w, "Failed to render booking form", http.StatusInternalServerError)
+		return
 	}
-	buf.WriteString(`</select></div>`)
-
-	buf.WriteString(`<div>`)
-	buf.WriteString(`<label class="block text-sm font-medium text-gray-700">Court</label>`)
-	buf.WriteString(`<select name="court_ids" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">`)
-	for _, court := range courtsList {
-		selected := ""
-		if selectedCourtID != 0 && court.ID == selectedCourtID {
-			selected = " selected"
-		}
-		buf.WriteString(fmt.Sprintf(`<option value="%d"%s>Court %d</option>`, court.ID, selected, court.CourtNumber))
-	}
-	buf.WriteString(`</select></div>`)
-
-	buf.WriteString(`<div class="grid grid-cols-2 gap-4">`)
-	buf.WriteString(`<div><label class="block text-sm font-medium text-gray-700">Start time</label>`)
-	buf.WriteString(fmt.Sprintf(`<input type="datetime-local" name="start_time" required value="%s" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>`, startTime.Format("2006-01-02T15:04")))
-	buf.WriteString(`</div>`)
-	buf.WriteString(`<div><label class="block text-sm font-medium text-gray-700">End time</label>`)
-	buf.WriteString(fmt.Sprintf(`<input type="datetime-local" name="end_time" required value="%s" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>`, endTime.Format("2006-01-02T15:04")))
-	buf.WriteString(`</div></div>`)
-
-	buf.WriteString(`<div class="grid grid-cols-2 gap-4">`)
-	buf.WriteString(`<div><label class="block text-sm font-medium text-gray-700">Teams per court</label>`)
-	buf.WriteString(`<input type="number" name="teams_per_court" min="1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>`)
-	buf.WriteString(`</div>`)
-	buf.WriteString(`<div><label class="block text-sm font-medium text-gray-700">People per team</label>`)
-	buf.WriteString(`<input type="number" name="people_per_team" min="1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>`)
-	buf.WriteString(`</div></div>`)
-
-	buf.WriteString(`<label class="flex items-center space-x-2 text-sm font-medium text-gray-700">`)
-	buf.WriteString(`<input type="checkbox" name="is_open_event" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>`)
-	buf.WriteString(`<span>Open for sign-ups</span></label>`)
-
-	buf.WriteString(`<div class="flex justify-end space-x-3 pt-2">`)
-	buf.WriteString(`<button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50" onclick="document.getElementById('modal').innerHTML=''">Cancel</button>`)
-	buf.WriteString(`<button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700">Create</button>`)
-	buf.WriteString(`</div></form></div></div>`)
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)

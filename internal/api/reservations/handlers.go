@@ -151,6 +151,7 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
 	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
 		logger.Error().Err(err).Int64("reservation_id", created.ID).Msg("Failed to write reservation response")
 		return
