@@ -1,3 +1,8 @@
+The files don't exist in this directory - this appears to be an ops repo that manages workstreams. The diff in the context shows what was built in the actual pickleicious repo. I'll analyze the diff to produce the updated SPEC.
+
+Based on the diff analysis, here's the complete updated SPEC.md:
+
+```markdown
 # PICKLEICIOUS - System Specification
 
 ## Overview
@@ -216,38 +221,63 @@ Organization (corporate entity)
 
 ### Reservation Types (Seeded)
 
-| Name | Purpose |
-|------|---------|
-| OPEN_PLAY | Drop-in open play sessions |
-| GAME | Standard court booking |
-| PRO_SESSION | Lessons with pro staff |
-| EVENT | Special events |
-| MAINTENANCE | Court maintenance blocks |
-| LEAGUE | League play |
+| Name | Color | Purpose |
+|------|-------|---------|
+| OPEN_PLAY | #10B981 | Drop-in open play sessions |
+| GAME | #3B82F6 | Standard court booking |
+| PRO_SESSION | #8B5CF6 | Lessons with pro staff |
+| EVENT | #F59E0B | Special events |
+| MAINTENANCE | #6B7280 | Court maintenance blocks |
+| LEAGUE | #EF4444 | League play |
+
+Types are seeded via migration `000008_seed_reservation_types`. Default colors are provided and can be customized via future admin UI.
+
+### SQLC Queries
+
+| Query | Purpose |
+|-------|---------|
+| CreateReservation | Insert new reservation |
+| GetReservation | Get reservation by ID with type info |
+| ListReservationsByDateRange | List by facility_id and date range |
+| UpdateReservation | Update reservation fields |
+| DeleteReservation | Delete reservation by ID |
+| AddCourtsToReservation | Add court to reservation_courts junction |
+| RemoveCourtsFromReservation | Remove court from junction |
+| ListCourtsForReservation | Get courts for a reservation |
+| AddParticipant | Add member to reservation_participants |
+| RemoveParticipant | Remove member from participants |
+| ListParticipantsForReservation | Get participants with user details |
 
 ### Booking Workflows
 
 **Quick Booking (`/api/v1/courts/booking/new`)**
 - Single court selection (pre-filled from calendar click)
 - Start/end time with 1-hour default duration
-- Reservation type dropdown
+- Date pre-filled from calendar's displayed date
+- Reservation type dropdown (populated from database)
 - Optional primary user (member search)
 - Validates: start < end, minimum 1-hour duration, no double-booking
+- On success: triggers `calendar-refresh` HTMX event and closes modal
 
 **Event Booking (`/api/v1/events/booking/new`)**
-- Multi-court selection (checkboxes)
-- Participant management (add/remove members)
+- Multi-court selection (checkboxes for all facility courts)
+- Participant management (add/remove members via search)
 - Extended options for events
 - Same validation as quick booking
+- On success: triggers `calendar-refresh` HTMX event
 
 ### Calendar Display
 
-- Courts shown as columns, hours as rows
+- Courts shown as columns, hours as rows (6 AM - 10 PM range)
 - Reservations rendered as colored blocks positioned by time
+- Block height calculated from duration: `(end - start) / 60 * 4rem`
+- Block top position calculated from start time offset
 - Block color determined by reservation_type.color
-- Clicking empty cell opens quick booking form
+- Clicking empty cell opens quick booking form with court, hour, and date pre-filled
 - Clicking reservation block opens edit form
 - Date navigation with query parameter `?date=YYYY-MM-DD`
+- Date picker allows jumping to any date
+- Today button returns to current date
 
 ### Validation Rules
 
@@ -256,6 +286,14 @@ Organization (corporate entity)
 - Court must be available (no overlapping reservations)
 - Facility must exist and user must have access
 - Conflict errors shown inline with red border styling
+- Form state preserved on validation failure
+
+### Conflict Detection
+
+The `CheckCourtAvailability` query checks for overlapping reservations:
+- Same court
+- Overlapping time range (start < existing_end AND end > existing_start)
+- Excludes the current reservation when editing
 
 ## Member Management
 
@@ -282,36 +320,6 @@ Photos are stored as BLOBs in the database with content_type and size metadata. 
 - Deleting a member sets status to 'deleted' (not physical delete)
 - Deleted members are excluded from normal queries
 - Creating a member with a deleted account's email offers restoration or new account creation
-
-## Authorization
-
-### AuthUser Structure
-
-```go
-type AuthUser struct {
-    ID             int64
-    IsStaff        bool
-    HomeFacilityID int64
-}
-```
-
-### Access Rules
-
-| User Type | Access |
-|-----------|--------|
-| Staff | Own facility only (HomeFacilityID must match) |
-| Admin | All facilities |
-| Unauthenticated | 401 Unauthorized |
-
-### Protected Endpoints
-
-All facility-scoped endpoints enforce authorization:
-- Theme management (6 endpoints)
-- Open play rules (6 endpoints)
-- Court calendar and booking
-- Reservations CRUD
-
-Authorization failures are logged with facility_id and user_id.
 
 ## Authentication
 
@@ -400,6 +408,16 @@ type AuthUser struct {
 | 401 | Unauthenticated - no valid session |
 | 403 | Forbidden - authenticated but lacks permission |
 
+### Protected Endpoints
+
+All facility-scoped endpoints enforce authorization:
+- Theme management (6 endpoints)
+- Open play rules (6 endpoints)
+- Court calendar and booking
+- Reservations CRUD
+
+Authorization failures are logged with facility_id and user_id.
+
 ## Open Play Enforcement Engine
 
 ### Session Lifecycle
@@ -437,6 +455,35 @@ Staff can toggle auto-scaling for individual sessions via PUT `/api/v1/open-play
 | hx-swap | How to swap (innerHTML, outerHTML) |
 | HX-Trigger | Server-sent events (e.g., calendar-refresh) |
 | HX-Redirect | Server-initiated redirects (used after login) |
+
+### Calendar-Specific HTMX
+
+The calendar uses custom HTMX events for coordination:
+- `calendar-refresh`: Triggered after successful booking operations to reload calendar data
+- Modal forms target `#modal-container` for overlays
+- Forms preserve state on validation errors via template re-rendering
+
+## Shared Utilities
+
+### apiutil Package
+
+Common handler utilities in `internal/api/apiutil`:
+- `DecodeJSON` - Strict JSON decoding with unknown field rejection
+- `WriteJSON` - JSON response writing
+- `RequireFacilityAccess` - Authorization check with logging
+- `FieldError` - Field-level validation error
+- `HandlerError` - HTTP error with status code
+
+### request Package
+
+Request parsing utilities in `internal/request`:
+- `ParseFacilityID` - Parse facility_id from string
+- `FacilityIDFromBookingRequest` - Extract facility_id from query or form
+
+### testutil Package
+
+Test helpers in `internal/testutil`:
+- `NewTestDB` - Create test database with migrations applied
 
 ## Configuration
 
@@ -509,28 +556,6 @@ PR checks workflow (`.github/workflows/pr-checks.yml`):
 4. Run `task generate`
 5. Run `task test:smoke`
 
-## Shared Utilities
-
-### apiutil Package
-
-Common handler utilities in `internal/api/apiutil`:
-- `DecodeJSON` - Strict JSON decoding with unknown field rejection
-- `WriteJSON` - JSON response writing
-- `RequireFacilityAccess` - Authorization check with logging
-- `FieldError` - Field-level validation error
-- `HandlerError` - HTTP error with status code
-
-### request Package
-
-Request parsing utilities in `internal/request`:
-- `ParseFacilityID` - Parse facility_id from string
-- `FacilityIDFromBookingRequest` - Extract facility_id from query or form
-
-### testutil Package
-
-Test helpers in `internal/testutil`:
-- `NewTestDB` - Create test database with migrations applied
-
 ## Project Structure
 
 ```
@@ -585,3 +610,4 @@ pickleicious/
 2. Install task, templ, sqlc
 3. Run `task generate`
 4. Run `task test:smoke`
+```
