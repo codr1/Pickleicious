@@ -23,3 +23,7 @@ Common commands:
 Environment variants:
 
 - `task build:prod`
+
+## Authentication Notes
+
+Local staff login uses a short-lived in-memory session token stored in the `pickleicious_session` cookie. The signed auth cookie (`pickleicious_auth`) remains the dev-mode/Cognito flow. This dual system is intentional while Cognito integration is still in flight; only the staff login path uses the session token.

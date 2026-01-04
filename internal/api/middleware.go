@@ -88,7 +88,7 @@ func WithContentType(next http.Handler) http.Handler {
 
 func WithAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, err := auth.UserFromRequest(r)
+		user, err := auth.UserFromRequest(w, r)
 		if err != nil {
 			log.Ctx(r.Context()).Warn().Err(err).Msg("Failed to load auth session")
 			next.ServeHTTP(w, r)

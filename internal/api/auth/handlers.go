@@ -241,6 +241,13 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := CreateSession(w, user.ID); err != nil {
+		logger.Error().Err(err).Msg("Failed to create auth session")
+		http.Error(w, "Failed to start session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/")
 	w.WriteHeader(http.StatusOK)
 }
 

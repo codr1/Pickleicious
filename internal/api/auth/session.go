@@ -2,20 +2,26 @@ package auth
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
 )
 
 const (
-	authCookieName = "pickleicious_auth"
-	authSessionTTL = 8 * time.Hour
+	authCookieName         = "pickleicious_auth"
+	sessionCookieName      = "pickleicious_session"
+	authSessionTTL         = 8 * time.Hour
+	sessionTokenBytes      = 32
+	sessionCleanupInterval = 15 * time.Minute
 )
 
 var errAuthConfigMissing = errors.New("auth configuration missing")
@@ -25,6 +31,91 @@ type authSession struct {
 	IsStaff        bool   `json:"is_staff"`
 	HomeFacilityID *int64 `json:"home_facility_id,omitempty"`
 	ExpiresAt      int64  `json:"exp"`
+}
+
+type sessionRecord struct {
+	UserID    int64
+	ExpiresAt time.Time
+}
+
+var (
+	sessionMu sync.RWMutex
+	// In-memory sessions are intentionally ephemeral for local staff login.
+	sessionStore       = make(map[string]sessionRecord)
+	sessionCleanupOnce sync.Once
+)
+
+func isSecureCookie() bool {
+	return appConfig == nil || appConfig.App.Environment != "development"
+}
+
+func CreateSession(w http.ResponseWriter, userID int64) error {
+	if w == nil {
+		return errors.New("session requires response writer")
+	}
+
+	startSessionCleanup()
+
+	if err := clearExistingSessionsForUser(userID); err != nil {
+		return err
+	}
+
+	token, err := newSessionToken()
+	if err != nil {
+		return err
+	}
+
+	expiresAt := time.Now().Add(authSessionTTL)
+	sessionMu.Lock()
+	sessionStore[token] = sessionRecord{
+		UserID:    userID,
+		ExpiresAt: expiresAt,
+	}
+	sessionMu.Unlock()
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(),
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expiresAt,
+		MaxAge:   int(authSessionTTL.Seconds()),
+	})
+
+	return nil
+}
+
+func ClearSession(w http.ResponseWriter, r *http.Request) {
+	if r == nil {
+		ClearSessionCookie(w)
+		return
+	}
+
+	cookie, err := r.Cookie(sessionCookieName)
+	if err == nil {
+		deleteSession(cookie.Value)
+	}
+
+	ClearSessionCookie(w)
+}
+
+func ClearSessionCookie(w http.ResponseWriter) {
+	if w == nil {
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(),
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+	})
 }
 
 func SetAuthCookie(w http.ResponseWriter, r *http.Request, user *authz.AuthUser) error {
@@ -55,13 +146,12 @@ func SetAuthCookie(w http.ResponseWriter, r *http.Request, user *authz.AuthUser)
 		return err
 	}
 
-	secure := appConfig.App.Environment != "development"
 	http.SetCookie(w, &http.Cookie{
 		Name:     authCookieName,
 		Value:    encodedPayload + "." + signature,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   secure,
+		Secure:   isSecureCookie(),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(expiresAt, 0),
 		MaxAge:   int(authSessionTTL.Seconds()),
@@ -70,7 +160,12 @@ func SetAuthCookie(w http.ResponseWriter, r *http.Request, user *authz.AuthUser)
 	return nil
 }
 
-func UserFromRequest(r *http.Request) (*authz.AuthUser, error) {
+func UserFromRequest(w http.ResponseWriter, r *http.Request) (*authz.AuthUser, error) {
+	user, err := userFromSessionToken(w, r)
+	if err != nil || user != nil {
+		return user, err
+	}
+
 	session, err := parseAuthCookie(r)
 	if err != nil || session == nil {
 		return nil, err
@@ -80,6 +175,56 @@ func UserFromRequest(r *http.Request) (*authz.AuthUser, error) {
 		ID:             session.UserID,
 		IsStaff:        session.IsStaff,
 		HomeFacilityID: session.HomeFacilityID,
+	}, nil
+}
+
+func userFromSessionToken(w http.ResponseWriter, r *http.Request) (*authz.AuthUser, error) {
+	if r == nil {
+		return nil, nil
+	}
+
+	startSessionCleanup()
+
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	token := cookie.Value
+	session, ok := getSession(token)
+	if !ok {
+		ClearSessionCookie(w)
+		return nil, nil
+	}
+
+	if queries == nil {
+		ClearSessionCookie(w)
+		return nil, errors.New("auth queries not initialized")
+	}
+
+	user, err := queries.GetUserByID(r.Context(), session.UserID)
+	if err != nil {
+		deleteSession(token)
+		ClearSessionCookie(w)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var homeFacilityID *int64
+	if user.HomeFacilityID.Valid {
+		id := user.HomeFacilityID.Int64
+		homeFacilityID = &id
+	}
+
+	return &authz.AuthUser{
+		ID:             user.ID,
+		IsStaff:        user.IsStaff,
+		HomeFacilityID: homeFacilityID,
 	}, nil
 }
 
@@ -141,4 +286,70 @@ func signPayload(payload string) (string, error) {
 	mac := hmac.New(sha256.New, []byte(appConfig.App.SecretKey))
 	_, _ = mac.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
+}
+
+func newSessionToken() (string, error) {
+	token := make([]byte, sessionTokenBytes)
+	if _, err := rand.Read(token); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(token), nil
+}
+
+func startSessionCleanup() {
+	sessionCleanupOnce.Do(func() {
+		// Lazy-start cleanup only when sessions are first used.
+		go func() {
+			ticker := time.NewTicker(sessionCleanupInterval)
+			defer ticker.Stop()
+			for range ticker.C {
+				pruneExpiredSessions()
+			}
+		}()
+	})
+}
+
+func pruneExpiredSessions() {
+	now := time.Now()
+	sessionMu.Lock()
+	for token, session := range sessionStore {
+		if session.ExpiresAt.Before(now) {
+			delete(sessionStore, token)
+		}
+	}
+	sessionMu.Unlock()
+}
+
+func clearExistingSessionsForUser(userID int64) error {
+	sessionMu.Lock()
+	for token, session := range sessionStore {
+		if session.UserID == userID {
+			delete(sessionStore, token)
+		}
+	}
+	sessionMu.Unlock()
+	return nil
+}
+
+func getSession(token string) (sessionRecord, bool) {
+	sessionMu.RLock()
+	session, ok := sessionStore[token]
+	sessionMu.RUnlock()
+	if !ok {
+		return sessionRecord{}, false
+	}
+
+	if session.ExpiresAt.Before(time.Now()) {
+		deleteSession(token)
+		return sessionRecord{}, false
+	}
+
+	return session, true
+}
+
+func deleteSession(token string) {
+	sessionMu.Lock()
+	delete(sessionStore, token)
+	sessionMu.Unlock()
 }
