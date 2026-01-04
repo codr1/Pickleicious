@@ -38,11 +38,32 @@ tasks:
       - go build -ldflags "-s -w" -o {{.SERVER_BIN}} ./cmd/server
 
   test:
-    desc: Run Go tests
+    desc: Run all Go tests
+    cmds:
+      - task: test:unit
+      - task: test:smoke
+      - task: test:integration
+
+  test:unit:
+    desc: Run unit tests (exclude smoke/integration tags)
     deps:
       - generate-sqlc
     cmds:
       - go test ./...
+
+  test:smoke:
+    desc: Run smoke tests
+    deps:
+      - generate-sqlc
+    cmds:
+      - go test -tags=smoke ./tests/smoke/...
+
+  test:integration:
+    desc: Run integration tests
+    deps:
+      - generate-sqlc
+    cmds:
+      - go test -tags=integration ./...
 
   css:
     desc: Build Tailwind CSS
