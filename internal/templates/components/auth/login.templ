@@ -1,6 +1,6 @@
 package auth
 
-templ LoginLayout() {
+templ LoginLayout(organizationID string) {
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
         <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
             <div class="text-center">
@@ -9,7 +9,9 @@ templ LoginLayout() {
             </div>
 
             <div class="mt-8">
-                <div class="space-y-6" id="login-form">
+                <form class="space-y-6" id="login-form">
+                    <input type="hidden" name="organization_id" value={organizationID}/>
+                    <div id="auth-error"></div>
                     <div>
                         <label for="identifier" class="block text-sm font-medium text-gray-700">
                             Email or Phone
@@ -28,6 +30,7 @@ templ LoginLayout() {
 
                     <div>
                         <button
+                            type="button"
                             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             hx-post="/api/v1/auth/send-code"
                             hx-target="#login-form">
@@ -36,7 +39,7 @@ templ LoginLayout() {
                     </div>
 
                     <div id="staff-auth-section" class="text-center"></div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
@@ -47,14 +50,17 @@ templ StaffAuthSection() {
         <button
             class="text-sm text-gray-600 hover:text-blue-600"
             hx-get="/api/v1/auth/staff-login"
+            hx-include="#login-form [name=organization_id]"
             hx-target="#login-form">
             Sign in with staff credentials
         </button>
     </div>
 }
 
-templ StaffLoginForm() {
+templ StaffLoginForm(organizationID string) {
     <div class="space-y-6">
+        <input type="hidden" name="organization_id" value={organizationID}/>
+        <div id="auth-error"></div>
         <div>
             <label for="identifier" class="block text-sm font-medium text-gray-700">
                 Email or Phone
@@ -83,6 +89,7 @@ templ StaffLoginForm() {
             <button
                 class="text-sm text-gray-600 hover:text-blue-600"
                 hx-get="/api/v1/auth/reset-password"
+                hx-include="#login-form [name=identifier], #login-form [name=organization_id]"
                 hx-target="#login-form">
                 Forgot password?
             </button>
@@ -96,6 +103,7 @@ templ StaffLoginForm() {
 
         <div>
             <button
+                type="button"
                 class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 hx-post="/api/v1/auth/staff-login"
                 hx-target="#login-form">
@@ -105,8 +113,12 @@ templ StaffLoginForm() {
     </div>
 }
 
-templ CodeVerification() {
+templ CodeVerification(identifier string, organizationID string, session string) {
     <div class="space-y-6">
+        <input type="hidden" name="identifier" value={identifier}/>
+        <input type="hidden" name="organization_id" value={organizationID}/>
+        <input type="hidden" name="session" value={session}/>
+        <div id="auth-error"></div>
         <div class="text-center">
             <h3 class="text-lg font-medium text-gray-900">Check your email/phone</h3>
             <p class="mt-2 text-sm text-gray-600">We've sent you a verification code</p>
@@ -127,12 +139,14 @@ templ CodeVerification() {
 
         <div class="flex items-center justify-between">
             <button
+                type="button"
                 class="text-sm text-gray-600 hover:text-blue-600"
                 hx-post="/api/v1/auth/resend-code"
                 hx-target="#login-form">
                 Resend Code
             </button>
             <button
+                type="button"
                 class="text-sm text-gray-600 hover:text-blue-600"
                 hx-get="/api/v1/auth/standard-login"
                 hx-target="#login-form">
@@ -142,6 +156,7 @@ templ CodeVerification() {
 
         <div>
             <button
+                type="button"
                 class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 hx-post="/api/v1/auth/verify-code"
                 hx-target="#login-form">

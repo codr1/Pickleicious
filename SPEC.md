@@ -139,7 +139,8 @@ Organization (corporate entity)
 | POST | `/api/v1/auth/verify-code` | Verify Cognito OTP code |
 | POST | `/api/v1/auth/resend-code` | Resend OTP code |
 | POST | `/api/v1/auth/staff-login` | Staff local password login |
-| POST | `/api/v1/auth/reset-password` | Password reset flow |
+| POST | `/api/v1/auth/reset-password` | Initiate password reset (Cognito ForgotPassword) |
+| POST | `/api/v1/auth/confirm-reset-password` | Complete password reset with code |
 | POST | `/api/v1/auth/standard-login` | Standard member login |
 
 ### Members
@@ -325,12 +326,43 @@ When `config.App.Environment == "development"`:
 
 ### Passwordless Member Auth (Cognito)
 
-1. Enter email/phone
-2. Cognito sends OTP
-3. Verify code
-4. Create session
+1. User enters email/phone and organization_id
+2. `/api/v1/auth/send-code` calls Cognito InitiateAuth with CUSTOM_AUTH flow
+3. Cognito sends OTP via user's preferred_auth_method (EMAIL or SMS)
+4. `/api/v1/auth/verify-code` calls Cognito RespondToAuthChallenge with session + code
+5. On success, cognito_status updated to 'CONFIRMED' in users table
+6. Stateless JWT created and returned as HTTP-only Secure cookie
 
-Note: Cognito integration handlers exist but are not yet fully implemented (marked TODO).
+OTP codes expire after 5 minutes (configured in Cognito User Pool).
+
+### Password Reset Flow
+
+1. User requests reset via `/api/v1/auth/reset-password`
+2. Cognito ForgotPassword API sends reset code via preferred_auth_method
+3. User submits code + new password to `/api/v1/auth/confirm-reset-password`
+4. Cognito ConfirmForgotPassword validates and updates password
+5. User redirected to login page on success
+
+### Cognito Client (`internal/cognito`)
+
+| Function | Purpose |
+|----------|---------|
+| NewClient | Initialize Cognito client from per-org config |
+| InitiateCustomAuth | Start CUSTOM_AUTH flow, send OTP |
+| RespondToAuthChallenge | Verify OTP code, return auth result |
+| ForgotPassword | Initiate password reset flow |
+| ConfirmForgotPassword | Complete reset with code + new password |
+
+### Cognito Error Handling
+
+| Error | HTTP Status | User Message |
+|-------|-------------|--------------|
+| TooManyRequestsException | 429 | "Too many requests. Please try again in a few minutes." |
+| NotAuthorizedException | 401 | "Invalid credentials" or "Invalid verification code" |
+| CodeMismatchException | 401 | "Invalid verification code" |
+| ExpiredCodeException | 403 | "Verification code expired" |
+| InvalidPasswordException | 400 | "Password does not meet requirements" |
+| UserNotFoundException | 401 | Silent (no user enumeration) |
 
 ### Auth Middleware
 
@@ -494,6 +526,7 @@ pickleicious/
 │   │   ├── openplay/        # Open play sessions
 │   │   ├── reservations/    # Reservation CRUD
 │   │   └── themes/          # Facility themes
+│   ├── cognito/             # AWS Cognito client wrapper
 │   ├── config/              # Configuration loading
 │   ├── db/
 │   │   ├── migrations/      # SQL migration files

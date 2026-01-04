@@ -17,6 +17,14 @@ templ Base(content templ.Component, theme *models.Theme) {
         <script src="https://unpkg.com/htmx.org@1.9.10"></script>
         <link href="/static/css/main.css" rel="stylesheet"/>
         <script>
+            htmx.config.responseHandling = [
+                { code: "204", swap: false },
+                { code: "2xx", swap: true },
+                { code: "3xx", swap: true },
+                { code: "4xx", swap: true, error: true },
+                { code: "5xx", swap: true, error: true },
+            ];
+
             function closeMenu() {
                 const menu = document.getElementById('nav-menu');
                 const backdrop = document.getElementById('nav-backdrop');
