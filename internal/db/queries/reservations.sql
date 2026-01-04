@@ -97,12 +97,8 @@ WHERE reservation_id = @reservation_id
   AND user_id = @user_id;
 
 -- name: ListParticipantsForReservation :many
-SELECT u.id, u.email, u.phone, u.cognito_sub, u.cognito_status,
-    u.preferred_auth_method, u.password_hash, u.local_auth_enabled,
-    u.first_name, u.last_name, u.photo_url, u.street_address, u.city, u.state,
-    u.postal_code, u.home_facility_id, u.is_member, u.is_staff, u.date_of_birth,
-    u.waiver_signed, u.membership_level, u.staff_role, u.status, u.created_at,
-    u.updated_at
+SELECT u.id, u.email, u.phone, u.first_name, u.last_name, u.photo_url,
+    u.is_member, u.is_staff, u.membership_level, u.status
 FROM reservation_participants rp
 JOIN users u ON u.id = rp.user_id
 WHERE rp.reservation_id = @reservation_id
