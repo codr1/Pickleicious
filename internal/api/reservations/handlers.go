@@ -326,7 +326,9 @@ func HandleReservationEdit(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	w.Write(buf.Bytes())
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		logger.Error().Err(err).Msg("Failed to write response")
+	}
 }
 
 // PUT /api/v1/reservations/{id}

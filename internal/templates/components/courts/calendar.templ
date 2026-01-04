@@ -107,7 +107,7 @@ templ Calendar(data CalendarData) {
 											}
 											<div
 												class="relative h-12 hover:bg-blue-50 cursor-pointer transition-colors"
-												hx-get={ fmt.Sprintf("/api/v1/courts/booking/new?court=%d&hour=%d", court.CourtNumber, hour) }
+												hx-get={ fmt.Sprintf("/api/v1/courts/booking/new?court=%d&hour=%d&date=%s", court.CourtNumber, hour, formatDateParam(data.DisplayDate)) }
 												hx-target="#modal">
 											</div>
 										</div>

@@ -141,11 +141,21 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	hour, hourErr := strconv.Atoi(hourValue)
 
 	now := time.Now()
-	if hourErr == nil && hour >= 0 && hour <= 23 {
-		now = time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, now.Location())
+	baseDate := now
+	dateValue := strings.TrimSpace(r.URL.Query().Get("date"))
+	if dateValue != "" {
+		parsedDate, err := time.ParseInLocation("2006-01-02", dateValue, now.Location())
+		if err == nil {
+			baseDate = time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, parsedDate.Location())
+		}
 	}
-	startTime := now
-	endTime := now.Add(time.Hour)
+
+	startHour := now.Hour()
+	if hourErr == nil && hour >= 0 && hour <= 23 {
+		startHour = hour
+	}
+	startTime := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), startHour, 0, 0, 0, baseDate.Location())
+	endTime := startTime.Add(time.Hour)
 
 	ctx, cancel := context.WithTimeout(r.Context(), courtsQueryTimeout)
 	defer cancel()
@@ -202,7 +212,9 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	w.Write(buf.Bytes())
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		logger.Error().Err(err).Msg("Failed to write response")
+	}
 }
 
 func loadQueries() *dbgen.Queries {
