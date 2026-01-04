@@ -282,10 +282,6 @@ Separate billing table for payment data:
 | Code sending | ❌ TODO |
 | Code verification | ❌ TODO |
 <!-- END WIP -->
-<!-- BEGIN WIP: STORY-0014 -->
-| Session creation | ❌ TODO |
-| Password login | ❌ TODO |
-<!-- END WIP -->
 | Password reset | ❌ TODO |
 
 ---
@@ -2176,10 +2172,6 @@ handler := api.ChainMiddleware(
 | auth/handlers.go:140 | Cognito verification |
 | auth/handlers.go:143 | Update cognito_status in DB |
 <!-- END WIP -->
-<!-- BEGIN WIP: STORY-0014 -->
-| auth/handlers.go:145 | Session/JWT setup |
-| auth/handlers.go:169 | Password verification |
-<!-- END WIP -->
 <!-- BEGIN WIP: STORY-0011 -->
 | auth/handlers.go:176 | Password reset flow |
 | auth/handlers.go:190 | Cognito code resending |
@@ -2279,9 +2271,6 @@ Issues 3-8 are duplicates of issues 9-16 (same content, created twice).
 1. ~~Fix member search (#31)~~ ✅ Done
 <!-- BEGIN WIP: STORY-0011 -->
 2. Complete Cognito authentication integration
-<!-- END WIP -->
-<!-- BEGIN WIP: STORY-0014 -->
-3. Implement staff password authentication
 <!-- END WIP -->
 4. Implement global search
 5. Add transactions/billing tables
