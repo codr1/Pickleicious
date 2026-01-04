@@ -1,0 +1,266 @@
+// internal/templates/components/reservations/event_booking_form.templ
+package reservations
+
+import (
+	"fmt"
+)
+
+templ EventBookingForm(data EventBookingFormData) {
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+		<div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-lg font-semibold text-gray-900">
+					if data.IsEdit {
+						Edit Event
+					} else {
+						Book Event
+					}
+				</h2>
+				<button
+					type="button"
+					class="text-gray-400 hover:text-gray-600"
+					onclick="document.getElementById('modal').innerHTML=''">
+					<span class="sr-only">Close</span>&times;
+				</button>
+			</div>
+
+			<div id="event-booking-form-indicator" class="htmx-indicator">
+				<div class="flex items-center justify-center">
+					<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+					<span class="ml-2 text-sm text-gray-600">Saving...</span>
+				</div>
+			</div>
+
+			<div
+				id="event-booking-form-errors"
+				class="hidden rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+			</div>
+
+			<form
+				if data.IsEdit {
+					hx-put={fmt.Sprintf("/api/v1/reservations/%d", data.ReservationID)}
+				} else {
+					hx-post="/api/v1/reservations"
+				}
+				hx-indicator="#event-booking-form-indicator"
+				hx-swap="none"
+				hx-on::before-request="document.getElementById('event-booking-form-errors').classList.add('hidden');"
+				hx-on::response-error="document.getElementById('event-booking-form-errors').textContent = event.detail.xhr.responseText; document.getElementById('event-booking-form-errors').classList.remove('hidden');"
+				hx-on::after-request="if(event.detail.xhr.status === 201 || event.detail.xhr.status === 200){document.getElementById('modal').innerHTML='';}"
+				class="space-y-4">
+				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)}/>
+
+				<div>
+					<label for="event_reservation_type_id" class="block text-sm font-medium text-gray-700">Reservation type</label>
+					<select
+						id="event_reservation_type_id"
+						name="reservation_type_id"
+						required
+						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+						for _, resType := range data.ReservationTypes {
+							<option value={fmt.Sprintf("%d", resType.ID)} selected?={data.SelectedReservationTypeID != 0 && data.SelectedReservationTypeID == resType.ID}>{resType.Name}</option>
+						}
+					</select>
+				</div>
+
+				<div>
+					<label class="block text-sm font-medium text-gray-700">Courts</label>
+					<div class="mt-2 grid grid-cols-2 gap-2">
+						for _, court := range data.Courts {
+							<label class="flex items-center space-x-2 text-sm text-gray-700">
+								<input
+									type="checkbox"
+									name="court_ids[]"
+									value={fmt.Sprintf("%d", court.ID)}
+									checked?={containsInt64(data.SelectedCourtIDs, court.ID)}
+									class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+								<span>{court.Label}</span>
+							</label>
+						}
+					</div>
+					<p class="mt-1 text-xs text-gray-500">Select one or more courts for the event.</p>
+				</div>
+
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label for="event_start_time" class="block text-sm font-medium text-gray-700">Start time</label>
+						<input
+							type="datetime-local"
+							id="event_start_time"
+							name="start_time"
+							required
+							value={data.StartTime.Format("2006-01-02T15:04")}
+							class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+					</div>
+					<div>
+						<label for="event_end_time" class="block text-sm font-medium text-gray-700">End time</label>
+						<input
+							type="datetime-local"
+							id="event_end_time"
+							name="end_time"
+							required
+							value={data.EndTime.Format("2006-01-02T15:04")}
+							class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+					</div>
+				</div>
+
+				<div>
+					<label for="event_primary_user_id" class="block text-sm font-medium text-gray-700">Primary member (optional)</label>
+					<input
+						type="number"
+						id="event_primary_user_id"
+						name="primary_user_id"
+						list="event-member-options"
+						placeholder="Search by member ID"
+						value={formatOptionalInt(data.PrimaryUserID)}
+						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+					<p class="mt-1 text-xs text-gray-500">Start typing to filter member IDs.</p>
+				</div>
+
+				<div>
+					<label class="block text-sm font-medium text-gray-700">Participants</label>
+					<div id="event-participants" class="mt-2 space-y-2">
+						if len(data.Participants) > 0 {
+							for _, participant := range data.Participants {
+								<div class="flex items-center space-x-2">
+									<input
+										type="number"
+										name="participant_ids[]"
+										list="event-member-options"
+										placeholder="Member ID"
+										value={fmt.Sprintf("%d", participant.ID)}
+										class="block w-full rounded-md border border-gray-300 px-3 py-2"/>
+									<button
+										type="button"
+										class="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+										onclick="this.parentElement.remove();">
+										Remove
+									</button>
+								</div>
+							}
+						} else {
+							<div class="flex items-center space-x-2">
+								<input
+									type="number"
+									name="participant_ids[]"
+									list="event-member-options"
+									placeholder="Member ID"
+									class="block w-full rounded-md border border-gray-300 px-3 py-2"/>
+								<button
+									type="button"
+									class="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+									onclick="this.parentElement.remove();">
+									Remove
+								</button>
+							</div>
+						}
+					</div>
+					<div class="mt-2">
+						<button
+							type="button"
+							class="px-3 py-2 text-xs font-medium text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50"
+							onclick="addEventParticipantRow();">
+							Add participant
+						</button>
+					</div>
+				</div>
+
+				<div class="space-y-2">
+					<label class="flex items-center space-x-2 text-sm font-medium text-gray-700">
+						<input
+							type="checkbox"
+							name="is_open_event"
+							checked?={data.IsOpenEvent}
+							class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+						<span>Open play event</span>
+					</label>
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label for="event_teams_per_court" class="block text-sm font-medium text-gray-700">Teams per court</label>
+							<input
+								type="number"
+								id="event_teams_per_court"
+								name="teams_per_court"
+								min="1"
+								value={formatOptionalInt(data.TeamsPerCourt)}
+								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+						</div>
+						<div>
+							<label for="event_people_per_team" class="block text-sm font-medium text-gray-700">People per team</label>
+							<input
+								type="number"
+								id="event_people_per_team"
+								name="people_per_team"
+								min="1"
+								value={formatOptionalInt(data.PeoplePerTeam)}
+								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+						</div>
+					</div>
+					<p class="text-xs text-gray-500">Leave team fields blank for standard reservations.</p>
+				</div>
+
+				<div class="flex justify-end space-x-3 pt-2">
+					<button
+						type="button"
+						class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+						onclick="document.getElementById('modal').innerHTML=''">
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700">
+						if data.IsEdit {
+							Update Event
+						} else {
+							Create Event
+						}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<datalist id="event-member-options">
+		for _, member := range data.Members {
+			<option value={fmt.Sprintf("%d", member.ID)}>{member.Label}</option>
+		}
+	</datalist>
+
+	<template id="event-participant-template">
+		<div class="flex items-center space-x-2">
+			<input
+				type="number"
+				name="participant_ids[]"
+				list="event-member-options"
+				placeholder="Member ID"
+				class="block w-full rounded-md border border-gray-300 px-3 py-2"/>
+			<button
+				type="button"
+				class="px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+				onclick="this.parentElement.remove();">
+				Remove
+			</button>
+		</div>
+	</template>
+
+	<script>
+		function addEventParticipantRow() {
+			const container = document.getElementById("event-participants");
+			const template = document.getElementById("event-participant-template");
+			if (!container || !template) {
+				return;
+			}
+			const clone = template.content.cloneNode(true);
+			container.appendChild(clone);
+		}
+	</script>
+}
+
+func containsInt64(values []int64, value int64) bool {
+	for _, item := range values {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}

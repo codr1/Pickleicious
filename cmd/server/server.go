@@ -17,6 +17,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
+	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
@@ -44,6 +45,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
+	reservations.InitHandlers(database)
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
 	}
@@ -170,6 +172,33 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)
 	mux.HandleFunc("/api/v1/courts/calendar", courts.HandleCalendarView)
+	mux.HandleFunc("/api/v1/courts/booking/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		courts.HandleBookingFormNew(w, r)
+	})
+	mux.HandleFunc("/api/v1/events/booking/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		reservations.HandleEventBookingFormNew(w, r)
+	})
+
+	// Reservation routes
+	mux.HandleFunc("/api/v1/reservations", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  reservations.HandleReservationsList,
+		http.MethodPost: reservations.HandleReservationCreate,
+	}))
+	mux.HandleFunc("/api/v1/reservations/{id}/edit", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: reservations.HandleReservationEdit,
+	}))
+	mux.HandleFunc("/api/v1/reservations/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut:    reservations.HandleReservationUpdate,
+		http.MethodDelete: reservations.HandleReservationDelete,
+	}))
 
 	// Open play rules
 	mux.HandleFunc("/open-play-rules", openplayapi.HandleOpenPlayRulesPage)

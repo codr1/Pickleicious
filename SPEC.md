@@ -1,7 +1,3 @@
-Here is the complete updated SPEC.md content:
-
----
-
 # PICKLEICIOUS - System Specification
 
 ## Overview
@@ -106,7 +102,7 @@ Organization (corporate entity)
 
 | Table | Purpose |
 |-------|---------|
-| reservation_types | Booking type lookup (GAME, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE, TOURNAMENT) |
+| reservation_types | Booking type lookup (GAME, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE, OPEN_PLAY) |
 | recurrence_rules | Recurring patterns (WEEKLY, BIWEEKLY, MONTHLY) |
 | reservations | Booking records |
 | reservation_courts | Multi-court junction |
@@ -163,12 +159,24 @@ Organization (corporate entity)
 | GET | `/api/v1/members/photo/{id}` | Member photo |
 | POST | `/api/v1/members/restore` | Restore/create decision |
 
-### Courts
+### Courts and Calendar
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/courts` | Courts page |
-| GET | `/api/v1/courts/calendar` | Calendar view |
+| GET | `/courts` | Courts page with calendar |
+| GET | `/api/v1/courts/calendar` | Calendar view fragment |
+| GET | `/api/v1/courts/booking/new` | Quick booking modal form |
+
+### Reservations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/reservations` | List reservations by date range |
+| POST | `/api/v1/reservations` | Create reservation |
+| GET | `/api/v1/reservations/{id}/edit` | Edit form |
+| PUT | `/api/v1/reservations/{id}` | Update reservation |
+| DELETE | `/api/v1/reservations/{id}` | Delete reservation |
+| GET | `/api/v1/events/booking/new` | Event booking form (multi-court) |
 
 ## Member Management
 
@@ -195,6 +203,82 @@ Photos are stored as BLOBs in the database with content_type and size metadata. 
 - Deleting a member sets status to 'deleted' (not physical delete)
 - Deleted members are excluded from normal queries
 - Creating a member with a deleted account's email offers restoration or new account creation
+
+## Reservation System
+
+### Reservation Types
+
+Seeded via migration with default colors:
+
+| Type | Color | Purpose |
+|------|-------|---------|
+| OPEN_PLAY | #2E7D32 (green) | Open play session |
+| GAME | #1976D2 (blue) | Standard game reservation |
+| PRO_SESSION | #6A1B9A (purple) | Pro-led session |
+| EVENT | #F57C00 (orange) | Special event booking |
+| MAINTENANCE | #546E7A (gray) | Maintenance block |
+| LEAGUE | #C62828 (red) | League play |
+
+### Reservation SQLC Queries
+
+| Query | Description |
+|-------|-------------|
+| CreateReservation | Insert new reservation |
+| GetReservation | Fetch by ID with facility check |
+| GetReservationByID | Fetch by ID only |
+| ListReservationsByDateRange | List reservations overlapping time range |
+| ListReservationCourtsByDateRange | List court assignments for reservations in range |
+| UpdateReservation | Update reservation details |
+| DeleteReservation | Remove reservation |
+| AddReservationCourt | Assign court to reservation |
+| RemoveReservationCourt | Remove court from reservation |
+| ListCourtsForReservation | List courts assigned to reservation |
+| AddParticipant | Add user to reservation |
+| RemoveParticipant | Remove user from reservation |
+| ListParticipantsForReservation | List users in reservation |
+| GetReservationType | Fetch type by ID |
+| ListReservationTypes | List all types |
+
+### Booking Workflows
+
+**Quick Booking** (`/api/v1/courts/booking/new`):
+- Modal form triggered by clicking calendar cell
+- Pre-fills court and time from click location
+- Single court selection
+- Minimum 1-hour duration enforced
+
+**Event Booking** (`/api/v1/events/booking/new`):
+- Full-page form for complex bookings
+- Multi-court selection
+- Participant management
+- Extended options (open event, teams per court, people per team)
+
+### Calendar Display
+
+The courts calendar (`/api/v1/courts/calendar`) displays:
+- Hourly grid rows (configurable start/end hours)
+- Court columns
+- Reservation blocks positioned by start_time/end_time
+- Color-coded by reservation type
+- Click empty cell opens quick booking form
+- Click existing reservation opens edit form
+
+### Validation Rules
+
+| Rule | Description |
+|------|-------------|
+| start_time < end_time | Start must precede end |
+| Minimum duration | 1 hour default |
+| Facility exists | facility_id must be valid |
+| No double-booking | Courts cannot overlap in time |
+| Facility authorization | Staff can only book for their home facility (admin unrestricted) |
+
+### Conflict Detection
+
+Before creating/updating reservations:
+1. Query existing reservations overlapping the time range
+2. Check if any requested courts are already assigned
+3. Return 409 Conflict with field-specific error if overlap found
 
 ## Authentication
 
@@ -283,6 +367,25 @@ type AuthUser struct {
 | 401 | Unauthenticated - no valid session |
 | 403 | Forbidden - authenticated but lacks permission |
 
+## Shared Utilities
+
+### apiutil Package (`internal/api/apiutil`)
+
+| Function | Purpose |
+|----------|---------|
+| DecodeJSON | Decode JSON request body with unknown field rejection |
+| WriteJSON | Encode and write JSON response |
+| RequireFacilityAccess | Check facility authorization, write error response if denied |
+| FieldError | Structured field validation error |
+| HandlerError | HTTP status + message wrapper for transaction rollback |
+
+### request Package (`internal/request`)
+
+| Function | Purpose |
+|----------|---------|
+| ParseFacilityID | Parse facility_id from string, return (id, ok) |
+| FacilityIDFromBookingRequest | Extract facility_id from query or form |
+
 ## UI Framework
 
 ### Layout
@@ -302,7 +405,7 @@ type AuthUser struct {
 | hx-trigger | Custom events, delays |
 | hx-target | Where to swap content |
 | hx-swap | How to swap (innerHTML, outerHTML) |
-| HX-Trigger | Server-sent events |
+| HX-Trigger | Server-sent events (e.g., `refreshCourtsCalendar`) |
 | HX-Redirect | Server-initiated redirects (used after login) |
 
 ## Configuration
@@ -382,12 +485,14 @@ pickleicious/
 │   └── tools/dbmigrate/     # Migration tool
 ├── internal/
 │   ├── api/                 # HTTP handlers
+│   │   ├── apiutil/         # Shared handler utilities
 │   │   ├── auth/            # Authentication (handlers, password, session)
 │   │   ├── authz/           # Authorization helpers
 │   │   ├── courts/          # Court/calendar
 │   │   ├── members/         # Member CRUD
 │   │   ├── nav/             # Navigation
 │   │   ├── openplay/        # Open play sessions
+│   │   ├── reservations/    # Reservation CRUD
 │   │   └── themes/          # Facility themes
 │   ├── config/              # Configuration loading
 │   ├── db/
@@ -398,6 +503,8 @@ pickleicious/
 │   ├── models/              # Domain models
 │   ├── request/             # Request parsing utilities
 │   ├── templates/           # Templ components
+│   │   └── components/
+│   │       └── reservations/ # Booking form templates
 │   └── testutil/            # Test helpers
 ├── tests/
 │   └── smoke/               # Smoke tests
