@@ -277,11 +277,6 @@ Separate billing table for payment data:
 |---------|--------|
 | Login page UI | ✅ Complete |
 | Staff check endpoint | ✅ Complete |
-<!-- BEGIN WIP: STORY-0011 -->
-| Cognito initialization | ❌ TODO |
-| Code sending | ❌ TODO |
-| Code verification | ❌ TODO |
-<!-- END WIP -->
 | Password reset | ❌ TODO |
 
 ---
@@ -2081,9 +2076,6 @@ handler := api.ChainMiddleware(
 | Feature | Status | GitHub Issue |
 |---------|--------|--------------|
 | ~~Fix member search~~ | ✅ Fixed | #31 |
-<!-- BEGIN WIP: STORY-0011 -->
-| Cognito auth integration | ❌ TODO | — |
-<!-- END WIP -->
 | Theme management system | ❌ TODO | #17-22 |
 | Localization system | ❌ TODO | #23-28 |
 | GitHub Actions CI/CD | ❌ TODO | #29 |
@@ -2095,16 +2087,6 @@ handler := api.ChainMiddleware(
 
 | Location | TODO |
 |----------|------|
-<!-- BEGIN WIP: STORY-0011 -->
-| auth/handlers.go:106 | Cognito client initialization |
-| auth/handlers.go:109 | Cognito code sending |
-| auth/handlers.go:140 | Cognito verification |
-| auth/handlers.go:143 | Update cognito_status in DB |
-<!-- END WIP -->
-<!-- BEGIN WIP: STORY-0011 -->
-| auth/handlers.go:176 | Password reset flow |
-| auth/handlers.go:190 | Cognito code resending |
-<!-- END WIP -->
 | nav/handlers.go:20 | Search functionality |
 | schema.sql:78 | Transactions table |
 | schema.sql:79 | Products table |
@@ -2189,9 +2171,6 @@ Issues 3-8 are duplicates of issues 9-16 (same content, created twice).
 
 ### 16.1 Near-Term (Based on TODOs + Bugs)
 1. ~~Fix member search (#31)~~ ✅ Done
-<!-- BEGIN WIP: STORY-0011 -->
-2. Complete Cognito authentication integration
-<!-- END WIP -->
 4. Implement global search
 5. Add transactions/billing tables
 
