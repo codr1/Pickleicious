@@ -1207,9 +1207,6 @@ A self-service marketplace where members discover and book coaches directly, red
 |---------|-------------|
 | Open Play Sessions | Scheduled drop-in times |
 | Skill-Based Sessions | Beginner, intermediate, advanced |
-<!-- BEGIN WIP: STORY-0015 -->
-| Sign-Up Visibility | See who else is signed up |
-<!-- END WIP -->
 | Rotation System | Fair play time distribution |
 
 **Guest Conversion:**
@@ -1464,17 +1461,6 @@ Open play and round robins are the bread-and-butter of recreational pickleball. 
 | Skill Clustering | Large groups | Group by skill, rotate within clusters |
 | Partner Variety | Doubles | Ensure each player partners with every other |
 
-<!-- BEGIN WIP: STORY-0015 -->
-**Player Management:**
-| Feature | Description |
-|---------|-------------|
-| Check-In Queue | Players check in; system adds to rotation |
-| Late Arrival Handling | Insert new players without disrupting flow |
-| Early Departure | Graceful removal with rebalancing |
-| Substitute Players | Fill spots when players leave mid-session |
-| Waitlist Integration | Auto-add from waitlist when spots open |
-| No-Show Timeout | Remove from queue if not present at court |
-<!-- END WIP -->
 
 **Court Assignment:**
 | Feature | Description |
@@ -1513,9 +1499,6 @@ Open play and round robins are the bread-and-butter of recreational pickleball. 
 | Skill Restrictions | Open / Level-restricted (e.g., 3.0-3.5 only) |
 | Gender Format | Open / Men's / Women's / Mixed |
 | Max Players | Per-session cap with waitlist overflow |
-<!-- BEGIN WIP: STORY-0015 -->
-| Min Players | Cancel threshold with auto-notification |
-<!-- END WIP -->
 
 **Staff Tools:**
 | Feature | Description |
