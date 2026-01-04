@@ -26,7 +26,10 @@ type DB struct {
 	Queries *dbgen.Queries
 }
 
-// New creates a new DB instance with the given data source name
+// New opens a SQLite database for the given data source name, ensures SQLite
+// foreign keys are enabled in the DSN, applies embedded migrations, and
+// returns a DB with generated queries bound to the connection.
+// It returns an error if opening the database or running migrations fails.
 func New(dataSourceName string) (*DB, error) {
 	dataSourceName = ensureForeignKeysEnabledDSN(dataSourceName)
 	sqlDB, err := sql.Open("sqlite3", dataSourceName)
@@ -49,7 +52,11 @@ func New(dataSourceName string) (*DB, error) {
 	}, nil
 }
 
-// NewFromConfig creates a new DB instance from configuration
+// NewFromConfig creates a new DB instance from cfg by opening the configured database,
+// applying migrations, and returning a DB with generated queries bound to the opened connection.
+// It supports "sqlite" (creates the database directory if needed and ensures foreign keys are enabled in the DSN)
+// and "turso" (constructs a libsql connection string with the provided auth token).
+// Returns an error if the driver is unsupported, if opening the database fails, or if migrations cannot be applied.
 func NewFromConfig(cfg *config.Config) (*DB, error) {
 	var db *sql.DB
 	var err error
@@ -89,6 +96,8 @@ func NewFromConfig(cfg *config.Config) (*DB, error) {
 	}, nil
 }
 
+// ensureForeignKeysEnabledDSN ensures the SQLite DSN enables foreign key enforcement by adding the `_fk=1` query parameter if missing.
+// If the DSN already contains `_fk=` it is returned unchanged; otherwise `_fk=1` is appended using `?` or `&` as appropriate.
 func ensureForeignKeysEnabledDSN(dataSourceName string) string {
 	if strings.Contains(dataSourceName, "_fk=") {
 		return dataSourceName
@@ -99,6 +108,8 @@ func ensureForeignKeysEnabledDSN(dataSourceName string) string {
 	return dataSourceName + "?_fk=1"
 }
 
+// runMigrations applies the embedded SQL migrations from migrationsFS to the provided database.
+// It returns an error if creating the migration driver, source, or migrate instance fails, or if applying migrations fails (a "no change" result is not treated as an error).
 func runMigrations(db *sql.DB) error {
 	// Create migrate instance
 	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
