@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/htmx"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -37,7 +38,11 @@ const (
 	openPlayQueryTimeout              = 5 * time.Second
 	openPlayAuditAutoScaleOverride    = "auto_scale_override"
 	openPlayAuditAutoScaleRuleDisable = "auto_scale_rule_disabled"
+	openPlayAuditParticipantAdded     = "participant_added"
+	openPlayAuditParticipantRemoved   = "participant_removed"
 )
+
+var errInvalidUserID = errors.New("invalid user ID")
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
@@ -559,7 +564,8 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	var updatedSession dbgen.OpenPlaySession
+	var auditSession dbgen.OpenPlaySession
+	var responseSession dbgen.GetOpenPlaySessionRow
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -590,7 +596,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 			nextOverride = !session.AutoScaleOverride.Bool
 		}
 
-		updatedSession, err = qtx.UpdateSessionAutoScaleOverride(ctx, dbgen.UpdateSessionAutoScaleOverrideParams{
+		auditSession, err = qtx.UpdateSessionAutoScaleOverride(ctx, dbgen.UpdateSessionAutoScaleOverrideParams{
 			ID:                sessionID,
 			FacilityID:        facilityID,
 			AutoScaleOverride: sql.NullBool{Bool: nextOverride, Valid: true},
@@ -605,7 +611,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditAutoScaleOverride, map[string]any{
 			"auto_scale_override": auditBoolValue(session.AutoScaleOverride),
 		}, map[string]any{
-			"auto_scale_override": auditBoolValue(updatedSession.AutoScaleOverride),
+			"auto_scale_override": auditBoolValue(auditSession.AutoScaleOverride),
 		}, sql.NullString{}); err != nil {
 			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play session auto scale override", err: err}
 		}
@@ -638,6 +644,10 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 			}
 		}
 
+		responseSession = session
+		responseSession.AutoScaleOverride = auditSession.AutoScaleOverride
+		responseSession.UpdatedAt = auditSession.UpdatedAt
+
 		return nil
 	})
 	if err != nil {
@@ -654,8 +664,303 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := writeJSON(w, http.StatusOK, updatedSession); err != nil {
+	if err := writeJSON(w, http.StatusOK, responseSession); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play session response")
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	sessionID, err := openPlaySessionIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := facilityIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	var payload openPlayParticipantRequest
+	if err := decodeJSON(r, &payload); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if payload.UserID <= 0 {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
+	defer cancel()
+
+	var participant dbgen.ReservationParticipant
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		session, reservationID, err := fetchOpenPlaySessionAndReservation(ctx, qtx, sessionID, facilityID)
+		if err != nil {
+			return err
+		}
+
+		participants, err := qtx.ListOpenPlayParticipants(ctx, dbgen.ListOpenPlayParticipantsParams{
+			FacilityID:     facilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to list open play participants", err: err}
+		}
+
+		for _, existing := range participants {
+			if existing.ID == payload.UserID {
+				return handlerError{status: http.StatusConflict, message: "Participant already exists"}
+			}
+		}
+
+		if _, err := qtx.GetUserByID(ctx, payload.UserID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return handlerError{status: http.StatusNotFound, message: "User not found", err: err}
+			}
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to fetch user", err: err}
+		}
+
+		participant, err = qtx.AddOpenPlayParticipant(ctx, dbgen.AddOpenPlayParticipantParams{
+			UserID:         payload.UserID,
+			FacilityID:     facilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return handlerError{status: http.StatusNotFound, message: "Open play reservation not found", err: err}
+			}
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to add participant", err: err}
+		}
+
+		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditParticipantAdded, map[string]any{}, map[string]any{
+			"user_id":        payload.UserID,
+			"reservation_id": reservationID,
+		}, sql.NullString{}); err != nil {
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play participant add", err: err}
+		}
+
+		return nil
+	})
+	if err != nil {
+		var herr handlerError
+		if errors.As(err, &herr) {
+			if herr.status == http.StatusInternalServerError {
+				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			}
+			http.Error(w, herr.message, herr.status)
+			return
+		}
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to add open play participant")
+		http.Error(w, "Failed to add participant", http.StatusInternalServerError)
+		return
+	}
+
+	if htmx.IsRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshOpenPlayParticipants")
+	}
+	if err := writeJSON(w, http.StatusCreated, participant); err != nil {
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play participant response")
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleRemoveParticipant(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	sessionID, err := openPlaySessionIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := facilityIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	userID, err := openPlayParticipantUserIDFromRequest(r)
+	if err != nil {
+		if errors.Is(err, errInvalidUserID) {
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
+	defer cancel()
+
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		session, reservationID, err := fetchOpenPlaySessionAndReservation(ctx, qtx, sessionID, facilityID)
+		if err != nil {
+			return err
+		}
+
+		removed, err := qtx.RemoveOpenPlayParticipant(ctx, dbgen.RemoveOpenPlayParticipantParams{
+			UserID:         userID,
+			FacilityID:     facilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to remove participant", err: err}
+		}
+		if removed == 0 {
+			return handlerError{status: http.StatusNotFound, message: "Participant not found"}
+		}
+
+		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditParticipantRemoved, map[string]any{
+			"user_id":        userID,
+			"reservation_id": reservationID,
+		}, map[string]any{}, sql.NullString{}); err != nil {
+			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play participant removal", err: err}
+		}
+
+		return nil
+	})
+	if err != nil {
+		var herr handlerError
+		if errors.As(err, &herr) {
+			if herr.status == http.StatusInternalServerError {
+				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			}
+			http.Error(w, herr.message, herr.status)
+			return
+		}
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to remove open play participant")
+		http.Error(w, "Failed to remove participant", http.StatusInternalServerError)
+		return
+	}
+
+	if htmx.IsRequest(r) {
+		w.Header().Set("HX-Trigger", "refreshOpenPlayParticipants")
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func HandleListParticipants(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	sessionID, err := openPlaySessionIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := facilityIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if !requireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
+	defer cancel()
+
+	session, err := fetchOpenPlaySession(ctx, q, sessionID, facilityID)
+	if err != nil {
+		var herr handlerError
+		if errors.As(err, &herr) {
+			if herr.status == http.StatusInternalServerError {
+				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			}
+			http.Error(w, herr.message, herr.status)
+			return
+		}
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to fetch open play session")
+		http.Error(w, "Failed to fetch open play session", http.StatusInternalServerError)
+		return
+	}
+
+	participants, err := q.ListOpenPlayParticipants(ctx, dbgen.ListOpenPlayParticipantsParams{
+		FacilityID:     facilityID,
+		OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+		StartTime:      session.StartTime,
+		EndTime:        session.EndTime,
+	})
+	if err != nil {
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to list open play participants")
+		http.Error(w, "Failed to list participants", http.StatusInternalServerError)
+		return
+	}
+
+	if htmx.IsRequest(r) {
+		rule, err := q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: facilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Open play rule not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to fetch open play rule")
+			http.Error(w, "Failed to load open play rule", http.StatusInternalServerError)
+			return
+		}
+
+		component := openplaytempl.OpenPlayParticipantsList(openplaytempl.NewOpenPlayParticipants(participants), rule.MinParticipants)
+		if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play participants list", "Failed to render participants list") {
+			return
+		}
+		return
+	}
+
+	if err := writeJSON(w, http.StatusOK, map[string]any{"participants": participants}); err != nil {
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play participant response")
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
 	}
@@ -745,8 +1050,78 @@ func openPlaySessionIDFromRequest(r *http.Request) (int64, error) {
 	return id, nil
 }
 
+func openPlayParticipantUserIDFromRequest(r *http.Request) (int64, error) {
+	pathID := strings.TrimSpace(r.PathValue("user_id"))
+	if pathID != "" {
+		id, err := strconv.ParseInt(pathID, 10, 64)
+		if err != nil || id <= 0 {
+			return 0, errInvalidUserID
+		}
+		return id, nil
+	}
+
+	var payload openPlayParticipantRequest
+	if err := decodeJSON(r, &payload); err != nil {
+		return 0, err
+	}
+	if payload.UserID <= 0 {
+		return 0, errInvalidUserID
+	}
+	return payload.UserID, nil
+}
+
+func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, sessionID, facilityID int64) (dbgen.GetOpenPlaySessionRow, int64, error) {
+	session, err := q.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+		ID:         sessionID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+		}
+		return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+	}
+
+	if session.Status != "scheduled" {
+		return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusBadRequest, message: "Open play session is not scheduled"}
+	}
+
+	reservationID, err := q.GetOpenPlayReservationID(ctx, dbgen.GetOpenPlayReservationIDParams{
+		FacilityID:     facilityID,
+		OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+		StartTime:      session.StartTime,
+		EndTime:        session.EndTime,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return session, 0, handlerError{status: http.StatusNotFound, message: "Open play reservation not found", err: err}
+		}
+		return session, 0, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play reservation", err: err}
+	}
+
+	return session, reservationID, nil
+}
+
+func fetchOpenPlaySession(ctx context.Context, q *dbgen.Queries, sessionID, facilityID int64) (dbgen.GetOpenPlaySessionRow, error) {
+	session, err := q.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+		ID:         sessionID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return dbgen.GetOpenPlaySessionRow{}, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+		}
+		return dbgen.GetOpenPlaySessionRow{}, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+	}
+	return session, nil
+}
+
 type openPlaySessionAutoScaleToggleRequest struct {
 	DisableForRule bool `json:"disable_for_rule"`
+}
+
+type openPlayParticipantRequest struct {
+	UserID int64 `json:"user_id"`
 }
 
 func parseIntField(r *http.Request, name string) (int64, error) {

@@ -196,6 +196,14 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		}
 		openplayapi.HandleOpenPlayRuleEdit(w, r)
 	})
+	mux.HandleFunc("/api/v1/open-play-sessions/{id}/participants", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:    openplayapi.HandleListParticipants,
+		http.MethodPost:   openplayapi.HandleAddParticipant,
+		http.MethodDelete: openplayapi.HandleRemoveParticipant,
+	}))
+	mux.HandleFunc("/api/v1/open-play-sessions/{id}/participants/{user_id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodDelete: openplayapi.HandleRemoveParticipant,
+	}))
 	mux.HandleFunc("/api/v1/open-play-sessions/{id}/auto-scale", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: openplayapi.HandleOpenPlaySessionAutoScaleToggle,
 	}))

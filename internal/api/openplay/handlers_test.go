@@ -343,7 +343,7 @@ func TestOpenPlaySessionAutoScaleToggle(t *testing.T) {
 		t.Fatalf("toggle status: %d", toggleRecorder.Code)
 	}
 
-	var updated dbgen.OpenPlaySession
+	var updated dbgen.GetOpenPlaySessionRow
 	if err := json.NewDecoder(toggleRecorder.Body).Decode(&updated); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
