@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api"
+	"github.com/codr1/Pickleicious/internal/api/auth"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
@@ -35,9 +36,11 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		api.WithLogging,
 		api.WithRecovery,
 		api.WithRequestID,
+		api.WithAuth,
 		api.WithContentType,
 	)
 
+	auth.InitHandlers(database.Queries, config)
 	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
@@ -113,6 +116,16 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/nav/menu", nav.HandleMenu)
 	mux.HandleFunc("/api/v1/nav/menu/close", nav.HandleMenuClose)
 	mux.HandleFunc("/api/v1/nav/search", nav.HandleSearch)
+
+	// Auth routes
+	mux.HandleFunc("/login", auth.HandleLoginPage)
+	mux.HandleFunc("/api/v1/auth/check-staff", auth.HandleCheckStaff)
+	mux.HandleFunc("/api/v1/auth/send-code", auth.HandleSendCode)
+	mux.HandleFunc("/api/v1/auth/verify-code", auth.HandleVerifyCode)
+	mux.HandleFunc("/api/v1/auth/resend-code", auth.HandleResendCode)
+	mux.HandleFunc("/api/v1/auth/staff-login", auth.HandleStaffLogin)
+	mux.HandleFunc("/api/v1/auth/reset-password", auth.HandleResetPassword)
+	mux.HandleFunc("/api/v1/auth/standard-login", auth.HandleStandardLogin)
 
 	// Member routes
 	mux.HandleFunc("/members", members.HandleMembersPage)
