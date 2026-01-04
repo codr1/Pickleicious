@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -91,7 +90,7 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, ok := facilityIDFromBookingRequest(r)
+	facilityID, ok := request.FacilityIDFromBookingRequest(r)
 	if !ok {
 		http.Error(w, "Facility ID is required", http.StatusBadRequest)
 		return
@@ -127,7 +126,7 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, ok := facilityIDFromBookingRequest(r)
+	facilityID, ok := request.FacilityIDFromBookingRequest(r)
 	if !ok {
 		http.Error(w, "Facility ID is required", http.StatusBadRequest)
 		return
@@ -219,29 +218,6 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 
 func loadQueries() *dbgen.Queries {
 	return queries
-}
-
-func facilityIDFromBookingRequest(r *http.Request) (int64, bool) {
-	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
-		return facilityID, true
-	}
-
-	currentURL := strings.TrimSpace(r.Header.Get("HX-Current-URL"))
-	if currentURL == "" {
-		return 0, false
-	}
-
-	parsed, err := url.Parse(currentURL)
-	if err != nil {
-		log.Ctx(r.Context()).
-			Debug().
-			Err(err).
-			Str("hx_current_url", currentURL).
-			Msg("Failed to parse HX-Current-URL")
-		return 0, false
-	}
-
-	return request.ParseFacilityID(parsed.Query().Get("facility_id"))
 }
 
 func calendarDateFromRequest(r *http.Request) time.Time {

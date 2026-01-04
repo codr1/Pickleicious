@@ -25,6 +25,24 @@ type BookingFormData struct {
 	ReservationID             int64
 }
 
+type EventBookingFormData struct {
+	FacilityID                int64
+	StartTime                 time.Time
+	EndTime                   time.Time
+	Courts                    []CourtOption
+	ReservationTypes          []ReservationTypeOption
+	Members                   []MemberOption
+	Participants              []MemberOption
+	SelectedCourtIDs          []int64
+	SelectedReservationTypeID int64
+	PrimaryUserID             *int64
+	IsOpenEvent               bool
+	TeamsPerCourt             *int64
+	PeoplePerTeam             *int64
+	IsEdit                    bool
+	ReservationID             int64
+}
+
 type CourtOption struct {
 	ID    int64
 	Label string

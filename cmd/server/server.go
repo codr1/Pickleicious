@@ -179,6 +179,13 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		}
 		courts.HandleBookingFormNew(w, r)
 	})
+	mux.HandleFunc("/api/v1/events/booking/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		reservations.HandleEventBookingFormNew(w, r)
+	})
 
 	// Reservation routes
 	mux.HandleFunc("/api/v1/reservations", methodHandler(map[string]http.HandlerFunc{

@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/request"
 	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
 )
 
@@ -99,6 +102,9 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.CourtIDs = normalizeCourtIDs(req.CourtIDs)
+	if req.ParticipantIDsSet {
+		req.ParticipantIDs = normalizeParticipantIDs(req.ParticipantIDs)
+	}
 	if err := ensureCourtsAvailable(ctx, q, facilityID, 0, startTime, endTime, req.CourtIDs); err != nil {
 		var availErr availabilityError
 		if errors.As(err, &availErr) {
@@ -137,6 +143,14 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 				CourtID:       courtID,
 			}); err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to assign courts", Err: err}
+			}
+		}
+		for _, participantID := range req.ParticipantIDs {
+			if err := qtx.AddParticipant(ctx, dbgen.AddParticipantParams{
+				ReservationID: created.ID,
+				UserID:        participantID,
+			}); err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add reservation participant", Err: err}
 			}
 		}
 		return nil
@@ -208,6 +222,95 @@ func HandleReservationsList(w http.ResponseWriter, r *http.Request) {
 	if err := apiutil.WriteJSON(w, http.StatusOK, reservations); err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to write reservation list response")
 		return
+	}
+}
+
+// GET /api/v1/events/booking/new
+func HandleEventBookingFormNew(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	facilityID, ok := request.FacilityIDFromBookingRequest(r)
+	if !ok {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	hourValue := strings.TrimSpace(r.URL.Query().Get("hour"))
+	hour, hourErr := strconv.Atoi(hourValue)
+
+	now := time.Now()
+	baseDate := now
+	dateValue := strings.TrimSpace(r.URL.Query().Get("date"))
+	if dateValue != "" {
+		parsedDate, err := time.ParseInLocation("2006-01-02", dateValue, now.Location())
+		if err == nil {
+			baseDate = parsedDate
+		}
+	}
+
+	startHour := now.Hour()
+	if hourErr == nil && hour >= 0 && hour <= 23 {
+		startHour = hour
+	}
+	startTime := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), startHour, 0, 0, 0, baseDate.Location())
+	endTime := startTime.Add(time.Hour)
+
+	ctx, cancel := context.WithTimeout(r.Context(), reservationQueryTimeout)
+	defer cancel()
+
+	courtsList, err := q.ListCourts(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load courts")
+		http.Error(w, "Failed to load courts", http.StatusInternalServerError)
+		return
+	}
+
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to load reservation types")
+		http.Error(w, "Failed to load reservation types", http.StatusInternalServerError)
+		return
+	}
+
+	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		SearchTerm: nil,
+		Offset:     0,
+		Limit:      50,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to load members for booking form")
+		memberRows = nil
+	}
+
+	var buf bytes.Buffer
+	component := reservationstempl.EventBookingForm(reservationstempl.EventBookingFormData{
+		FacilityID:       facilityID,
+		StartTime:        startTime,
+		EndTime:          endTime,
+		Courts:           reservationstempl.NewCourtOptions(courtsList),
+		ReservationTypes: reservationstempl.NewReservationTypeOptions(reservationTypes),
+		Members:          reservationstempl.NewMemberOptions(memberRows),
+	})
+	if err := component.Render(r.Context(), &buf); err != nil {
+		logger.Error().Err(err).Msg("Failed to render event booking form")
+		http.Error(w, "Failed to render booking form", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		logger.Error().Err(err).Msg("Failed to write response")
 	}
 }
 
@@ -391,6 +494,9 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.CourtIDs = normalizeCourtIDs(req.CourtIDs)
+	if req.ParticipantIDsSet {
+		req.ParticipantIDs = normalizeParticipantIDs(req.ParticipantIDs)
+	}
 
 	var updated dbgen.Reservation
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
@@ -468,6 +574,46 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 				CourtID:       courtID,
 			}); err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add reservation court", Err: err}
+			}
+		}
+
+		if req.ParticipantIDsSet {
+			existingParticipants, err := qtx.ListParticipantsForReservation(ctx, reservationID)
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation participants", Err: err}
+			}
+
+			existingParticipantIDs := make(map[int64]struct{}, len(existingParticipants))
+			for _, participant := range existingParticipants {
+				existingParticipantIDs[participant.ID] = struct{}{}
+			}
+			nextParticipantIDs := make(map[int64]struct{}, len(req.ParticipantIDs))
+			for _, participantID := range req.ParticipantIDs {
+				nextParticipantIDs[participantID] = struct{}{}
+			}
+
+			for participantID := range existingParticipantIDs {
+				if _, ok := nextParticipantIDs[participantID]; ok {
+					continue
+				}
+				if err := qtx.RemoveParticipant(ctx, dbgen.RemoveParticipantParams{
+					ReservationID: reservationID,
+					UserID:        participantID,
+				}); err != nil {
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove reservation participant", Err: err}
+				}
+			}
+
+			for participantID := range nextParticipantIDs {
+				if _, ok := existingParticipantIDs[participantID]; ok {
+					continue
+				}
+				if err := qtx.AddParticipant(ctx, dbgen.AddParticipantParams{
+					ReservationID: reservationID,
+					UserID:        participantID,
+				}); err != nil {
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add reservation participant", Err: err}
+				}
 			}
 		}
 
@@ -615,13 +761,37 @@ type reservationRequest struct {
 	TeamsPerCourt     *int64  `json:"teams_per_court,omitempty"`
 	PeoplePerTeam     *int64  `json:"people_per_team,omitempty"`
 	CourtIDs          []int64 `json:"court_ids"`
+	ParticipantIDs    []int64 `json:"participant_ids"`
+	ParticipantIDsSet bool    `json:"-"`
 }
 
 func decodeReservationRequest(r *http.Request) (reservationRequest, error) {
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		var req reservationRequest
-		if err := apiutil.DecodeJSON(r, &req); err != nil {
+		if r.Body == nil {
+			return reservationRequest{}, fmt.Errorf("missing request body")
+		}
+		defer r.Body.Close()
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
 			return reservationRequest{}, err
+		}
+
+		var req reservationRequest
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			return reservationRequest{}, err
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return reservationRequest{}, fmt.Errorf("invalid JSON body")
+		}
+
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err == nil {
+			if _, ok := raw["participant_ids"]; ok {
+				req.ParticipantIDsSet = true
+			}
 		}
 		return req, nil
 	}
@@ -673,9 +843,25 @@ func decodeReservationRequest(r *http.Request) (reservationRequest, error) {
 		return reservationRequest{}, err
 	}
 
-	req.CourtIDs, err = parseCourtIDs(r.Form["court_ids"])
+	courtValues := r.Form["court_ids"]
+	if len(courtValues) == 0 {
+		courtValues = r.Form["court_ids[]"]
+	}
+	req.CourtIDs, err = parseCourtIDs(courtValues)
 	if err != nil {
 		return reservationRequest{}, err
+	}
+
+	participantValues, participantValuesOK := r.Form["participant_ids"]
+	if !participantValuesOK {
+		participantValues, participantValuesOK = r.Form["participant_ids[]"]
+	}
+	if participantValuesOK {
+		req.ParticipantIDsSet = true
+		req.ParticipantIDs, err = parseParticipantIDs(participantValues)
+		if err != nil {
+			return reservationRequest{}, err
+		}
 	}
 
 	return req, nil
@@ -698,6 +884,11 @@ func validateReservationInput(req reservationRequest, startTime, endTime time.Ti
 	for _, courtID := range req.CourtIDs {
 		if courtID <= 0 {
 			return apiutil.FieldError{Field: "court_ids", Reason: "must contain only positive integers"}
+		}
+	}
+	for _, participantID := range req.ParticipantIDs {
+		if participantID <= 0 {
+			return apiutil.FieldError{Field: "participant_ids", Reason: "must contain only positive integers"}
 		}
 	}
 	for name, value := range map[string]*int64{
@@ -766,6 +957,19 @@ func normalizeCourtIDs(courtIDs []int64) []int64 {
 	return normalized
 }
 
+func normalizeParticipantIDs(participantIDs []int64) []int64 {
+	seen := make(map[int64]struct{}, len(participantIDs))
+	normalized := make([]int64, 0, len(participantIDs))
+	for _, participantID := range participantIDs {
+		if _, ok := seen[participantID]; ok {
+			continue
+		}
+		seen[participantID] = struct{}{}
+		normalized = append(normalized, participantID)
+	}
+	return normalized
+}
+
 func parseReservationTimes(startValue, endValue string) (time.Time, time.Time, error) {
 	startTime, err := parseReservationTime(startValue, "start_time")
 	if err != nil {
@@ -825,6 +1029,32 @@ func parseCourtIDs(values []string) ([]int64, error) {
 		}
 	}
 	return courtIDs, nil
+}
+
+func parseParticipantIDs(values []string) ([]int64, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	var participantIDs []int64
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		parts := strings.Split(value, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			participantID, err := strconv.ParseInt(part, 10, 64)
+			if err != nil || participantID <= 0 {
+				return nil, apiutil.FieldError{Field: "participant_ids", Reason: "must be a list of positive integers"}
+			}
+			participantIDs = append(participantIDs, participantID)
+		}
+	}
+	return participantIDs, nil
 }
 
 func parseIntField(value, name string) (int64, error) {
