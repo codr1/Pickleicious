@@ -135,6 +135,60 @@ WHERE open_play_audit_log.session_id = @session_id
   AND open_play_sessions.facility_id = @facility_id
 ORDER BY open_play_audit_log.created_at;
 
+-- name: AddOpenPlayParticipant :one
+INSERT INTO reservation_participants (reservation_id, user_id)
+SELECT r.id, @user_id
+FROM reservations r
+JOIN reservation_types rt ON rt.id = r.reservation_type_id
+WHERE r.facility_id = @facility_id
+  AND r.open_play_rule_id = @open_play_rule_id
+  AND r.start_time = @start_time
+  AND r.end_time = @end_time
+  AND rt.name = 'OPEN_PLAY'
+RETURNING id, reservation_id, user_id, created_at, updated_at;
+
+-- name: RemoveOpenPlayParticipant :execrows
+DELETE FROM reservation_participants
+WHERE reservation_id = (
+    SELECT r.id
+    FROM reservations r
+    JOIN reservation_types rt ON rt.id = r.reservation_type_id
+    WHERE r.facility_id = @facility_id
+      AND r.open_play_rule_id = @open_play_rule_id
+      AND r.start_time = @start_time
+      AND r.end_time = @end_time
+      AND rt.name = 'OPEN_PLAY'
+    LIMIT 1
+)
+  AND user_id = @user_id;
+
+-- name: ListOpenPlayParticipants :many
+SELECT u.id,
+    u.first_name,
+    u.last_name,
+    u.photo_url
+FROM reservation_participants rp
+JOIN reservations r ON r.id = rp.reservation_id
+JOIN reservation_types rt ON rt.id = r.reservation_type_id
+JOIN users u ON u.id = rp.user_id
+WHERE r.facility_id = @facility_id
+  AND r.open_play_rule_id = @open_play_rule_id
+  AND r.start_time = @start_time
+  AND r.end_time = @end_time
+  AND rt.name = 'OPEN_PLAY'
+ORDER BY u.last_name, u.first_name;
+
+-- name: GetOpenPlayParticipantCount :one
+SELECT COUNT(*)
+FROM reservation_participants rp
+JOIN reservations r ON r.id = rp.reservation_id
+JOIN reservation_types rt ON rt.id = r.reservation_type_id
+WHERE r.facility_id = @facility_id
+  AND r.open_play_rule_id = @open_play_rule_id
+  AND r.start_time = @start_time
+  AND r.end_time = @end_time
+  AND rt.name = 'OPEN_PLAY';
+
 -- name: CreateStaffNotification :one
 INSERT INTO staff_notifications (
     facility_id,
