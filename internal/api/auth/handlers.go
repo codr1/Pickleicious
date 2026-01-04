@@ -1,8 +1,11 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,7 +13,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/request"
@@ -28,6 +33,14 @@ type CognitoConfig struct {
 var queries *dbgen.Queries
 var limiter *rate.Limiter
 var appConfig *config.Config
+var newCognitoClient = func(cfg dbgen.CognitoConfig) (CognitoAuthClient, error) {
+	return cognito.NewClient(cfg)
+}
+
+type CognitoAuthClient interface {
+	InitiateCustomAuth(ctx context.Context, username string, authMethod string) (*cognitoidentityprovider.InitiateAuthOutput, error)
+	RespondToAuthChallenge(ctx context.Context, session string, username string, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error)
+}
 
 // Used to mask timing differences when a user record does not exist.
 const dummyPasswordHash = "$2a$10$6bhr8BjYp8rXJejsIExR7uOrcalHplR0RnnoSJk5mZXv5fNru2udi"
@@ -52,7 +65,8 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	component := authtempl.LoginLayout()
+	organizationID := r.FormValue("organization_id")
+	component := authtempl.LoginLayout(organizationID)
 	err := component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render login page")
@@ -114,6 +128,23 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to load user for auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Get Cognito config for this organization
 	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
 	if err != nil {
@@ -123,13 +154,34 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize Cognito client with organization-specific config
-	// TODO: Implement Cognito client initialization with cognitoConfig
-	_ = cognitoConfig // Suppress unused warning until TODO is implemented
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	// Send verification code via Cognito
-	// TODO: Implement Cognito code sending
+	authMethod := ""
+	if user.PreferredAuthMethod.Valid {
+		authMethod = user.PreferredAuthMethod.String
+	}
 
-	component := authtempl.CodeVerification()
+	authResponse, err := client.InitiateCustomAuth(r.Context(), identifier, authMethod)
+	if err != nil {
+		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to initiate Cognito auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	session := ""
+	if authResponse != nil && authResponse.Session != nil {
+		session = *authResponse.Session
+	}
+
+	component := authtempl.CodeVerification(identifier, organizationIDStr, session)
 	err = component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render verification screen")
@@ -143,15 +195,33 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	identifier := r.FormValue("identifier")
 	organizationIDStr := r.FormValue("organization_id")
+	session := r.FormValue("session")
 
-	if code == "" || identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Code, identifier, and organization are required", http.StatusBadRequest)
+	if code == "" || identifier == "" || organizationIDStr == "" || session == "" {
+		http.Error(w, "Code, identifier, organization, and session are required", http.StatusBadRequest)
 		return
 	}
 
 	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to load user for auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -164,13 +234,47 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify code with Cognito
-	// TODO: Implement Cognito verification with cognitoConfig
-	_ = cognitoConfig // Suppress unused warning until TODO is implemented
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	authResponse, err := client.RespondToAuthChallenge(r.Context(), session, identifier, code)
+	if err != nil {
+		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to respond to Cognito challenge")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if authResponse == nil || authResponse.AuthenticationResult == nil || authResponse.ChallengeName != "" {
+		writeHTMXError(w, r, http.StatusUnauthorized, "Additional verification required")
+		return
+	}
 
 	// Update user's Cognito status if needed
-	// TODO: Update cognito_status in database
+	err = queries.UpdateUserCognitoStatus(r.Context(), dbgen.UpdateUserCognitoStatusParams{
+		ID:            user.ID,
+		CognitoStatus: sql.NullString{String: "CONFIRMED", Valid: true},
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to update Cognito status")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	// TODO: Set up session/JWT
+	if err := CreateSession(w, user.ID); err != nil {
+		logger.Error().Err(err).Msg("Failed to create auth session")
+		http.Error(w, "Failed to start session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
 }
 
 func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
@@ -261,15 +365,72 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 	identifier := r.FormValue("identifier")
+	organizationIDStr := r.FormValue("organization_id")
 
-	if identifier == "" {
-		http.Error(w, "Identifier is required", http.StatusBadRequest)
+	if identifier == "" || organizationIDStr == "" {
+		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
 		return
 	}
 
-	// TODO: Implement Cognito code resending
-	component := authtempl.CodeVerification()
-	err := component.Render(r.Context(), w)
+	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to load user for auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get Cognito config")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	authMethod := ""
+	if user.PreferredAuthMethod.Valid {
+		authMethod = user.PreferredAuthMethod.String
+	}
+
+	authResponse, err := client.InitiateCustomAuth(r.Context(), identifier, authMethod)
+	if err != nil {
+		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to resend Cognito auth code")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	session := ""
+	if authResponse != nil && authResponse.Session != nil {
+		session = *authResponse.Session
+	}
+
+	component := authtempl.CodeVerification(identifier, organizationIDStr, session)
+	err = component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render verification screen")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -280,7 +441,8 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 func HandleStandardLogin(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
-	component := authtempl.LoginLayout()
+	organizationID := r.FormValue("organization_id")
+	component := authtempl.LoginLayout(organizationID)
 	err := component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render login page")
@@ -314,4 +476,42 @@ func devModeBypass(r *http.Request, identifier, password string) (*authz.AuthUse
 		IsStaff:        true,
 		HomeFacilityID: homeFacilityID,
 	}, true
+}
+
+func getUserByIdentifier(ctx context.Context, identifier string) (dbgen.User, error) {
+	if strings.Contains(identifier, "@") {
+		return queries.GetUserByEmail(ctx, sql.NullString{String: identifier, Valid: true})
+	}
+	return queries.GetUserByPhone(ctx, sql.NullString{String: identifier, Valid: true})
+}
+
+func handleCognitoAuthError(w http.ResponseWriter, r *http.Request, err error, unauthorizedMsg string, expiredMsg string) bool {
+	switch {
+	case errors.Is(err, cognito.ErrCognitoThrottled):
+		writeHTMXError(w, r, http.StatusTooManyRequests, "Too many requests. Please try again in a few minutes.")
+		return true
+	case errors.Is(err, cognito.ErrCognitoNotAuthorized), errors.Is(err, cognito.ErrCognitoCodeMismatch):
+		writeHTMXError(w, r, http.StatusUnauthorized, unauthorizedMsg)
+		return true
+	case errors.Is(err, cognito.ErrCognitoExpiredCode):
+		writeHTMXError(w, r, http.StatusForbidden, expiredMsg)
+		return true
+	default:
+		return false
+	}
+}
+
+func writeHTMXError(w http.ResponseWriter, r *http.Request, status int, message string) {
+	if strings.EqualFold(r.Header.Get("HX-Request"), "true") {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("HX-Retarget", "#auth-error")
+		w.Header().Set("HX-Reswap", "innerHTML")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(fmt.Sprintf(
+			`<div class="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">%s</div>`,
+			html.EscapeString(message),
+		)))
+		return
+	}
+	http.Error(w, message, status)
 }

@@ -20,6 +20,15 @@ import (
 // ErrCognitoThrottled marks errors returned when Cognito throttles requests.
 var ErrCognitoThrottled = errors.New("cognito throttling")
 
+// ErrCognitoNotAuthorized marks errors returned when Cognito rejects credentials.
+var ErrCognitoNotAuthorized = errors.New("cognito not authorized")
+
+// ErrCognitoExpiredCode marks errors returned when Cognito sees expired codes.
+var ErrCognitoExpiredCode = errors.New("cognito code expired")
+
+// ErrCognitoCodeMismatch marks errors returned when Cognito sees mismatched codes.
+var ErrCognitoCodeMismatch = errors.New("cognito code mismatch")
+
 type CognitoClient struct {
 	client       *cognitoidentityprovider.Client
 	clientID     string
@@ -99,6 +108,18 @@ func mapCognitoError(err error) error {
 	var throttled *types.TooManyRequestsException
 	if errors.As(err, &throttled) {
 		return fmt.Errorf("%w: %v", ErrCognitoThrottled, err)
+	}
+	var notAuthorized *types.NotAuthorizedException
+	if errors.As(err, &notAuthorized) {
+		return fmt.Errorf("%w: %v", ErrCognitoNotAuthorized, err)
+	}
+	var expired *types.ExpiredCodeException
+	if errors.As(err, &expired) {
+		return fmt.Errorf("%w: %v", ErrCognitoExpiredCode, err)
+	}
+	var mismatch *types.CodeMismatchException
+	if errors.As(err, &mismatch) {
+		return fmt.Errorf("%w: %v", ErrCognitoCodeMismatch, err)
 	}
 	return err
 }
