@@ -19,7 +19,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog/log"
 
-	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	"github.com/codr1/Pickleicious/internal/api/htmx"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
@@ -632,7 +632,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := writeJSON(w, http.StatusOK, responseSession); err != nil {
+	if err := apiutil.WriteJSON(w, http.StatusOK, responseSession); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play session response")
 		return
 	}
@@ -661,12 +661,12 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 
 	var payload openPlayParticipantRequest
-	if err := decodeJSON(r, &payload); err != nil {
+	if err := apiutil.DecodeJSON(r, &payload); err != nil {
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
@@ -694,20 +694,20 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 			EndTime:        session.EndTime,
 		})
 		if err != nil {
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to list open play participants", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to list open play participants", Err: err}
 		}
 
 		for _, existing := range participants {
 			if existing.ID == payload.UserID {
-				return handlerError{status: http.StatusConflict, message: "Participant already exists"}
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Participant already exists"}
 			}
 		}
 
 		if _, err := qtx.GetUserByID(ctx, payload.UserID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return handlerError{status: http.StatusNotFound, message: "User not found", err: err}
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "User not found", Err: err}
 			}
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to fetch user", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch user", Err: err}
 		}
 
 		participant, err = qtx.AddOpenPlayParticipant(ctx, dbgen.AddOpenPlayParticipantParams{
@@ -719,27 +719,27 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return handlerError{status: http.StatusNotFound, message: "Open play reservation not found", err: err}
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found", Err: err}
 			}
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to add participant", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add participant", Err: err}
 		}
 
 		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditParticipantAdded, map[string]any{}, map[string]any{
 			"user_id":        payload.UserID,
 			"reservation_id": reservationID,
 		}, sql.NullString{}); err != nil {
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play participant add", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log open play participant add", Err: err}
 		}
 
 		return nil
 	})
 	if err != nil {
-		var herr handlerError
+		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
-			if herr.status == http.StatusInternalServerError {
-				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("session_id", sessionID).Msg(herr.Message)
 			}
-			http.Error(w, herr.message, herr.status)
+			http.Error(w, herr.Message, herr.Status)
 			return
 		}
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to add open play participant")
@@ -750,7 +750,7 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshOpenPlayParticipants")
 	}
-	if err := writeJSON(w, http.StatusCreated, participant); err != nil {
+	if err := apiutil.WriteJSON(w, http.StatusCreated, participant); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play participant response")
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
@@ -780,7 +780,7 @@ func HandleRemoveParticipant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 
@@ -813,28 +813,28 @@ func HandleRemoveParticipant(w http.ResponseWriter, r *http.Request) {
 			EndTime:        session.EndTime,
 		})
 		if err != nil {
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to remove participant", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove participant", Err: err}
 		}
 		if removed == 0 {
-			return handlerError{status: http.StatusNotFound, message: "Participant not found"}
+			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Participant not found"}
 		}
 
 		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditParticipantRemoved, map[string]any{
 			"user_id":        userID,
 			"reservation_id": reservationID,
 		}, map[string]any{}, sql.NullString{}); err != nil {
-			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play participant removal", err: err}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log open play participant removal", Err: err}
 		}
 
 		return nil
 	})
 	if err != nil {
-		var herr handlerError
+		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
-			if herr.status == http.StatusInternalServerError {
-				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("session_id", sessionID).Msg(herr.Message)
 			}
-			http.Error(w, herr.message, herr.status)
+			http.Error(w, herr.Message, herr.Status)
 			return
 		}
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to remove open play participant")
@@ -870,7 +870,7 @@ func HandleListParticipants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !requireFacilityAccess(w, r, facilityID) {
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
 
@@ -879,12 +879,12 @@ func HandleListParticipants(w http.ResponseWriter, r *http.Request) {
 
 	session, err := fetchOpenPlaySession(ctx, q, sessionID, facilityID)
 	if err != nil {
-		var herr handlerError
+		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
-			if herr.status == http.StatusInternalServerError {
-				logger.Error().Err(herr.err).Int64("session_id", sessionID).Msg(herr.message)
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("session_id", sessionID).Msg(herr.Message)
 			}
-			http.Error(w, herr.message, herr.status)
+			http.Error(w, herr.Message, herr.Status)
 			return
 		}
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to fetch open play session")
@@ -926,7 +926,7 @@ func HandleListParticipants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := writeJSON(w, http.StatusOK, map[string]any{"participants": participants}); err != nil {
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"participants": participants}); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play participant response")
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
@@ -1028,7 +1028,7 @@ func openPlayParticipantUserIDFromRequest(r *http.Request) (int64, error) {
 	}
 
 	var payload openPlayParticipantRequest
-	if err := decodeJSON(r, &payload); err != nil {
+	if err := apiutil.DecodeJSON(r, &payload); err != nil {
 		return 0, err
 	}
 	if payload.UserID <= 0 {
@@ -1044,13 +1044,13 @@ func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, s
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+			return dbgen.GetOpenPlaySessionRow{}, 0, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play session not found", Err: err}
 		}
-		return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+		return dbgen.GetOpenPlaySessionRow{}, 0, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play session", Err: err}
 	}
 
 	if session.Status != "scheduled" {
-		return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusBadRequest, message: "Open play session is not scheduled"}
+		return dbgen.GetOpenPlaySessionRow{}, 0, apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session is not scheduled"}
 	}
 
 	reservationID, err := q.GetOpenPlayReservationID(ctx, dbgen.GetOpenPlayReservationIDParams{
@@ -1061,9 +1061,9 @@ func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, s
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return session, 0, handlerError{status: http.StatusNotFound, message: "Open play reservation not found", err: err}
+			return session, 0, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found", Err: err}
 		}
-		return session, 0, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play reservation", err: err}
+		return session, 0, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play reservation", Err: err}
 	}
 
 	return session, reservationID, nil
@@ -1076,9 +1076,9 @@ func fetchOpenPlaySession(ctx context.Context, q *dbgen.Queries, sessionID, faci
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return dbgen.GetOpenPlaySessionRow{}, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+			return dbgen.GetOpenPlaySessionRow{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play session not found", Err: err}
 		}
-		return dbgen.GetOpenPlaySessionRow{}, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+		return dbgen.GetOpenPlaySessionRow{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play session", Err: err}
 	}
 	return session, nil
 }

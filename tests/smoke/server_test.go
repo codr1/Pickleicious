@@ -61,6 +61,7 @@ features:
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	cmd.Env = append(os.Environ(), "APP_SECRET_KEY=smoke-test-secret")
 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start server: %v", err)

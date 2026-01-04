@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 )
@@ -263,6 +264,16 @@ func setupThemeHandlers(t *testing.T) *mockThemeQueries {
 	return mock
 }
 
+func withAuthUser(req *http.Request, facilityID int64) *http.Request {
+	homeFacilityID := facilityID
+	user := &authz.AuthUser{
+		ID:             1,
+		IsStaff:        true,
+		HomeFacilityID: &homeFacilityID,
+	}
+	return req.WithContext(authz.ContextWithUser(req.Context(), user))
+}
+
 func TestCreateTheme_ValidInput(t *testing.T) {
 	setupThemeHandlers(t)
 
@@ -281,6 +292,7 @@ func TestCreateTheme_ValidInput(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/themes", strings.NewReader(string(payload)))
+	req = withAuthUser(req, 42)
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -320,6 +332,7 @@ func TestCreateTheme_InvalidWCAG(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/themes", strings.NewReader(string(payload)))
+	req = withAuthUser(req, 42)
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -377,6 +390,7 @@ func TestUpdateTheme_Success(t *testing.T) {
 
 	themeIDStr := strconv.FormatInt(themeID, 10)
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/themes/"+themeIDStr, strings.NewReader(string(payload)))
+	req = withAuthUser(req, 77)
 	req.Header.Set("Content-Type", "application/json")
 	req.SetPathValue("id", themeIDStr)
 	recorder := httptest.NewRecorder()
@@ -411,6 +425,7 @@ func TestDeleteTheme_Success(t *testing.T) {
 
 	themeIDStr := strconv.FormatInt(themeID, 10)
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/themes/"+themeIDStr, nil)
+	req = withAuthUser(req, 77)
 	req.SetPathValue("id", themeIDStr)
 	recorder := httptest.NewRecorder()
 
@@ -466,6 +481,7 @@ func TestListThemes_ReturnsAllThemes(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/themes?facility_id=5", nil)
+	req = withAuthUser(req, 5)
 	recorder := httptest.NewRecorder()
 
 	HandleThemesList(recorder, req)
