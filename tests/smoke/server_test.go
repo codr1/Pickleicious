@@ -37,6 +37,7 @@ func TestServerStartup(t *testing.T) {
   environment: "development"
   port: %d
   base_url: "http://localhost:%d"
+  secret_key: "test-secret-key-for-smoke-tests-only"
 
 database:
   driver: "sqlite"
