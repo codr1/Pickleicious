@@ -1,7 +1,3 @@
-Here is the complete updated SPEC.md content:
-
----
-
 # PICKLEICIOUS - System Specification
 
 ## Overview
@@ -106,11 +102,20 @@ Organization (corporate entity)
 
 | Table | Purpose |
 |-------|---------|
-| reservation_types | Booking type lookup (GAME, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE, TOURNAMENT) |
+| reservation_types | Booking type lookup (seeded: OPEN_PLAY, GAME, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE) |
 | recurrence_rules | Recurring patterns (WEEKLY, BIWEEKLY, MONTHLY) |
 | reservations | Booking records |
 | reservation_courts | Multi-court junction |
 | reservation_participants | Multi-member junction |
+
+### Open Play System
+
+| Table | Purpose |
+|-------|---------|
+| open_play_rules | Configuration for open play sessions |
+| open_play_sessions | Individual open play session instances |
+| staff_notifications | Staff notification storage |
+| audit_log | Audit trail for automated decisions |
 
 ### Key Constraints
 
@@ -163,12 +168,94 @@ Organization (corporate entity)
 | GET | `/api/v1/members/photo/{id}` | Member photo |
 | POST | `/api/v1/members/restore` | Restore/create decision |
 
-### Courts
+### Courts and Calendar
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/courts` | Courts page |
-| GET | `/api/v1/courts/calendar` | Calendar view |
+| GET | `/courts` | Courts page with calendar |
+| GET | `/api/v1/courts/calendar` | Calendar view (HTMX partial) |
+| GET | `/api/v1/courts/booking/new` | Quick booking form modal |
+
+### Reservations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/reservations` | List reservations by facility and date range |
+| POST | `/api/v1/reservations` | Create reservation |
+| GET | `/api/v1/reservations/{id}/edit` | Edit reservation form |
+| PUT | `/api/v1/reservations/{id}` | Update reservation |
+| DELETE | `/api/v1/reservations/{id}` | Delete reservation |
+| GET | `/api/v1/events/booking/new` | Event booking form (multi-court) |
+
+### Open Play
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/open-play-rules` | Open play rules page |
+| GET | `/api/v1/open-play-rules` | List rules |
+| POST | `/api/v1/open-play-rules` | Create rule |
+| GET | `/api/v1/open-play-rules/new` | New rule form |
+| GET | `/api/v1/open-play-rules/{id}` | Rule detail |
+| GET | `/api/v1/open-play-rules/{id}/edit` | Edit form |
+| PUT | `/api/v1/open-play-rules/{id}` | Update rule |
+| DELETE | `/api/v1/open-play-rules/{id}` | Delete rule |
+| PUT | `/api/v1/open-play-sessions/{id}/auto-scale` | Toggle auto-scale override |
+
+### Themes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/themes` | List themes |
+| POST | `/api/v1/themes` | Create theme |
+| GET | `/api/v1/themes/{id}` | Theme detail |
+| PUT | `/api/v1/themes/{id}` | Update theme |
+| DELETE | `/api/v1/themes/{id}` | Delete theme |
+| PUT | `/api/v1/themes/{id}/activate` | Activate theme for facility |
+
+## Reservation System
+
+### Reservation Types (Seeded)
+
+| Name | Purpose |
+|------|---------|
+| OPEN_PLAY | Drop-in open play sessions |
+| GAME | Standard court booking |
+| PRO_SESSION | Lessons with pro staff |
+| EVENT | Special events |
+| MAINTENANCE | Court maintenance blocks |
+| LEAGUE | League play |
+
+### Booking Workflows
+
+**Quick Booking (`/api/v1/courts/booking/new`)**
+- Single court selection (pre-filled from calendar click)
+- Start/end time with 1-hour default duration
+- Reservation type dropdown
+- Optional primary user (member search)
+- Validates: start < end, minimum 1-hour duration, no double-booking
+
+**Event Booking (`/api/v1/events/booking/new`)**
+- Multi-court selection (checkboxes)
+- Participant management (add/remove members)
+- Extended options for events
+- Same validation as quick booking
+
+### Calendar Display
+
+- Courts shown as columns, hours as rows
+- Reservations rendered as colored blocks positioned by time
+- Block color determined by reservation_type.color
+- Clicking empty cell opens quick booking form
+- Clicking reservation block opens edit form
+- Date navigation with query parameter `?date=YYYY-MM-DD`
+
+### Validation Rules
+
+- Start time must be before end time
+- Minimum duration: 1 hour
+- Court must be available (no overlapping reservations)
+- Facility must exist and user must have access
+- Conflict errors shown inline with red border styling
 
 ## Member Management
 
@@ -195,6 +282,36 @@ Photos are stored as BLOBs in the database with content_type and size metadata. 
 - Deleting a member sets status to 'deleted' (not physical delete)
 - Deleted members are excluded from normal queries
 - Creating a member with a deleted account's email offers restoration or new account creation
+
+## Authorization
+
+### AuthUser Structure
+
+```go
+type AuthUser struct {
+    ID             int64
+    IsStaff        bool
+    HomeFacilityID int64
+}
+```
+
+### Access Rules
+
+| User Type | Access |
+|-----------|--------|
+| Staff | Own facility only (HomeFacilityID must match) |
+| Admin | All facilities |
+| Unauthenticated | 401 Unauthorized |
+
+### Protected Endpoints
+
+All facility-scoped endpoints enforce authorization:
+- Theme management (6 endpoints)
+- Open play rules (6 endpoints)
+- Court calendar and booking
+- Reservations CRUD
+
+Authorization failures are logged with facility_id and user_id.
 
 ## Authentication
 
@@ -283,6 +400,22 @@ type AuthUser struct {
 | 401 | Unauthenticated - no valid session |
 | 403 | Forbidden - authenticated but lacks permission |
 
+## Open Play Enforcement Engine
+
+### Session Lifecycle
+
+Open play sessions are created from rules and managed by a gocron scheduler that:
+- Evaluates sessions at configured intervals
+- Auto-scales courts based on participant count
+- Notifies staff of important events
+- Logs all automated decisions to audit_log
+
+### Auto-Scale Override
+
+Staff can toggle auto-scaling for individual sessions via PUT `/api/v1/open-play-sessions/{id}/auto-scale`. Options:
+- Override for current session only
+- Disable for entire rule (affects future sessions)
+
 ## UI Framework
 
 ### Layout
@@ -302,7 +435,7 @@ type AuthUser struct {
 | hx-trigger | Custom events, delays |
 | hx-target | Where to swap content |
 | hx-swap | How to swap (innerHTML, outerHTML) |
-| HX-Trigger | Server-sent events |
+| HX-Trigger | Server-sent events (e.g., calendar-refresh) |
 | HX-Redirect | Server-initiated redirects (used after login) |
 
 ## Configuration
@@ -325,6 +458,9 @@ features:
   enable_metrics: false
   enable_tracing: false
   enable_debug: true
+
+open_play:
+  enforcement_interval: "5m"
 ```
 
 ### Environment Variables
@@ -373,6 +509,28 @@ PR checks workflow (`.github/workflows/pr-checks.yml`):
 4. Run `task generate`
 5. Run `task test:smoke`
 
+## Shared Utilities
+
+### apiutil Package
+
+Common handler utilities in `internal/api/apiutil`:
+- `DecodeJSON` - Strict JSON decoding with unknown field rejection
+- `WriteJSON` - JSON response writing
+- `RequireFacilityAccess` - Authorization check with logging
+- `FieldError` - Field-level validation error
+- `HandlerError` - HTTP error with status code
+
+### request Package
+
+Request parsing utilities in `internal/request`:
+- `ParseFacilityID` - Parse facility_id from string
+- `FacilityIDFromBookingRequest` - Extract facility_id from query or form
+
+### testutil Package
+
+Test helpers in `internal/testutil`:
+- `NewTestDB` - Create test database with migrations applied
+
 ## Project Structure
 
 ```
@@ -382,13 +540,15 @@ pickleicious/
 │   └── tools/dbmigrate/     # Migration tool
 ├── internal/
 │   ├── api/                 # HTTP handlers
+│   │   ├── apiutil/         # Shared handler utilities
 │   │   ├── auth/            # Authentication (handlers, password, session)
 │   │   ├── authz/           # Authorization helpers
 │   │   ├── courts/          # Court/calendar
 │   │   ├── members/         # Member CRUD
 │   │   ├── nav/             # Navigation
-│   │   ├── openplay/        # Open play sessions
-│   │   └── themes/          # Facility themes
+│   │   ├── openplay/        # Open play rules
+│   │   ├── reservations/    # Reservation CRUD
+│   │   └── themes/          # Theme management
 │   ├── config/              # Configuration loading
 │   ├── db/
 │   │   ├── migrations/      # SQL migration files
@@ -398,6 +558,9 @@ pickleicious/
 │   ├── models/              # Domain models
 │   ├── request/             # Request parsing utilities
 │   ├── templates/           # Templ components
+│   │   └── components/
+│   │       ├── courts/      # Calendar components
+│   │       └── reservations/ # Booking form components
 │   └── testutil/            # Test helpers
 ├── tests/
 │   └── smoke/               # Smoke tests
@@ -412,3 +575,13 @@ pickleicious/
 ├── .air.toml                # Hot reload config
 └── config.yaml              # App configuration
 ```
+
+## CI/CD
+
+### PR Checks Workflow
+
+`.github/workflows/pr-checks.yml` runs on pull requests to main:
+1. Set up Go with version from go.mod
+2. Install task, templ, sqlc
+3. Run `task generate`
+4. Run `task test:smoke`
