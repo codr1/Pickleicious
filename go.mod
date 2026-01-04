@@ -12,6 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/rs/zerolog v1.33.0
+	golang.org/x/crypto v0.38.0
 	golang.org/x/sync v0.18.0
 	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
