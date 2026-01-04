@@ -4,6 +4,7 @@ package smoke
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/codr1/Pickleicious/internal/testutil"
 )
 
 func TestServerStartup(t *testing.T) {
@@ -155,4 +158,59 @@ func findRepoRoot(t *testing.T) string {
 
 	t.Fatal("failed to locate repo root with go.mod")
 	return ""
+}
+
+func TestMigrationsApplied(t *testing.T) {
+	db := testutil.NewTestDB(t)
+
+	expectedTables := []string{
+		"organizations",
+		"facilities",
+		"operating_hours",
+		"users",
+		"user_billing",
+		"user_photos",
+		"staff",
+		"courts",
+		"reservation_types",
+		"recurrence_rules",
+		"reservations",
+		"reservation_courts",
+		"reservation_participants",
+		"cognito_config",
+	}
+
+	for _, table := range expectedTables {
+		var name string
+		err := db.QueryRow(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+			table,
+		).Scan(&name)
+		if err == sql.ErrNoRows {
+			t.Fatalf("missing expected table %q after migrations", table)
+		}
+		if err != nil {
+			t.Fatalf("query table %q existence: %v", table, err)
+		}
+	}
+}
+
+func TestForeignKeyIntegrity(t *testing.T) {
+	db := testutil.NewTestDB(t)
+
+	var foreignKeysEnabled int
+	if err := db.QueryRow("PRAGMA foreign_keys;").Scan(&foreignKeysEnabled); err != nil {
+		t.Fatalf("query foreign_keys pragma: %v", err)
+	}
+	if foreignKeysEnabled != 1 {
+		t.Fatalf("expected foreign_keys pragma enabled, got %d", foreignKeysEnabled)
+	}
+
+	_, err := db.Exec(
+		`INSERT INTO facilities (organization_id, name, slug, timezone)
+		 VALUES (9999, 'Bad Facility', 'bad-facility', 'UTC')`,
+	)
+	if err == nil {
+		t.Fatal("expected foreign key constraint failure for invalid organization_id")
+	}
 }

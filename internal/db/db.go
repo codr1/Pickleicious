@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
@@ -27,6 +28,7 @@ type DB struct {
 
 // New creates a new DB instance with the given data source name
 func New(dataSourceName string) (*DB, error) {
+	dataSourceName = ensureForeignKeysEnabledDSN(dataSourceName)
 	sqlDB, err := sql.Open("sqlite3", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("error opening database: %w", err)
@@ -58,7 +60,8 @@ func NewFromConfig(cfg *config.Config) (*DB, error) {
 		if err := os.MkdirAll(filepath.Dir(cfg.Database.Filename), 0755); err != nil {
 			return nil, fmt.Errorf("error creating database directory: %w", err)
 		}
-		db, err = sql.Open("sqlite3", cfg.Database.Filename)
+		dataSourceName := ensureForeignKeysEnabledDSN(cfg.Database.Filename)
+		db, err = sql.Open("sqlite3", dataSourceName)
 
 	case "turso":
 		// Example for future Turso support
@@ -84,6 +87,16 @@ func NewFromConfig(cfg *config.Config) (*DB, error) {
 		DB:      db,
 		Queries: queries,
 	}, nil
+}
+
+func ensureForeignKeysEnabledDSN(dataSourceName string) string {
+	if strings.Contains(dataSourceName, "_fk=") {
+		return dataSourceName
+	}
+	if strings.Contains(dataSourceName, "?") {
+		return dataSourceName + "&_fk=1"
+	}
+	return dataSourceName + "?_fk=1"
 }
 
 func runMigrations(db *sql.DB) error {
