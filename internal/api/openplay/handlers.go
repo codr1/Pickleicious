@@ -563,7 +563,8 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	var updatedSession dbgen.OpenPlaySession
+	var auditSession dbgen.OpenPlaySession
+	var responseSession dbgen.GetOpenPlaySessionRow
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -594,7 +595,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 			nextOverride = !session.AutoScaleOverride.Bool
 		}
 
-		updatedSession, err = qtx.UpdateSessionAutoScaleOverride(ctx, dbgen.UpdateSessionAutoScaleOverrideParams{
+		auditSession, err = qtx.UpdateSessionAutoScaleOverride(ctx, dbgen.UpdateSessionAutoScaleOverrideParams{
 			ID:                sessionID,
 			FacilityID:        facilityID,
 			AutoScaleOverride: sql.NullBool{Bool: nextOverride, Valid: true},
@@ -609,7 +610,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		if err := createOpenPlayAuditEntry(ctx, qtx, session.ID, openPlayAuditAutoScaleOverride, map[string]any{
 			"auto_scale_override": auditBoolValue(session.AutoScaleOverride),
 		}, map[string]any{
-			"auto_scale_override": auditBoolValue(updatedSession.AutoScaleOverride),
+			"auto_scale_override": auditBoolValue(auditSession.AutoScaleOverride),
 		}, sql.NullString{}); err != nil {
 			return handlerError{status: http.StatusInternalServerError, message: "Failed to log open play session auto scale override", err: err}
 		}
@@ -642,6 +643,10 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 			}
 		}
 
+		responseSession = session
+		responseSession.AutoScaleOverride = auditSession.AutoScaleOverride
+		responseSession.UpdatedAt = auditSession.UpdatedAt
+
 		return nil
 	})
 	if err != nil {
@@ -658,7 +663,7 @@ func HandleOpenPlaySessionAutoScaleToggle(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := writeJSON(w, http.StatusOK, updatedSession); err != nil {
+	if err := writeJSON(w, http.StatusOK, responseSession); err != nil {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play session response")
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		return
@@ -1036,20 +1041,20 @@ func openPlayParticipantUserIDFromRequest(r *http.Request) (int64, error) {
 	return payload.UserID, nil
 }
 
-func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, sessionID, facilityID int64) (dbgen.OpenPlaySession, int64, error) {
+func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, sessionID, facilityID int64) (dbgen.GetOpenPlaySessionRow, int64, error) {
 	session, err := q.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
 		ID:         sessionID,
 		FacilityID: facilityID,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return dbgen.OpenPlaySession{}, 0, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+			return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
 		}
-		return dbgen.OpenPlaySession{}, 0, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+		return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
 	}
 
 	if session.Status != "scheduled" {
-		return dbgen.OpenPlaySession{}, 0, handlerError{status: http.StatusBadRequest, message: "Open play session is not scheduled"}
+		return dbgen.GetOpenPlaySessionRow{}, 0, handlerError{status: http.StatusBadRequest, message: "Open play session is not scheduled"}
 	}
 
 	reservationID, err := q.GetOpenPlayReservationID(ctx, dbgen.GetOpenPlayReservationIDParams{
@@ -1068,16 +1073,16 @@ func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, s
 	return session, reservationID, nil
 }
 
-func fetchOpenPlaySession(ctx context.Context, q *dbgen.Queries, sessionID, facilityID int64) (dbgen.OpenPlaySession, error) {
+func fetchOpenPlaySession(ctx context.Context, q *dbgen.Queries, sessionID, facilityID int64) (dbgen.GetOpenPlaySessionRow, error) {
 	session, err := q.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
 		ID:         sessionID,
 		FacilityID: facilityID,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return dbgen.OpenPlaySession{}, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
+			return dbgen.GetOpenPlaySessionRow{}, handlerError{status: http.StatusNotFound, message: "Open play session not found", err: err}
 		}
-		return dbgen.OpenPlaySession{}, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
+		return dbgen.GetOpenPlaySessionRow{}, handlerError{status: http.StatusInternalServerError, message: "Failed to fetch open play session", err: err}
 	}
 	return session, nil
 }
