@@ -146,7 +146,7 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	if dateValue != "" {
 		parsedDate, err := time.ParseInLocation("2006-01-02", dateValue, now.Location())
 		if err == nil {
-			baseDate = time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, parsedDate.Location())
+			baseDate = parsedDate
 		}
 	}
 
