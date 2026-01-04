@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package authz_test
 
 // NOTE: Tests cannot use t.Parallel() due to shared package state.
@@ -56,7 +59,7 @@ func setupAuthzIntegrationTest(t *testing.T) *db.DB {
 	}
 
 	themes.InitHandlers(database.Queries)
-	openplay.InitHandlers(database.Queries)
+	openplay.InitHandlers(database)
 
 	return database
 }
