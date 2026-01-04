@@ -14,6 +14,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
@@ -40,6 +41,8 @@ var newCognitoClient = func(cfg dbgen.CognitoConfig) (CognitoAuthClient, error) 
 type CognitoAuthClient interface {
 	InitiateCustomAuth(ctx context.Context, username string, authMethod string) (*cognitoidentityprovider.InitiateAuthOutput, error)
 	RespondToAuthChallenge(ctx context.Context, session string, username string, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error)
+	ForgotPassword(ctx context.Context, username string, authMethod string) (*cognitoidentityprovider.ForgotPasswordOutput, error)
+	ConfirmForgotPassword(ctx context.Context, username string, code string, newPassword string) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error)
 }
 
 // Used to mask timing differences when a user record does not exist.
@@ -119,6 +122,11 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 
 	if identifier == "" || organizationIDStr == "" {
 		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+		return
+	}
+
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 
@@ -293,7 +301,8 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
 	if r.Method == http.MethodGet {
-		component := authtempl.StaffLoginForm()
+		organizationID := r.FormValue("organization_id")
+		component := authtempl.StaffLoginForm(organizationID)
 		err := component.Render(r.Context(), w)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to render staff login form")
@@ -369,9 +378,156 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 
 func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
-	// TODO: Implement password reset flow
-	logger.Error().Msg("Password reset not implemented")
-	http.Error(w, "Password reset not implemented", http.StatusNotImplemented)
+	if r.Method == http.MethodGet {
+		identifier := r.FormValue("identifier")
+		organizationID := r.FormValue("organization_id")
+		component := authtempl.ResetPasswordForm(identifier, organizationID)
+		err := component.Render(r.Context(), w)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to render reset password form")
+			http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	identifier := r.FormValue("identifier")
+	organizationIDStr := r.FormValue("organization_id")
+
+	if identifier == "" || organizationIDStr == "" {
+		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+		return
+	}
+
+	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get Cognito config")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	authMethod := ""
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logger.Error().Err(err).Msg("Failed to load user for password reset")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if err == nil && user.PreferredAuthMethod.Valid {
+		authMethod = user.PreferredAuthMethod.String
+	}
+
+	_, err = client.ForgotPassword(r.Context(), identifier, authMethod)
+	if err != nil {
+		var userNotFound *types.UserNotFoundException
+		if errors.As(err, &userNotFound) {
+			err = nil
+		} else if handleCognitoAuthError(w, r, err, "Unable to send reset code", "Reset request expired") {
+			return
+		} else {
+			logger.Error().Err(err).Msg("Failed to send password reset code")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	component := authtempl.ResetPasswordConfirmation(identifier, organizationIDStr)
+	err = component.Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render password reset confirmation form")
+		http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+	code := r.FormValue("code")
+	newPassword := r.FormValue("new_password")
+	identifier := r.FormValue("identifier")
+	organizationIDStr := r.FormValue("organization_id")
+
+	if code == "" || newPassword == "" || identifier == "" || organizationIDStr == "" {
+		http.Error(w, "Code, new password, identifier, and organization are required", http.StatusBadRequest)
+		return
+	}
+
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get Cognito config")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = client.ConfirmForgotPassword(r.Context(), identifier, code, newPassword)
+	if err != nil {
+		var userNotFound *types.UserNotFoundException
+		if errors.As(err, &userNotFound) {
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid verification code")
+			return
+		}
+		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
+			return
+		}
+		var invalidPassword *types.InvalidPasswordException
+		if errors.As(err, &invalidPassword) {
+			writeHTMXError(w, r, http.StatusBadRequest, "Password does not meet requirements")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to confirm password reset")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", fmt.Sprintf("/login?organization_id=%s", organizationIDStr))
+	w.WriteHeader(http.StatusOK)
 }
 
 func HandleResendCode(w http.ResponseWriter, r *http.Request) {

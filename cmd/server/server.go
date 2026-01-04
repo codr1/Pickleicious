@@ -127,6 +127,7 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/auth/resend-code", auth.HandleResendCode)
 	mux.HandleFunc("/api/v1/auth/staff-login", auth.HandleStaffLogin)
 	mux.HandleFunc("/api/v1/auth/reset-password", auth.HandleResetPassword)
+	mux.HandleFunc("/api/v1/auth/confirm-reset-password", auth.HandleConfirmResetPassword)
 	mux.HandleFunc("/api/v1/auth/standard-login", auth.HandleStandardLogin)
 
 	// Member routes

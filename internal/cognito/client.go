@@ -98,6 +98,47 @@ func (c *CognitoClient) RespondToAuthChallenge(ctx context.Context, session stri
 	return out, nil
 }
 
+func (c *CognitoClient) ForgotPassword(ctx context.Context, username string, authMethod string) (*cognitoidentityprovider.ForgotPasswordOutput, error) {
+	input := &cognitoidentityprovider.ForgotPasswordInput{
+		ClientId: aws.String(c.clientID),
+		Username: aws.String(username),
+	}
+	if authMethod != "" {
+		input.ClientMetadata = map[string]string{
+			"AUTH_METHOD": authMethod,
+		}
+	}
+	if c.clientSecret != "" {
+		input.SecretHash = aws.String(c.secretHash(username))
+	}
+
+	out, err := c.client.ForgotPassword(ctx, input)
+	if err != nil {
+		return nil, mapCognitoError(err)
+	}
+
+	return out, nil
+}
+
+func (c *CognitoClient) ConfirmForgotPassword(ctx context.Context, username string, code string, newPassword string) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error) {
+	input := &cognitoidentityprovider.ConfirmForgotPasswordInput{
+		ClientId:         aws.String(c.clientID),
+		Username:         aws.String(username),
+		ConfirmationCode: aws.String(code),
+		Password:         aws.String(newPassword),
+	}
+	if c.clientSecret != "" {
+		input.SecretHash = aws.String(c.secretHash(username))
+	}
+
+	out, err := c.client.ConfirmForgotPassword(ctx, input)
+	if err != nil {
+		return nil, mapCognitoError(err)
+	}
+
+	return out, nil
+}
+
 func (c *CognitoClient) secretHash(username string) string {
 	mac := hmac.New(sha256.New, []byte(c.clientSecret))
 	mac.Write([]byte(username + c.clientID))

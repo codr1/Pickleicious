@@ -50,14 +50,16 @@ templ StaffAuthSection() {
         <button
             class="text-sm text-gray-600 hover:text-blue-600"
             hx-get="/api/v1/auth/staff-login"
+            hx-include="#login-form [name=organization_id]"
             hx-target="#login-form">
             Sign in with staff credentials
         </button>
     </div>
 }
 
-templ StaffLoginForm() {
+templ StaffLoginForm(organizationID string) {
     <div class="space-y-6">
+        <input type="hidden" name="organization_id" value={organizationID}/>
         <div id="auth-error"></div>
         <div>
             <label for="identifier" class="block text-sm font-medium text-gray-700">
@@ -87,6 +89,7 @@ templ StaffLoginForm() {
             <button
                 class="text-sm text-gray-600 hover:text-blue-600"
                 hx-get="/api/v1/auth/reset-password"
+                hx-include="#login-form [name=identifier], #login-form [name=organization_id]"
                 hx-target="#login-form">
                 Forgot password?
             </button>
