@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package authz_test
 
 // NOTE: Tests cannot use t.Parallel() due to shared package state.
@@ -7,29 +10,22 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/openplay"
 	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/db"
+	"github.com/codr1/Pickleicious/internal/testutil"
 )
 
 func setupAuthzIntegrationTest(t *testing.T) *db.DB {
 	t.Helper()
 
-	dbPath := filepath.Join(t.TempDir(), "authz_integration.db")
-	database, err := db.New(dbPath)
-	if err != nil {
-		t.Fatalf("create db: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = database.Close()
-	})
+	database := testutil.NewTestDB(t)
 
 	ctx := context.Background()
-	_, err = database.ExecContext(ctx,
+	_, err := database.ExecContext(ctx,
 		"INSERT INTO organizations (id, name, slug, status) VALUES (?, ?, ?, ?)",
 		1,
 		"Test Org",
@@ -63,7 +59,7 @@ func setupAuthzIntegrationTest(t *testing.T) *db.DB {
 	}
 
 	themes.InitHandlers(database.Queries)
-	openplay.InitHandlers(database.Queries)
+	openplay.InitHandlers(database)
 
 	return database
 }

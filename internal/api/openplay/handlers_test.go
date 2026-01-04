@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,20 +18,13 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/testutil"
 )
 
 func setupOpenPlayTest(t *testing.T) (*db.DB, int64) {
 	t.Helper()
 
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "open_play.db")
-	database, err := db.New(dbPath)
-	if err != nil {
-		t.Fatalf("create db: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = database.Close()
-	})
+	database := testutil.NewTestDB(t)
 
 	ctx := context.Background()
 	orgResult, err := database.ExecContext(ctx,
