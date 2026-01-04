@@ -444,6 +444,7 @@ Supports recurring reservations:
 
 Stored as iCalendar RRULE compatible format.
 
+<!-- BEGIN WIP: STORY-0012 -->
 ### 6.5 Reservation Entity
 
 | Field | Type | Description |
@@ -471,6 +472,7 @@ Stored as iCalendar RRULE compatible format.
 `reservation_participants`:
 - Multiple members can join a reservation
 - Beyond the primary member
+<!-- END WIP -->
 
 ### 6.7 Open Play Rules (NEW)
 
@@ -489,7 +491,9 @@ Stored as iCalendar RRULE compatible format.
 - Hours: 6:00 AM to 10:00 PM (16 slots)
 - Date navigation: Previous/Next/Today
 - View modes: Work Week, Week, Month (selector ready)
+<!-- BEGIN WIP: STORY-0012 -->
 - Click-to-book: Opens modal at court/time intersection
+<!-- END WIP -->
 
 **Visual Grid:**
 ```
@@ -500,6 +504,7 @@ Stored as iCalendar RRULE compatible format.
 22:00   [      ] [      ] [      ] [      ] [      ] [      ] [      ] [      ]
 ```
 
+<!-- BEGIN WIP: STORY-0012 -->
 **Slot States (Planned):**
 | State | Color Treatment |
 |-------|-----------------|
@@ -508,6 +513,7 @@ Stored as iCalendar RRULE compatible format.
 | Pro Session | Accent color, distinctive pattern |
 | Tournament | Primary→Secondary gradient |
 | Maintenance | Tertiary, diagonal stripes |
+<!-- END WIP -->
 
 ### 6.9 Calendar Interactions (Planned)
 
@@ -518,6 +524,7 @@ These calendar interactions are designed but not yet implemented:
 - Month View: Overview of all reservations
 - Agenda View: Chronological list of upcoming reservations
 
+<!-- BEGIN WIP: STORY-0012 -->
 **Interactions:**
 - Click empty slot: Create new reservation
 - Click existing reservation: View details, edit
@@ -528,6 +535,7 @@ These calendar interactions are designed but not yet implemented:
 - Respect operating hours (slots outside hours grayed/non-bookable)
 - Prevent double-booking
 - Validate against court availability
+<!-- END WIP -->
 
 ---
 
@@ -2202,9 +2210,11 @@ handler := api.ChainMiddleware(
 | `courts` | Court definitions |
 | `reservation_types` | Booking type lookup |
 | `recurrence_rules` | Recurring patterns |
+<!-- BEGIN WIP: STORY-0012 -->
 | `reservations` | Booking records |
 | `reservation_courts` | Multi-court junction |
 | `reservation_participants` | Multi-member junction |
+<!-- END WIP -->
 | `cognito_config` | Per-org auth settings |
 
 ### 14.2 Key Constraints
@@ -2215,8 +2225,10 @@ handler := api.ChainMiddleware(
 - `courts(facility_id, court_number)` - UNIQUE
 - `operating_hours(facility_id, day_of_week)` - UNIQUE
 - `member_photos.member_id` - UNIQUE INDEX
+<!-- BEGIN WIP: STORY-0012 -->
 - `reservation_courts(reservation_id, court_id)` - UNIQUE
 - `reservation_participants(reservation_id, member_id)` - UNIQUE
+<!-- END WIP -->
 
 ---
 
