@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"strconv"
@@ -153,4 +154,14 @@ func RenderHTMLComponent(ctx context.Context, w http.ResponseWriter, component t
 		logger.Error().Err(err).Msg("Failed to write response")
 	}
 	return true
+}
+
+func WriteHTMLFeedback(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(
+		w,
+		`<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">%s</div>`,
+		html.EscapeString(message),
+	)
 }

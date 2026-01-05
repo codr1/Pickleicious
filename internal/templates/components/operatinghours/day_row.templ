@@ -12,7 +12,8 @@ templ DayRow(facilityID int64, day DayHours) {
 		class="grid gap-4 px-4 py-3 md:grid-cols-[160px_140px_minmax(240px,1fr)]"
 		hx-put={fmt.Sprintf("/api/v1/operating-hours/%d", day.DayOfWeek)}
 		hx-trigger="change from:input[name='opens_at'] delay:300ms, change from:input[name='closes_at'] delay:300ms, change from:input[name='is_closed'] delay:300ms"
-		hx-swap="none"
+		hx-target="#operating-hours-feedback"
+		hx-swap="innerHTML"
 		hx-on::after-request="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} if(event.detail.xhr.status===200){indicator.textContent='Saved'; indicator.classList.remove('text-red-600'); indicator.classList.add('text-emerald-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},1200);}"
 		hx-on::response-error="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} indicator.textContent='Error'; indicator.classList.remove('text-emerald-600'); indicator.classList.add('text-red-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},2000);">
 		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)}/>

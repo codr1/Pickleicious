@@ -24,6 +24,8 @@ const (
 	operatingHoursQueryTimeout = 5 * time.Second
 	facilityIDQueryKey         = "facility_id"
 	dayOfWeekParam             = "day_of_week"
+	defaultOpensAt             = "08:00"
+	defaultClosesAt            = "21:00"
 )
 
 var (
@@ -77,6 +79,9 @@ func HandleOperatingHoursPage(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch operating hours")
 		http.Error(w, "Failed to load operating hours", http.StatusInternalServerError)
 		return
+	}
+	if len(hours) == 0 {
+		hours = defaultOperatingHours(facilityID)
 	}
 
 	activeTheme, err := models.GetActiveTheme(ctx, q, facilityID)
@@ -137,19 +142,41 @@ func HandleOperatingHoursUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to update operating hours", http.StatusInternalServerError)
 			return
 		}
-		if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"deleted": true}); err != nil {
-			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("day_of_week", dayOfWeek).Msg("Failed to write operating hours response")
+		if apiutil.IsJSONRequest(r) {
+			if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"deleted": true}); err != nil {
+				logger.Error().Err(err).Int64("facility_id", facilityID).Int64("day_of_week", dayOfWeek).Msg("Failed to write operating hours response")
+			}
+		} else {
+			apiutil.WriteHTMLFeedback(w, http.StatusOK, "Operating hours cleared.")
 		}
 		return
 	}
 
-	opensAt, opensTime, err := parseOperatingTime(req.OpensAt, "opens_at")
+	opensAtRaw := strings.TrimSpace(req.OpensAt)
+	closesAtRaw := strings.TrimSpace(req.ClosesAt)
+	if opensAtRaw == "" && closesAtRaw == "" {
+		count, err := q.OperatingHoursExists(ctx, dbgen.OperatingHoursExistsParams{
+			FacilityID: facilityID,
+			DayOfWeek:  dayOfWeek,
+		})
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("day_of_week", dayOfWeek).Msg("Failed to check existing operating hours")
+			http.Error(w, "Failed to update operating hours", http.StatusInternalServerError)
+			return
+		}
+		if count == 0 {
+			opensAtRaw = defaultOpensAt
+			closesAtRaw = defaultClosesAt
+		}
+	}
+
+	opensAt, opensTime, err := parseOperatingTime(opensAtRaw, "opens_at")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	closesAt, closesTime, err := parseOperatingTime(req.ClosesAt, "closes_at")
+	closesAt, closesTime, err := parseOperatingTime(closesAtRaw, "closes_at")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -176,9 +203,13 @@ func HandleOperatingHoursUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := apiutil.WriteJSON(w, http.StatusOK, updated); err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Int64("day_of_week", dayOfWeek).Msg("Failed to write operating hours response")
+	if apiutil.IsJSONRequest(r) {
+		if err := apiutil.WriteJSON(w, http.StatusOK, updated); err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("day_of_week", dayOfWeek).Msg("Failed to write operating hours response")
+		}
+		return
 	}
+	apiutil.WriteHTMLFeedback(w, http.StatusOK, "Operating hours saved.")
 }
 
 func operatingHoursPageComponent(facilityID int64, hours []dbgen.OperatingHour) templ.Component {
@@ -202,6 +233,19 @@ func operatingHoursPageComponent(facilityID int64, hours []dbgen.OperatingHour) 
 	}
 
 	return operatinghourstempl.OperatingHoursLayout(facilityID, days)
+}
+
+func defaultOperatingHours(facilityID int64) []dbgen.OperatingHour {
+	hours := make([]dbgen.OperatingHour, 0, 7)
+	for day := int64(0); day < 7; day++ {
+		hours = append(hours, dbgen.OperatingHour{
+			FacilityID: facilityID,
+			DayOfWeek:  day,
+			OpensAt:    defaultOpensAt,
+			ClosesAt:   defaultClosesAt,
+		})
+	}
+	return hours
 }
 
 func parseOperatingTime(raw string, field string) (string, time.Time, error) {

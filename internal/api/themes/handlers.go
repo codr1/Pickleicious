@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -335,7 +334,7 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusCreated, "Theme created.")
+		apiutil.WriteHTMLFeedback(w, http.StatusCreated, "Theme created.")
 		return
 	}
 
@@ -450,7 +449,7 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusOK, "Theme updated.")
+		apiutil.WriteHTMLFeedback(w, http.StatusOK, "Theme updated.")
 		return
 	}
 
@@ -533,7 +532,7 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusOK, "Theme deleted.")
+		apiutil.WriteHTMLFeedback(w, http.StatusOK, "Theme deleted.")
 		return
 	}
 
@@ -659,7 +658,7 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusCreated, "Theme cloned.")
+		apiutil.WriteHTMLFeedback(w, http.StatusCreated, "Theme cloned.")
 		return
 	}
 
@@ -736,7 +735,7 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusOK, "Active theme updated.")
+		apiutil.WriteHTMLFeedback(w, http.StatusOK, "Active theme updated.")
 		return
 	}
 
@@ -860,16 +859,6 @@ func parseRequiredInt64Field(raw string, field string) (int64, error) {
 func parseBoolField(raw string) bool {
 	value := strings.ToLower(strings.TrimSpace(raw))
 	return value == "true" || value == "1" || value == "yes" || value == "on"
-}
-
-func writeThemeFeedback(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(status)
-	_, _ = fmt.Fprintf(
-		w,
-		`<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">%s</div>`,
-		html.EscapeString(message),
-	)
 }
 
 func newThemeEditorData(facilityID int64) themetempl.ThemeEditorData {

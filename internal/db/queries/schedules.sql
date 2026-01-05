@@ -4,6 +4,10 @@ SELECT * FROM operating_hours
 WHERE facility_id = ?
 ORDER BY day_of_week;
 
+-- name: OperatingHoursExists :one
+SELECT COUNT(1) FROM operating_hours
+WHERE facility_id = ? AND day_of_week = ?;
+
 -- name: UpsertOperatingHours :one
 INSERT INTO operating_hours (
     facility_id,

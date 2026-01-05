@@ -15,6 +15,7 @@ templ OperatingHoursLayout(facilityID int64, days []DayHours) {
 			</div>
 			<span class="text-xs text-gray-500">Facility ID {fmt.Sprintf("%d", facilityID)}</span>
 		</div>
+		<div id="operating-hours-feedback" class="text-sm"></div>
 
 		<section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
 			<div class="hidden grid-cols-[160px_140px_minmax(240px,1fr)] border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
