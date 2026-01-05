@@ -18,7 +18,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
 
-	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	"github.com/codr1/Pickleicious/internal/api/htmx"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -171,7 +171,7 @@ func HandleThemeDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !htmx.IsRequest(r) {
-		writeJSON(w, http.StatusOK, theme)
+		apiutil.WriteJSON(w, http.StatusOK, theme)
 		return
 	}
 
