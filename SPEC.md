@@ -1081,9 +1081,9 @@ The project uses Taskfile for build orchestration.
 | Task | Description | Dependencies |
 |------|-------------|--------------|
 | `test` | Run all Go tests (unit, smoke, integration) | - |
-| `test:unit` | Run unit tests (exclude smoke/integration tags) | generate-sqlc |
-| `test:smoke` | Run smoke tests | generate-sqlc |
-| `test:integration` | Run integration tests | generate-sqlc |
+| `test:unit` | Run unit tests (exclude smoke/integration tags) | generate |
+| `test:smoke` | Run smoke tests | generate |
+| `test:integration` | Run integration tests | generate |
 
 ### Build Tasks
 
