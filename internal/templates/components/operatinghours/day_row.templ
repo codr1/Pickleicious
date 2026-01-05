@@ -1,0 +1,96 @@
+// internal/templates/components/operatinghours/day_row.templ
+package operatinghours
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+templ DayRow(facilityID int64, day DayHours) {
+	<form
+		class="grid gap-4 px-4 py-3 md:grid-cols-[160px_140px_minmax(240px,1fr)]"
+		hx-put={fmt.Sprintf("/api/v1/operating-hours/%d", day.DayOfWeek)}
+		hx-trigger="change from:input[name='opens_at'] delay:300ms, change from:input[name='closes_at'] delay:300ms, change from:input[name='is_closed'] delay:300ms"
+		hx-swap="none"
+		hx-on::after-request="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} if(event.detail.xhr.status===200){indicator.textContent='Saved'; indicator.classList.remove('text-red-600'); indicator.classList.add('text-emerald-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},1200);}"
+		hx-on::response-error="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} indicator.textContent='Error'; indicator.classList.remove('text-emerald-600'); indicator.classList.add('text-red-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},2000);">
+		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)}/>
+
+		<div class="flex items-center justify-between md:block">
+			<span class="text-sm font-semibold text-gray-900">{dayLabel(day.DayOfWeek)}</span>
+			<span class="text-xs text-gray-500 md:hidden">Hours</span>
+		</div>
+
+		<label class="flex items-center gap-2 text-sm text-gray-600">
+			<input type="hidden" name="is_closed" value="false"/>
+			<input
+				type="checkbox"
+				name="is_closed"
+				value="true"
+				checked?={day.IsClosed}
+				onchange="const row=this.closest('form'); if(!row){return;} const disabled=this.checked; row.querySelectorAll('input[name=opens_at],input[name=closes_at]').forEach((input)=>{input.disabled=disabled;});"
+				class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+			/>
+			<span>Closed</span>
+		</label>
+
+		<div class="flex flex-wrap items-center gap-3">
+			<input
+				type="text"
+				name="opens_at"
+				list="operating-hours-time-options"
+				placeholder="8:00 AM"
+				value={formatTimeDisplay(day.OpensAt)}
+				disabled?={day.IsClosed}
+				class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+			/>
+			<span class="text-sm text-gray-400">to</span>
+			<input
+				type="text"
+				name="closes_at"
+				list="operating-hours-time-options"
+				placeholder="9:00 PM"
+				value={formatTimeDisplay(day.ClosesAt)}
+				disabled?={day.IsClosed}
+				class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+			/>
+			<span class="text-xs text-emerald-600 opacity-0 transition-opacity duration-300" data-save-indicator>Saved</span>
+		</div>
+	</form>
+}
+
+func dayLabel(day int64) string {
+	switch day {
+	case 0:
+		return "Sunday"
+	case 1:
+		return "Monday"
+	case 2:
+		return "Tuesday"
+	case 3:
+		return "Wednesday"
+	case 4:
+		return "Thursday"
+	case 5:
+		return "Friday"
+	case 6:
+		return "Saturday"
+	default:
+		return fmt.Sprintf("Day %d", day)
+	}
+}
+
+func formatTimeDisplay(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if parsed, err := time.Parse("15:04", raw); err == nil {
+		return parsed.Format("3:04 PM")
+	}
+	if parsed, err := time.Parse("3:04 PM", strings.ToUpper(raw)); err == nil {
+		return parsed.Format("3:04 PM")
+	}
+	return raw
+}

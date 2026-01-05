@@ -17,6 +17,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
+	"github.com/codr1/Pickleicious/internal/api/operatinghours"
 	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
@@ -46,6 +47,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
+	operatinghours.InitHandlers(database.Queries)
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
 	}
@@ -263,6 +265,14 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/facilities/{id}/theme", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: themes.HandleFacilityThemeSet,
+	}))
+
+	// Operating hours admin page
+	mux.HandleFunc("/admin/operating-hours", operatinghours.HandleOperatingHoursPage)
+
+	// Operating hours API
+	mux.HandleFunc("/api/v1/operating-hours/{day_of_week}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: operatinghours.HandleOperatingHoursUpdate,
 	}))
 
 	// Static file handling with logging and environment awareness
