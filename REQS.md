@@ -387,6 +387,7 @@ WHERE id = @id;
 
 ### 6.1 Facility Operating Hours
 
+<!-- BEGIN WIP: STORY-0017 -->
 | Field | Description |
 |-------|-------------|
 | `facility_id` | FK to facility |
@@ -395,6 +396,7 @@ WHERE id = @id;
 | `closes_at` | TIME - Closing time |
 
 Unique constraint: One entry per facility per day.
+<!-- END WIP -->
 
 ### 6.2 Court Entity
 

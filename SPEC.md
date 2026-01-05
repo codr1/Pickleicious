@@ -709,6 +709,44 @@ Colors must meet WCAG AA contrast standards:
 
 ---
 
+## Operating Hours
+
+Facilities define when they're open each day of the week. These hours constrain when courts can be reserved and when open play sessions can run.
+
+### Admin Interface
+
+Staff access the operating hours page at `/admin/operating-hours?facility_id=X`. The interface displays a 7-day weekly grid where each day shows:
+
+- **Day label**: Sunday through Saturday (0-6 internally)
+- **Closed toggle**: Checkbox to mark the facility as closed
+- **Time inputs**: Opens at and closes at fields with AM/PM format
+
+### Time Format
+
+Times are displayed and accepted in 12-hour AM/PM format (e.g., "8:00 AM", "9:30 PM"). Internally stored as 24-hour HH:MM strings. The UI provides a datalist with 30-minute increments for quick selection.
+
+### Default Hours
+
+New facilities or days with no hours configured display default hours of 8:00 AM - 9:00 PM. When a closed day is toggled back to open, these defaults pre-populate if no previous hours existed.
+
+### Saving Behavior
+
+Changes save automatically via HTMX PUT requests with a 300ms debounce. Each day saves independently to `/api/v1/operating-hours/{day_of_week}`. Visual feedback ("Saved" indicator) confirms successful updates.
+
+### Validation Rules
+
+| Rule | Behavior |
+|------|----------|
+| opens_at before closes_at | Required - rejects invalid order |
+| Time format | Accepts HH:MM or H:MM AM/PM |
+| Closed day | Deletes hours from database |
+
+### Authorization
+
+Only authenticated staff with facility access can view or edit operating hours. Uses the same facility-scoped authorization as other admin pages.
+
+---
+
 ## Authentication and Access
 
 ### Session Management
@@ -914,6 +952,13 @@ Authorization failures are logged with facility_id and user_id.
 | DELETE | `/api/v1/themes/{id}` | Delete theme |
 | POST | `/api/v1/themes/{id}/clone` | Clone theme |
 | PUT | `/api/v1/facilities/{id}/theme` | Set facility active theme |
+
+### Operating Hours
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/operating-hours` | Operating hours admin page |
+| PUT | `/api/v1/operating-hours/{day_of_week}` | Update hours for a day (0=Sunday through 6=Saturday) |
 
 ---
 
@@ -1189,6 +1234,7 @@ pickleicious/
 │   │   ├── members/         # Member CRUD
 │   │   ├── nav/             # Navigation
 │   │   ├── openplay/        # Open play rules
+│   │   ├── operatinghours/  # Operating hours management
 │   │   ├── reservations/    # Reservation CRUD
 │   │   └── themes/          # Theme management
 │   ├── config/              # Configuration loading
@@ -1201,8 +1247,9 @@ pickleicious/
 │   ├── request/             # Request parsing utilities
 │   ├── templates/           # Templ components
 │   │   └── components/
-│   │       ├── courts/      # Calendar components
-│   │       └── reservations/ # Booking form components
+│   │       ├── courts/          # Calendar components
+│   │       ├── operatinghours/  # Operating hours UI
+│   │       └── reservations/    # Booking form components
 │   └── testutil/            # Test helpers
 ├── tests/
 │   └── smoke/               # Smoke tests
@@ -1313,6 +1360,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Reservations | Complete | CRUD, multi-court, participants, conflict detection |
 | Staff Local Login | Complete | Bcrypt, rate limiting, timing attack mitigation |
 | Authorization | Complete | Facility-scoped access, admin override |
+| Operating Hours | Complete | Admin UI, per-day CRUD, default hours, HTMX updates |
 
 ### Partial Implementation
 
@@ -1322,7 +1370,6 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Open Play Enforcement | Scheduled | gocron job configured, evaluation logic partial |
 | Password Reset | Not implemented | Returns 501 |
 | Staff Management | Schema only | Tables exist, no handlers |
-| Operating Hours | Schema only | Tables exist, not used in handlers |
 | Recurrence Rules | Schema only | Tables exist, not used in handlers |
 
 ### Not Yet Started

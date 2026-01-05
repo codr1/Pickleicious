@@ -2,7 +2,6 @@
 package openplay
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -92,7 +91,7 @@ func HandleOpenPlayRulesPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := layouts.Base(openPlayRulesPageComponent(rules), activeTheme)
-	if !renderHTMLComponent(r.Context(), w, page, nil, "Failed to render open play rules page", "Failed to render page") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render open play rules page", "Failed to render page") {
 		return
 	}
 }
@@ -127,7 +126,7 @@ func HandleOpenPlayRulesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := openPlayRulesListComponent(rules)
-	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rules list", "Failed to render list") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rules list", "Failed to render list") {
 		return
 	}
 }
@@ -144,7 +143,7 @@ func HandleOpenPlayRuleNew(w http.ResponseWriter, r *http.Request) {
 	}
 	rule := dbgen.OpenPlayRule{FacilityID: facilityID}
 	component := openplaytempl.OpenPlayRuleForm(openplaytempl.NewOpenPlayRule(rule), facilityID)
-	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
 		return
 	}
 }
@@ -192,7 +191,7 @@ func HandleOpenPlayRuleEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := openplaytempl.OpenPlayRuleForm(openplaytempl.NewOpenPlayRule(rule), facilityID)
-	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule form", "Failed to render form") {
 		return
 	}
 }
@@ -288,7 +287,7 @@ func HandleOpenPlayRuleCreate(w http.ResponseWriter, r *http.Request) {
 	headers := map[string]string{
 		"HX-Trigger": "refreshOpenPlayRulesList",
 	}
-	if !renderHTMLComponent(r.Context(), w, component, headers, "Failed to render open play rule detail", "Failed to render response") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, headers, "Failed to render open play rule detail", "Failed to render response") {
 		return
 	}
 }
@@ -336,7 +335,7 @@ func HandleOpenPlayRuleDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := openPlayRuleDetailComponent(rule)
-	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule detail", "Failed to render detail") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play rule detail", "Failed to render detail") {
 		return
 	}
 }
@@ -444,7 +443,7 @@ func HandleOpenPlayRuleUpdate(w http.ResponseWriter, r *http.Request) {
 	headers := map[string]string{
 		"HX-Trigger": "refreshOpenPlayRulesList",
 	}
-	if !renderHTMLComponent(r.Context(), w, component, headers, "Failed to render open play rule detail", "Failed to render response") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, headers, "Failed to render open play rule detail", "Failed to render response") {
 		return
 	}
 }
@@ -495,7 +494,7 @@ func HandleOpenPlayRuleDelete(w http.ResponseWriter, r *http.Request) {
 		"HX-Redirect": fmt.Sprintf("/open-play-rules?facility_id=%d", facilityID),
 	}
 	component := openPlayRuleDeleteComponent()
-	if !renderHTMLComponent(r.Context(), w, component, headers, "Failed to render delete response", "Failed to render response") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, headers, "Failed to render delete response", "Failed to render response") {
 		return
 	}
 }
@@ -920,7 +919,7 @@ func HandleListParticipants(w http.ResponseWriter, r *http.Request) {
 		}
 
 		component := openplaytempl.OpenPlayParticipantsList(openplaytempl.NewOpenPlayParticipants(participants), rule.MinParticipants)
-		if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play participants list", "Failed to render participants list") {
+		if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play participants list", "Failed to render participants list") {
 			return
 		}
 		return
@@ -1214,24 +1213,6 @@ func openPlayRuleDeleteComponent() templ.Component {
 		_, err := io.WriteString(w, `<div class="h-full flex items-center justify-center text-gray-500"><p>Open play rule successfully deleted</p></div>`)
 		return err
 	})
-}
-
-func renderHTMLComponent(ctx context.Context, w http.ResponseWriter, component templ.Component, headers map[string]string, logMsg string, errMsg string) bool {
-	logger := log.Ctx(ctx)
-	var buf bytes.Buffer
-	if err := component.Render(ctx, &buf); err != nil {
-		logger.Error().Err(err).Msg(logMsg)
-		http.Error(w, errMsg, http.StatusInternalServerError)
-		return false
-	}
-	w.Header().Set("Content-Type", "text/html")
-	for key, value := range headers {
-		w.Header().Set(key, value)
-	}
-	if _, err := w.Write(buf.Bytes()); err != nil {
-		logger.Error().Err(err).Msg("Failed to write response")
-	}
-	return true
 }
 
 func buildOpenPlayRulesListHTML(rules []dbgen.OpenPlayRule) string {

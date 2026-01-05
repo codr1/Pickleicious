@@ -2,20 +2,16 @@
 package themes
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"html"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/a-h/templ"
-	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
@@ -97,6 +93,9 @@ func HandleThemesPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), themeQueryTimeout)
 	defer cancel()
@@ -109,7 +108,7 @@ func HandleThemesPage(w http.ResponseWriter, r *http.Request) {
 
 	editor := newThemeEditorData(facilityID)
 	page := layouts.Base(themetempl.ThemeAdminLayout(facilityID, editor), activeTheme)
-	if !renderHTMLComponent(r.Context(), w, page, nil, "Failed to render themes page", "Failed to render page") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render themes page", "Failed to render page") {
 		return
 	}
 }
@@ -123,7 +122,7 @@ func HandleThemeNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := themetempl.ThemeEditor(newThemeEditorData(facilityID))
-	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render new theme form", "Failed to render form") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render new theme form", "Failed to render form") {
 		return
 	}
 }
@@ -177,7 +176,7 @@ func HandleThemeDetail(w http.ResponseWriter, r *http.Request) {
 
 	editor := themeEditorData(theme, facilityID)
 	component := themetempl.ThemeEditor(editor)
-	if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render theme form", "Failed to render form") {
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render theme form", "Failed to render form") {
 		return
 	}
 }
@@ -228,7 +227,7 @@ func HandleThemesList(w http.ResponseWriter, r *http.Request) {
 		}
 
 		component := themetempl.ThemeList(themetempl.NewThemes(themes, activeThemeID), facilityID)
-		if !renderHTMLComponent(r.Context(), w, component, nil, "Failed to render themes list", "Failed to render list") {
+		if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render themes list", "Failed to render list") {
 			return
 		}
 		return
@@ -324,7 +323,7 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 		HighlightColor: req.HighlightColor,
 	})
 	if err != nil {
-		if isSQLiteForeignKeyViolation(err) {
+		if apiutil.IsSQLiteForeignKeyViolation(err) {
 			http.Error(w, "Facility not found", http.StatusNotFound)
 			return
 		}
@@ -335,7 +334,7 @@ func HandleThemeCreate(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusCreated, "Theme created.")
+		apiutil.WriteHTMLFeedback(w, http.StatusCreated, "Theme created.")
 		return
 	}
 
@@ -450,7 +449,7 @@ func HandleThemeUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusOK, "Theme updated.")
+		apiutil.WriteHTMLFeedback(w, http.StatusOK, "Theme updated.")
 		return
 	}
 
@@ -518,7 +517,7 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 
 	deleted, err := q.DeleteTheme(ctx, themeID)
 	if err != nil {
-		if isSQLiteForeignKeyViolation(err) {
+		if apiutil.IsSQLiteForeignKeyViolation(err) {
 			http.Error(w, "Cannot delete active theme", http.StatusConflict)
 			return
 		}
@@ -533,7 +532,7 @@ func HandleThemeDelete(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusOK, "Theme deleted.")
+		apiutil.WriteHTMLFeedback(w, http.StatusOK, "Theme deleted.")
 		return
 	}
 
@@ -648,7 +647,7 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 		HighlightColor: source.HighlightColor,
 	})
 	if err != nil {
-		if isSQLiteForeignKeyViolation(err) {
+		if apiutil.IsSQLiteForeignKeyViolation(err) {
 			http.Error(w, "Facility not found", http.StatusNotFound)
 			return
 		}
@@ -659,7 +658,7 @@ func HandleThemeClone(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusCreated, "Theme cloned.")
+		apiutil.WriteHTMLFeedback(w, http.StatusCreated, "Theme cloned.")
 		return
 	}
 
@@ -736,7 +735,7 @@ func HandleFacilityThemeSet(w http.ResponseWriter, r *http.Request) {
 
 	if htmx.IsRequest(r) {
 		w.Header().Set("HX-Trigger", "refreshThemesList")
-		writeThemeFeedback(w, http.StatusOK, "Active theme updated.")
+		apiutil.WriteHTMLFeedback(w, http.StatusOK, "Active theme updated.")
 		return
 	}
 
@@ -780,7 +779,7 @@ func themeIDFromRequest(r *http.Request) (int64, error) {
 }
 
 func decodeThemeRequest(r *http.Request) (themeRequest, error) {
-	if isJSONRequest(r) {
+	if apiutil.IsJSONRequest(r) {
 		var req themeRequest
 		return req, apiutil.DecodeJSON(r, &req)
 	}
@@ -789,25 +788,25 @@ func decodeThemeRequest(r *http.Request) (themeRequest, error) {
 		return themeRequest{}, err
 	}
 
-	facilityID, err := parseOptionalInt64Field(firstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
+	facilityID, err := apiutil.ParseOptionalInt64Field(apiutil.FirstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
 	if err != nil {
 		return themeRequest{}, err
 	}
 
 	return themeRequest{
 		FacilityID:     facilityID,
-		IsSystem:       parseBoolField(firstNonEmpty(r.FormValue("is_system"), r.FormValue("isSystem"))),
-		Name:           firstNonEmpty(r.FormValue("name")),
-		PrimaryColor:   firstNonEmpty(r.FormValue("primary_color"), r.FormValue("primaryColor")),
-		SecondaryColor: firstNonEmpty(r.FormValue("secondary_color"), r.FormValue("secondaryColor")),
-		TertiaryColor:  firstNonEmpty(r.FormValue("tertiary_color"), r.FormValue("tertiaryColor")),
-		AccentColor:    firstNonEmpty(r.FormValue("accent_color"), r.FormValue("accentColor")),
-		HighlightColor: firstNonEmpty(r.FormValue("highlight_color"), r.FormValue("highlightColor")),
+		IsSystem:       parseBoolField(apiutil.FirstNonEmpty(r.FormValue("is_system"), r.FormValue("isSystem"))),
+		Name:           apiutil.FirstNonEmpty(r.FormValue("name")),
+		PrimaryColor:   apiutil.FirstNonEmpty(r.FormValue("primary_color"), r.FormValue("primaryColor")),
+		SecondaryColor: apiutil.FirstNonEmpty(r.FormValue("secondary_color"), r.FormValue("secondaryColor")),
+		TertiaryColor:  apiutil.FirstNonEmpty(r.FormValue("tertiary_color"), r.FormValue("tertiaryColor")),
+		AccentColor:    apiutil.FirstNonEmpty(r.FormValue("accent_color"), r.FormValue("accentColor")),
+		HighlightColor: apiutil.FirstNonEmpty(r.FormValue("highlight_color"), r.FormValue("highlightColor")),
 	}, nil
 }
 
 func decodeThemeCloneRequest(r *http.Request) (themeCloneRequest, error) {
-	if isJSONRequest(r) {
+	if apiutil.IsJSONRequest(r) {
 		var req themeCloneRequest
 		return req, apiutil.DecodeJSON(r, &req)
 	}
@@ -816,19 +815,19 @@ func decodeThemeCloneRequest(r *http.Request) (themeCloneRequest, error) {
 		return themeCloneRequest{}, err
 	}
 
-	facilityID, err := parseOptionalInt64Field(firstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
+	facilityID, err := apiutil.ParseOptionalInt64Field(apiutil.FirstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
 	if err != nil {
 		return themeCloneRequest{}, err
 	}
 
 	return themeCloneRequest{
 		FacilityID: facilityID,
-		Name:       firstNonEmpty(r.FormValue("name")),
+		Name:       apiutil.FirstNonEmpty(r.FormValue("name")),
 	}, nil
 }
 
 func decodeFacilityThemeRequest(r *http.Request) (facilityThemeRequest, error) {
-	if isJSONRequest(r) {
+	if apiutil.IsJSONRequest(r) {
 		var req facilityThemeRequest
 		return req, apiutil.DecodeJSON(r, &req)
 	}
@@ -837,28 +836,12 @@ func decodeFacilityThemeRequest(r *http.Request) (facilityThemeRequest, error) {
 		return facilityThemeRequest{}, err
 	}
 
-	themeID, err := parseRequiredInt64Field(firstNonEmpty(r.FormValue("theme_id"), r.FormValue("themeId")), "theme_id")
+	themeID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("theme_id"), r.FormValue("themeId")), "theme_id")
 	if err != nil {
 		return facilityThemeRequest{}, err
 	}
 
 	return facilityThemeRequest{ThemeID: themeID}, nil
-}
-
-func isJSONRequest(r *http.Request) bool {
-	return strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json")
-}
-
-func parseOptionalInt64Field(raw string, field string) (*int64, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, nil
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return nil, fmt.Errorf("%s must be a positive integer", field)
-	}
-	return &value, nil
 }
 
 func parseRequiredInt64Field(raw string, field string) (int64, error) {
@@ -878,43 +861,6 @@ func parseBoolField(raw string) bool {
 	return value == "true" || value == "1" || value == "yes" || value == "on"
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func renderHTMLComponent(ctx context.Context, w http.ResponseWriter, component templ.Component, headers map[string]string, logMsg string, errMsg string) bool {
-	logger := log.Ctx(ctx)
-	var buf bytes.Buffer
-	if err := component.Render(ctx, &buf); err != nil {
-		logger.Error().Err(err).Msg(logMsg)
-		http.Error(w, errMsg, http.StatusInternalServerError)
-		return false
-	}
-	w.Header().Set("Content-Type", "text/html")
-	for key, value := range headers {
-		w.Header().Set(key, value)
-	}
-	if _, err := w.Write(buf.Bytes()); err != nil {
-		logger.Error().Err(err).Msg("Failed to write response")
-	}
-	return true
-}
-
-func writeThemeFeedback(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(status)
-	_, _ = fmt.Fprintf(
-		w,
-		`<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">%s</div>`,
-		html.EscapeString(message),
-	)
-}
-
 func newThemeEditorData(facilityID int64) themetempl.ThemeEditorData {
 	return themeEditorData(models.DefaultTheme(), facilityID)
 }
@@ -929,12 +875,4 @@ func themeEditorData(theme models.Theme, facilityID int64) themetempl.ThemeEdito
 
 func loadQueries() themeQueries {
 	return queries
-}
-
-func isSQLiteForeignKeyViolation(err error) bool {
-	var sqliteErr sqlite3.Error
-	if !errors.As(err, &sqliteErr) {
-		return false
-	}
-	return sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey
 }

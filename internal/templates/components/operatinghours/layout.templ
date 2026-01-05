@@ -1,0 +1,50 @@
+// internal/templates/components/operatinghours/layout.templ
+package operatinghours
+
+import (
+	"fmt"
+	"time"
+)
+
+templ OperatingHoursLayout(facilityID int64, days []DayHours) {
+	<div class="space-y-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<div>
+				<h2 class="text-2xl font-semibold text-gray-900">Operating Hours</h2>
+				<p class="mt-1 text-sm text-gray-600">Set weekly open and close times for the facility.</p>
+			</div>
+			<span class="text-xs text-gray-500">Facility ID {fmt.Sprintf("%d", facilityID)}</span>
+		</div>
+		<div id="operating-hours-feedback" class="text-sm"></div>
+
+		<section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+			<div class="hidden grid-cols-[160px_140px_minmax(240px,1fr)] border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
+				<div>Day</div>
+				<div>Status</div>
+				<div>Hours (AM/PM)</div>
+			</div>
+			<div class="divide-y divide-gray-200">
+				for _, day := range days {
+					@DayRow(facilityID, day)
+				}
+			</div>
+		</section>
+
+		<datalist id="operating-hours-time-options">
+			for _, option := range timePickerOptions() {
+				<option value={option}></option>
+			}
+		</datalist>
+	</div>
+}
+
+func timePickerOptions() []string {
+	options := make([]string, 0, 48)
+	for hour := 0; hour < 24; hour++ {
+		for _, minute := range []int{0, 30} {
+			clock := time.Date(2000, 1, 1, hour, minute, 0, 0, time.UTC)
+			options = append(options, clock.Format("3:04 PM"))
+		}
+	}
+	return options
+}
