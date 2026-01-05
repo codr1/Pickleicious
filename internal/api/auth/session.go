@@ -22,13 +22,15 @@ const (
 	authSessionTTL         = 8 * time.Hour
 	sessionTokenBytes      = 32
 	sessionCleanupInterval = 15 * time.Minute
+	sessionTypeStaff       = "staff"
+	sessionTypeMember      = "member"
 )
 
 var errAuthConfigMissing = errors.New("auth configuration missing")
 
 type authSession struct {
 	UserID         int64  `json:"user_id"`
-	IsStaff        bool   `json:"is_staff"`
+	SessionType    string `json:"session_type"`
 	HomeFacilityID *int64 `json:"home_facility_id,omitempty"`
 	ExpiresAt      int64  `json:"exp"`
 }
@@ -128,9 +130,14 @@ func SetAuthCookie(w http.ResponseWriter, r *http.Request, user *authz.AuthUser)
 	}
 
 	expiresAt := time.Now().Add(authSessionTTL).Unix()
+	sessionType := user.SessionType
+	if sessionType == "" {
+		sessionType = sessionTypeFromStaff(user.IsStaff)
+	}
+	sessionType = normalizeSessionType(sessionType)
 	session := authSession{
 		UserID:         user.ID,
-		IsStaff:        user.IsStaff,
+		SessionType:    sessionType,
 		HomeFacilityID: user.HomeFacilityID,
 		ExpiresAt:      expiresAt,
 	}
@@ -173,7 +180,8 @@ func UserFromRequest(w http.ResponseWriter, r *http.Request) (*authz.AuthUser, e
 
 	return &authz.AuthUser{
 		ID:             session.UserID,
-		IsStaff:        session.IsStaff,
+		IsStaff:        session.SessionType == sessionTypeStaff,
+		SessionType:    session.SessionType,
 		HomeFacilityID: session.HomeFacilityID,
 	}, nil
 }
@@ -224,6 +232,7 @@ func userFromSessionToken(w http.ResponseWriter, r *http.Request) (*authz.AuthUs
 	return &authz.AuthUser{
 		ID:             user.ID,
 		IsStaff:        user.IsStaff,
+		SessionType:    sessionTypeFromStaff(user.IsStaff),
 		HomeFacilityID: homeFacilityID,
 	}, nil
 }
@@ -271,11 +280,29 @@ func parseAuthCookie(r *http.Request) (*authSession, error) {
 		return nil, err
 	}
 
+	session.SessionType = normalizeSessionType(session.SessionType)
+
 	if session.ExpiresAt <= time.Now().Unix() {
 		return nil, errors.New("auth session expired")
 	}
 
 	return &session, nil
+}
+
+func normalizeSessionType(sessionType string) string {
+	switch sessionType {
+	case sessionTypeStaff, sessionTypeMember:
+		return sessionType
+	default:
+		return sessionTypeMember
+	}
+}
+
+func sessionTypeFromStaff(isStaff bool) string {
+	if isStaff {
+		return sessionTypeStaff
+	}
+	return sessionTypeMember
 }
 
 func signPayload(payload string) (string, error) {

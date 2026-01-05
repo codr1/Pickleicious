@@ -14,6 +14,7 @@ var (
 type AuthUser struct {
 	ID             int64
 	IsStaff        bool
+	SessionType    string
 	HomeFacilityID *int64
 }
 

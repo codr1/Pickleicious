@@ -284,6 +284,7 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	authUser := &authz.AuthUser{
 		ID:             user.ID,
 		IsStaff:        user.IsStaff,
+		SessionType:    sessionTypeFromStaff(user.IsStaff),
 		HomeFacilityID: homeFacilityID,
 	}
 
@@ -642,6 +643,7 @@ func devModeBypass(r *http.Request, identifier, password string) (*authz.AuthUse
 	return &authz.AuthUser{
 		ID:             0,
 		IsStaff:        true,
+		SessionType:    sessionTypeStaff,
 		HomeFacilityID: homeFacilityID,
 	}, true
 }
