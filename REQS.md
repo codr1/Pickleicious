@@ -232,6 +232,7 @@ Separate billing table for payment data:
 
 ### 4.1 Authentication Architecture
 
+<!-- BEGIN WIP: STORY-0019 -->
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    AUTHENTICATION FLOW                       │
@@ -252,6 +253,7 @@ Separate billing table for payment data:
 │ 4. Create session   │               │ 3b. Fallback to OTP │
 └─────────────────────┘               └─────────────────────┘
 ```
+<!-- END WIP -->
 
 ### 4.2 Cognito Configuration (Per-Organization)
 
@@ -273,9 +275,11 @@ Separate billing table for payment data:
 - Sends verification code via Cognito
 - Replaces form with code entry UI
 
+<!-- BEGIN WIP: STORY-0019 -->
 **Step 3: Code Verification**
 - Validates code with Cognito
 - Creates session/JWT on success
+<!-- END WIP -->
 
 ### 4.4 Implementation Status
 
@@ -1194,6 +1198,7 @@ A self-service marketplace where members discover and book coaches directly, red
 
 ### 9.14 Mobile App & Member Portal
 
+<!-- BEGIN WIP: STORY-0019 -->
 **Member Self-Service Portal:**
 | Feature | Description |
 |---------|-------------|
@@ -1202,6 +1207,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Payment History | See charges and receipts |
 | Profile Management | Update contact info, photo |
 | Membership Management | Upgrade, renew, cancel |
+<!-- END WIP -->
 
 **Mobile App Features:**
 | Feature | Description |
