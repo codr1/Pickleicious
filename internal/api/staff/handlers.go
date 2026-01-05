@@ -81,6 +81,7 @@ func HandleStaffList(w http.ResponseWriter, r *http.Request) {
 
 	facilityID, hasFacility := request.ParseFacilityID(r.URL.Query().Get("facility_id"))
 	role := strings.TrimSpace(r.URL.Query().Get("role"))
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
 	ctx, cancel := context.WithTimeout(r.Context(), staffQueryTimeout)
 	defer cancel()
@@ -123,6 +124,10 @@ func HandleStaffList(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to fetch staff", http.StatusInternalServerError)
 			return
 		}
+	}
+
+	if search != "" {
+		staffRows = filterStaffRowsBySearch(staffRows, search)
 	}
 
 	templateStaff := stafftempl.NewStaffList(staffRows)
@@ -182,6 +187,16 @@ func HandleStaffDetail(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// /api/v1/staff/new
+func HandleNewStaffForm(w http.ResponseWriter, r *http.Request) {
+	component := stafftempl.StaffNewForm()
+	if err := component.Render(r.Context(), w); err != nil {
+		log.Ctx(r.Context()).Error().Err(err).Msg("Failed to render staff form")
+		http.Error(w, "Failed to render staff form", http.StatusInternalServerError)
+		return
+	}
+}
+
 func filterStaffRowsByRole(rows []dbgen.ListStaffRow, role string) []dbgen.ListStaffRow {
 	filtered := make([]dbgen.ListStaffRow, 0, len(rows))
 	for _, row := range rows {
@@ -190,6 +205,39 @@ func filterStaffRowsByRole(rows []dbgen.ListStaffRow, role string) []dbgen.ListS
 		}
 		filtered = append(filtered, row)
 	}
+	return filtered
+}
+
+func filterStaffRowsBySearch(rows []dbgen.ListStaffRow, search string) []dbgen.ListStaffRow {
+	search = strings.ToLower(strings.TrimSpace(search))
+	if search == "" {
+		return rows
+	}
+
+	filtered := make([]dbgen.ListStaffRow, 0, len(rows))
+	for _, row := range rows {
+		name := strings.TrimSpace(fmt.Sprintf("%s %s", row.FirstName, row.LastName))
+		email := ""
+		if row.Email.Valid {
+			email = row.Email.String
+		}
+		role := strings.TrimSpace(row.Role)
+		facility := ""
+		if row.HomeFacilityID.Valid {
+			facility = fmt.Sprintf("%d", row.HomeFacilityID.Int64)
+		}
+
+		haystack := strings.ToLower(strings.TrimSpace(strings.Join([]string{
+			name,
+			email,
+			role,
+			facility,
+		}, " ")))
+		if strings.Contains(haystack, search) {
+			filtered = append(filtered, row)
+		}
+	}
+
 	return filtered
 }
 

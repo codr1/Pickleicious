@@ -1,34 +1,67 @@
 // internal/templates/components/staff/list.templ
 package staff
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 templ StaffLayout(staff []Staff) {
 	<div class="flex h-[calc(100vh-4rem)]">
 		<div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
 			<div class="p-4 border-b border-gray-200 bg-white">
-				<form class="space-y-3" hx-get="/api/v1/staff" hx-target="#staff-list" hx-trigger="change, submit">
-					<div class="flex gap-2">
+				<div id="staff-filters" class="space-y-3">
+					<div>
 						<input
-							type="number"
-							name="facility_id"
-							placeholder="Facility ID"
-							class="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-						/>
-						<input
-							type="text"
-							name="role"
-							placeholder="Role"
-							class="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+							type="search"
+							name="search"
+							placeholder="Search staff..."
+							class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+							hx-get="/api/v1/staff"
+							hx-trigger="keyup changed delay:300ms"
+							hx-target="#staff-list"
+							hx-include="#staff-filters"
 						/>
 					</div>
-					<button
-						type="submit"
-						class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
-					>
-						Filter
-					</button>
-				</form>
+					<div class="flex items-center justify-between gap-3">
+						<div class="flex gap-2">
+							<select
+								name="facility_id"
+								class="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+								hx-get="/api/v1/staff"
+								hx-target="#staff-list"
+								hx-trigger="change"
+								hx-include="#staff-filters"
+							>
+								<option value="">All facilities</option>
+								for _, facilityID := range staffFacilityOptions(staff) {
+									<option value={fmt.Sprintf("%d", facilityID)}>Facility {fmt.Sprintf("%d", facilityID)}</option>
+								}
+							</select>
+							<select
+								name="role"
+								class="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+								hx-get="/api/v1/staff"
+								hx-target="#staff-list"
+								hx-trigger="change"
+								hx-include="#staff-filters"
+							>
+								<option value="">All roles</option>
+								for _, role := range staffRoleOptions(staff) {
+									<option value={role}>{role}</option>
+								}
+							</select>
+						</div>
+						<button
+							class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+							hx-get="/api/v1/staff/new"
+							hx-target="#staff-detail"
+						>
+							Add Staff
+						</button>
+					</div>
+				</div>
 			</div>
 
 			<div
@@ -52,40 +85,52 @@ templ StaffLayout(staff []Staff) {
 }
 
 templ StaffList(staff []Staff) {
-	for _, member := range staff {
-		<div
-			class="p-4 border-b border-gray-200 hover:bg-white cursor-pointer"
-			hx-get={fmt.Sprintf("/api/v1/staff/%d", member.ID)}
-			hx-target="#staff-detail"
-		>
-			<p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
-			<p class="text-sm text-gray-500">{member.RoleStr()}</p>
-			<p class="text-sm text-gray-500">{member.EmailStr()}</p>
+	if len(staff) == 0 {
+		<div class="flex items-center justify-center p-6 text-gray-500">
+			No staff found
 		</div>
+	} else {
+		for _, member := range staff {
+			<div
+				class="p-4 border-b border-gray-200 hover:bg-white cursor-pointer"
+				hx-get={fmt.Sprintf("/api/v1/staff/%d", member.ID)}
+				hx-target="#staff-detail"
+			>
+				<div class="flex items-center justify-between gap-4">
+					<div>
+						<p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
+						<p class="text-sm text-gray-500">{member.EmailStr()}</p>
+					</div>
+					<div class="text-right">
+						<p class="text-sm text-gray-700">{member.RoleStr()}</p>
+						<p class="text-sm text-gray-500">Facility {member.FacilityStr()}</p>
+					</div>
+				</div>
+			</div>
+		}
 	}
 }
 
 templ StaffDetail(member Staff) {
 	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
 		<div class="p-6 border-b border-gray-200">
-			<h2 class="text-xl font-bold text-gray-900">Staff Details</h2>
+			<div class="flex items-center justify-between gap-4">
+				<div>
+					<h2 class="text-xl font-bold text-gray-900">Staff Profile</h2>
+					<p class="text-gray-600">{member.FirstName} {member.LastName}</p>
+				</div>
+				<span class="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+					{member.RoleStr()}
+				</span>
+			</div>
 		</div>
-		<div class="p-6 space-y-4">
+		<div class="p-6 space-y-6">
 			<div>
-				<h3 class="text-sm font-semibold text-gray-700">Name</h3>
-				<p class="text-gray-900">{member.FirstName} {member.LastName}</p>
-			</div>
-			<div>
-				<h3 class="text-sm font-semibold text-gray-700">Role</h3>
-				<p class="text-gray-900">{member.RoleStr()}</p>
-			</div>
-			<div>
-				<h3 class="text-sm font-semibold text-gray-700">Email</h3>
-				<p class="text-gray-900">{member.EmailStr()}</p>
-			</div>
-			<div>
-				<h3 class="text-sm font-semibold text-gray-700">Phone</h3>
-				<p class="text-gray-900">{member.PhoneStr()}</p>
+				<h3 class="text-sm font-semibold text-gray-700">Contact</h3>
+				<div class="mt-2 space-y-1">
+					<p class="text-gray-900">{member.EmailStr()}</p>
+					<p class="text-gray-900">{member.PhoneStr()}</p>
+				</div>
 			</div>
 			<div>
 				<h3 class="text-sm font-semibold text-gray-700">Home Facility</h3>
@@ -93,4 +138,56 @@ templ StaffDetail(member Staff) {
 			</div>
 		</div>
 	</div>
+}
+
+templ StaffNewForm() {
+	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
+		<div class="p-6 border-b border-gray-200">
+			<h2 class="text-xl font-bold text-gray-900">Add Staff</h2>
+		</div>
+		<div class="p-6 text-gray-600">
+			Staff creation is coming soon.
+		</div>
+	</div>
+}
+
+func staffFacilityOptions(staff []Staff) []int64 {
+	unique := make(map[int64]struct{})
+	for _, member := range staff {
+		if !member.HomeFacilityID.Valid {
+			continue
+		}
+		unique[member.HomeFacilityID.Int64] = struct{}{}
+	}
+
+	facilityIDs := make([]int64, 0, len(unique))
+	for facilityID := range unique {
+		facilityIDs = append(facilityIDs, facilityID)
+	}
+
+	sort.Slice(facilityIDs, func(i, j int) bool {
+		return facilityIDs[i] < facilityIDs[j]
+	})
+
+	return facilityIDs
+}
+
+func staffRoleOptions(staff []Staff) []string {
+	unique := make(map[string]struct{})
+	for _, member := range staff {
+		role := strings.TrimSpace(member.Role)
+		if role == "" {
+			continue
+		}
+		unique[role] = struct{}{}
+	}
+
+	roles := make([]string, 0, len(unique))
+	for role := range unique {
+		roles = append(roles, role)
+	}
+
+	sort.Strings(roles)
+
+	return roles
 }
