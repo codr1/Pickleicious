@@ -1,0 +1,96 @@
+// internal/templates/components/staff/list.templ
+package staff
+
+import "fmt"
+
+templ StaffLayout(staff []Staff) {
+	<div class="flex h-[calc(100vh-4rem)]">
+		<div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
+			<div class="p-4 border-b border-gray-200 bg-white">
+				<form class="space-y-3" hx-get="/api/v1/staff" hx-target="#staff-list" hx-trigger="change, submit">
+					<div class="flex gap-2">
+						<input
+							type="number"
+							name="facility_id"
+							placeholder="Facility ID"
+							class="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+						/>
+						<input
+							type="text"
+							name="role"
+							placeholder="Role"
+							class="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+						/>
+					</div>
+					<button
+						type="submit"
+						class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+					>
+						Filter
+					</button>
+				</form>
+			</div>
+
+			<div
+				class="flex-1 overflow-y-auto bg-gray-50"
+				id="staff-list"
+				hx-get="/api/v1/staff"
+				hx-trigger="load, refreshStaffList from:body"
+			>
+				<div class="flex items-center justify-center p-4 text-gray-500">
+					Loading staff...
+				</div>
+			</div>
+		</div>
+
+		<div class="w-1/2 h-full min-w-[50%]" id="staff-detail">
+			<div class="h-full w-full flex items-center justify-center text-gray-500">
+				Select a staff member to view details
+			</div>
+		</div>
+	</div>
+}
+
+templ StaffList(staff []Staff) {
+	for _, member := range staff {
+		<div
+			class="p-4 border-b border-gray-200 hover:bg-white cursor-pointer"
+			hx-get={fmt.Sprintf("/api/v1/staff/%d", member.ID)}
+			hx-target="#staff-detail"
+		>
+			<p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
+			<p class="text-sm text-gray-500">{member.RoleStr()}</p>
+			<p class="text-sm text-gray-500">{member.EmailStr()}</p>
+		</div>
+	}
+}
+
+templ StaffDetail(member Staff) {
+	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
+		<div class="p-6 border-b border-gray-200">
+			<h2 class="text-xl font-bold text-gray-900">Staff Details</h2>
+		</div>
+		<div class="p-6 space-y-4">
+			<div>
+				<h3 class="text-sm font-semibold text-gray-700">Name</h3>
+				<p class="text-gray-900">{member.FirstName} {member.LastName}</p>
+			</div>
+			<div>
+				<h3 class="text-sm font-semibold text-gray-700">Role</h3>
+				<p class="text-gray-900">{member.RoleStr()}</p>
+			</div>
+			<div>
+				<h3 class="text-sm font-semibold text-gray-700">Email</h3>
+				<p class="text-gray-900">{member.EmailStr()}</p>
+			</div>
+			<div>
+				<h3 class="text-sm font-semibold text-gray-700">Phone</h3>
+				<p class="text-gray-900">{member.PhoneStr()}</p>
+			</div>
+			<div>
+				<h3 class="text-sm font-semibold text-gray-700">Home Facility</h3>
+				<p class="text-gray-900">{member.FacilityStr()}</p>
+			</div>
+		</div>
+	</div>
+}
