@@ -14,6 +14,7 @@ var (
 type AuthUser struct {
 	ID             int64
 	IsStaff        bool
+	SessionType    string
 	HomeFacilityID *int64
 }
 
@@ -55,6 +56,14 @@ func CanManageStaff(requesterStaff, targetStaff StaffAccess) bool {
 	}
 
 	return *requesterStaff.HomeFacilityID == *targetStaff.HomeFacilityID
+}
+
+func SessionTypeFromContext(ctx context.Context) string {
+	user := UserFromContext(ctx)
+	if user == nil {
+		return ""
+	}
+	return user.SessionType
 }
 
 func RequireFacilityAccess(ctx context.Context, requestedFacilityID int64) error {

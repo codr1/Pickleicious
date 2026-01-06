@@ -6,7 +6,7 @@ import (
     "github.com/codr1/Pickleicious/internal/templates/components/nav"
 )
 
-templ Base(content templ.Component, theme *models.Theme) {
+templ Base(content templ.Component, theme *models.Theme, sessionType string) {
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -67,7 +67,7 @@ templ Base(content templ.Component, theme *models.Theme) {
     </head>
     <body class="min-h-screen bg-gray-50">
         <!-- Top Navigation -->
-        @nav.TopNav()
+        @nav.TopNav(sessionType)
         
         <!-- Menu Backdrop -->
         <div 

@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	"github.com/codr1/Pickleicious/internal/request"
@@ -79,7 +80,8 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 
 	// Render the layout template with members
 	component := membertempl.MembersLayout(templateMembers)
-	page := layouts.Base(component, activeTheme)
+	sessionType := authz.SessionTypeFromContext(r.Context())
+	page := layouts.Base(component, activeTheme, sessionType)
 
 	err = page.Render(r.Context(), w)
 	if err != nil {

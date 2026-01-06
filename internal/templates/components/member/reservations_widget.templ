@@ -1,0 +1,37 @@
+package member
+
+templ MemberReservationsWidget(data ReservationWidgetData) {
+	<details class="relative">
+		<summary class="relative list-none cursor-pointer select-none rounded-full p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200">
+			<span class="sr-only">Upcoming reservations</span>
+			<svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+				<circle cx="8" cy="16" r="4" stroke-width="1.5"/>
+				<path stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M11 13l7-7M14 6l4 4M12.5 9.5l4 4M6 4l6 6"/>
+			</svg>
+			<span class="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+				{data.BadgeLabel()}
+			</span>
+		</summary>
+		<div class="absolute right-0 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg z-50">
+			<div class="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-gray-900">
+				Upcoming reservations
+			</div>
+			if data.Count == 0 {
+				<div class="px-4 py-3 text-sm text-gray-500">No upcoming reservations.</div>
+			} else {
+				<ul class="max-h-80 overflow-y-auto divide-y divide-gray-100">
+					for _, reservation := range data.Upcoming {
+						<li class="px-4 py-3">
+							<p class="text-sm font-medium text-gray-900">
+								{reservation.StartTime.Format("Jan 2, 3:04 PM")} - {reservation.EndTime.Format("3:04 PM")}
+							</p>
+							<p class="text-xs text-gray-500">{reservation.FacilityName}</p>
+							<p class="text-xs text-gray-500">Court: {reservation.CourtLabel()}</p>
+							<p class="text-xs text-gray-500">Type: {reservation.ReservationTypeLabel()}</p>
+						</li>
+					}
+				</ul>
+			}
+		</div>
+	</details>
+}

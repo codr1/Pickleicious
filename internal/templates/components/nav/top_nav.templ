@@ -1,7 +1,9 @@
 // internal/templates/components/nav/top_nav.templ
 package nav
 
-templ TopNav() {
+import "github.com/codr1/Pickleicious/internal/api/auth"
+
+templ TopNav(sessionType string) {
     <header class="fixed top-0 inset-x-0 h-16 bg-white border-b border-gray-200 z-40">
         <div class="flex items-center justify-between h-full px-4">
             <!-- Menu Toggle -->
@@ -23,6 +25,15 @@ templ TopNav() {
 
             <!-- Quick Actions -->
             <div class="flex items-center space-x-4">
+                if sessionType == auth.SessionTypeMember {
+                    <div
+                        id="member-reservations-widget"
+                        class="relative"
+                        hx-get="/api/v1/member/reservations/widget"
+                        hx-trigger="load"
+                        hx-swap="outerHTML">
+                    </div>
+                }
                 <!-- Theme Toggle -->
                 <button 
                     type="button"
@@ -51,4 +62,3 @@ templ TopNav() {
         </div>
     </header>
 }
-

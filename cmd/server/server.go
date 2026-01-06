@@ -13,7 +13,9 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/auth"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/courts"
+	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
@@ -48,7 +50,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
-
+	member.InitHandlers(database.Queries)
 	operatinghours.InitHandlers(database.Queries)
 
 	staff.InitHandlers(database)
@@ -111,7 +113,8 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 				activeTheme = nil
 			}
 		}
-		component := layouts.Base(nil, activeTheme)
+		sessionType := authz.SessionTypeFromContext(r.Context())
+		component := layouts.Base(nil, activeTheme, sessionType)
 		component.Render(r.Context(), w)
 	})
 
@@ -128,9 +131,12 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Auth routes
 	mux.HandleFunc("/login", auth.HandleLoginPage)
+	mux.HandleFunc("/member/login", auth.HandleMemberLoginPage)
 	mux.HandleFunc("/api/v1/auth/check-staff", auth.HandleCheckStaff)
 	mux.HandleFunc("/api/v1/auth/send-code", auth.HandleSendCode)
 	mux.HandleFunc("/api/v1/auth/verify-code", auth.HandleVerifyCode)
+	mux.HandleFunc("/api/v1/auth/member/send-code", auth.HandleMemberSendCode)
+	mux.HandleFunc("/api/v1/auth/member/verify-code", auth.HandleMemberVerifyCode)
 	mux.HandleFunc("/api/v1/auth/resend-code", auth.HandleResendCode)
 	mux.HandleFunc("/api/v1/auth/staff-login", auth.HandleStaffLogin)
 	mux.HandleFunc("/api/v1/auth/reset-password", auth.HandleResetPassword)
@@ -138,6 +144,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/auth/standard-login", auth.HandleStandardLogin)
 
 	// Member routes
+	mux.Handle("/member", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberPortal)))
+	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsPartial)))
+	mux.Handle("/api/v1/member/reservations/widget", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsWidget)))
 	mux.HandleFunc("/members", members.HandleMembersPage)
 	mux.HandleFunc("/api/v1/members", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  members.HandleMembersList,
