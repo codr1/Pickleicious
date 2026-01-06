@@ -18,6 +18,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
+	"github.com/codr1/Pickleicious/internal/api/notifications"
 	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
 	"github.com/codr1/Pickleicious/internal/api/operatinghours"
 	"github.com/codr1/Pickleicious/internal/api/reservations"
@@ -52,6 +53,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	reservations.InitHandlers(database)
 	member.InitHandlers(database.Queries)
 	operatinghours.InitHandlers(database.Queries)
+	notifications.InitHandlers(database.Queries)
 
 	staff.InitHandlers(database)
 
@@ -128,6 +130,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/nav/menu", nav.HandleMenu)
 	mux.HandleFunc("/api/v1/nav/menu/close", nav.HandleMenuClose)
 	mux.HandleFunc("/api/v1/nav/search", nav.HandleSearch)
+	mux.HandleFunc("/api/v1/notifications", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: notifications.HandleNotificationsList,
+	}))
 
 	// Auth routes
 	mux.HandleFunc("/login", auth.HandleLoginPage)
