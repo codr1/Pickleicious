@@ -82,6 +82,7 @@ templ StaffLayout(staff []Staff) {
 			</div>
 		</div>
 	</div>
+	<div id="modal"></div>
 }
 
 templ StaffList(staff []Staff) {
@@ -123,12 +124,27 @@ templ StaffDetail(member Staff) {
 					<span class="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
 						{member.RoleStr()}
 					</span>
+					<span class={templ.Classes(
+						"px-3 py-1 text-xs font-semibold rounded-full",
+						templ.KV("bg-green-100 text-green-800", member.UserStatus == "active"),
+						templ.KV("bg-red-100 text-red-800", member.UserStatus == "inactive"),
+					)}>
+						{member.UserStatus}
+					</span>
 					<button
 						class="px-3 py-1 text-xs font-semibold rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
 						hx-get={fmt.Sprintf("/api/v1/staff/%d/edit", member.ID)}
 						hx-target="#staff-detail">
 						Edit
 					</button>
+					if member.UserStatus == "active" {
+						<button
+							class="px-3 py-1 text-xs font-semibold rounded-full border border-red-300 text-red-700 hover:bg-red-50"
+							hx-delete={fmt.Sprintf("/api/v1/staff/%d", member.ID)}
+							hx-target="#staff-detail">
+							Deactivate
+						</button>
+					}
 				</div>
 			</div>
 		</div>

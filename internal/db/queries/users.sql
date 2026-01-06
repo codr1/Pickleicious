@@ -37,3 +37,9 @@ SET first_name = @first_name,
     staff_role = @staff_role,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id AND is_staff = 1;
+
+-- name: UpdateUserStatus :exec
+UPDATE users
+SET status = @status,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id;

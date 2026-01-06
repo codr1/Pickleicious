@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -27,7 +28,23 @@ var (
 	store   *appdb.DB
 )
 
-const staffQueryTimeout = 5 * time.Second
+var (
+	errDeactivationSessionsChanged = errors.New("deactivation sessions changed")
+	errDeactivationRequiresConfirm = errors.New("deactivation requires confirmation")
+)
+
+type deactivationValidationError struct {
+	msg string
+}
+
+func (e *deactivationValidationError) Error() string {
+	return e.msg
+}
+
+const (
+	staffQueryTimeout        = 5 * time.Second
+	staffDeactivationTimeout = 60 * time.Second
+)
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
@@ -576,6 +593,334 @@ func HandleUpdateStaff(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// /api/v1/staff/{id}
+func HandleDeactivateStaff(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if queries == nil || store == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	staffID, err := parseStaffIDFromPath(r.URL.Path, 1)
+	if err != nil {
+		http.Error(w, "Invalid staff ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), staffQueryTimeout)
+	defer cancel()
+
+	if !requireStaffAdminOrManager(w, r, ctx) {
+		return
+	}
+	user := authz.UserFromContext(r.Context())
+
+	var (
+		updatedStaff      dbgen.GetStaffByIDRow
+		modalStaff        dbgen.GetStaffByIDRow
+		modalPros         []dbgen.ListStaffRow
+		modalSessionCount int
+	)
+	if err := store.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		staffRow, err := qtx.GetStaffByID(ctx, staffID)
+		if err != nil {
+			return err
+		}
+		if user != nil && user.ID == staffRow.UserID {
+			return &deactivationValidationError{msg: "Cannot deactivate your own account"}
+		}
+
+		futureSessions, err := qtx.GetFutureProSessionsByStaffID(ctx, dbgen.GetFutureProSessionsByStaffIDParams{
+			ProID:     sql.NullInt64{Int64: staffID, Valid: true},
+			StartTime: time.Now(),
+		})
+		if err != nil {
+			return err
+		}
+
+		if len(futureSessions) > 0 {
+			staffRows, err := qtx.ListStaff(ctx)
+			if err != nil {
+				return err
+			}
+			modalStaff = staffRow
+			modalPros = buildActiveProOptions(staffRows, staffID)
+			modalSessionCount = len(futureSessions)
+			return errDeactivationRequiresConfirm
+		}
+
+		if staffRow.UserStatus == "inactive" {
+			logger.Info().Int64("id", staffID).Int64("user_id", staffRow.UserID).Msg("Staff already inactive; skipping deactivation")
+			updatedStaff = staffRow
+			return nil
+		}
+
+		if err := qtx.UpdateUserStatus(ctx, dbgen.UpdateUserStatusParams{
+			ID:     staffRow.UserID,
+			Status: "inactive",
+		}); err != nil {
+			return err
+		}
+
+		updatedStaff, err = qtx.GetStaffByID(ctx, staffID)
+		return err
+	}); err != nil {
+		if errors.Is(err, errDeactivationRequiresConfirm) {
+			component := stafftempl.DeactivateModal(
+				stafftempl.NewStaff(toListStaffRow(modalStaff)),
+				stafftempl.NewStaffList(modalPros),
+				modalSessionCount,
+				"",
+				"",
+			)
+			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("HX-Retarget", "#modal")
+			w.Header().Set("HX-Reswap", "innerHTML")
+			if err := component.Render(r.Context(), w); err != nil {
+				logger.Error().Err(err).Msg("Failed to render deactivation modal")
+				http.Error(w, "Failed to render modal", http.StatusInternalServerError)
+			}
+			return
+		}
+		var validationErr *deactivationValidationError
+		if errors.As(err, &validationErr) {
+			http.Error(w, validationErr.Error(), http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Staff not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("id", staffID).Msg("Failed to deactivate staff user")
+		http.Error(w, "Failed to deactivate staff", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("HX-Trigger", "refreshStaffList")
+	w.Header().Set("HX-Retarget", "#staff-detail")
+	w.Header().Set("HX-Reswap", "innerHTML")
+	if err := renderStaffDetail(w, r, updatedStaff); err != nil {
+		logger.Error().Err(err).Msg("Failed to render staff detail")
+		http.Error(w, "Failed to render staff detail", http.StatusInternalServerError)
+		return
+	}
+}
+
+// /api/v1/staff/{id}/deactivate
+func HandleConfirmDeactivation(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if queries == nil || store == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	staffID, err := parseStaffIDFromPath(r.URL.Path, 2)
+	if err != nil {
+		http.Error(w, "Invalid staff ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		logger.Error().Err(err).Msg("Failed to parse deactivation form")
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	expectedCount := -1
+	expectedValue := strings.TrimSpace(r.FormValue("expected_sessions"))
+	if expectedValue != "" {
+		if parsed, err := strconv.Atoi(expectedValue); err == nil {
+			expectedCount = parsed
+		}
+	}
+
+	action := strings.TrimSpace(r.FormValue("deactivation_action"))
+	if action == "" {
+		http.Error(w, "Missing deactivation action", http.StatusBadRequest)
+		return
+	}
+
+	reassignID := int64(0)
+	if action == "reassign" {
+		reassignValue := strings.TrimSpace(r.FormValue("reassign_to"))
+		if reassignValue == "" {
+			http.Error(w, "Reassignment staff ID required", http.StatusBadRequest)
+			return
+		}
+		reassignID, err = strconv.ParseInt(reassignValue, 10, 64)
+		if err != nil || reassignID <= 0 {
+			http.Error(w, "Invalid reassignment staff ID", http.StatusBadRequest)
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), staffDeactivationTimeout)
+	defer cancel()
+
+	if !requireStaffAdminOrManager(w, r, ctx) {
+		return
+	}
+	user := authz.UserFromContext(r.Context())
+
+	var (
+		updatedStaff        dbgen.GetStaffByIDRow
+		modalStaff          dbgen.GetStaffByIDRow
+		modalPros           []dbgen.ListStaffRow
+		modalSessionCount   int
+		modalSelectedAction string
+	)
+	err = store.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		staffRow, err := qtx.GetStaffByID(ctx, staffID)
+		if err != nil {
+			return err
+		}
+		if user != nil && user.ID == staffRow.UserID {
+			return &deactivationValidationError{msg: "Cannot deactivate your own account"}
+		}
+
+		futureSessions, err := qtx.GetFutureProSessionsByStaffID(ctx, dbgen.GetFutureProSessionsByStaffIDParams{
+			ProID:     sql.NullInt64{Int64: staffID, Valid: true},
+			StartTime: time.Now(),
+		})
+		if err != nil {
+			return err
+		}
+
+		if action != "abort" && expectedCount >= 0 && expectedCount != len(futureSessions) {
+			staffRows, err := qtx.ListStaff(ctx)
+			if err != nil {
+				return err
+			}
+			modalStaff = staffRow
+			modalPros = buildActiveProOptions(staffRows, staffID)
+			modalSessionCount = len(futureSessions)
+			modalSelectedAction = action
+			return errDeactivationSessionsChanged
+		}
+
+		switch action {
+		case "reassign":
+			if reassignID == staffID {
+				return &deactivationValidationError{msg: "Reassignment staff ID must differ from staff ID"}
+			}
+			reassignStaff, err := qtx.GetStaffByID(ctx, reassignID)
+			if err != nil {
+				return err
+			}
+			if !strings.EqualFold(reassignStaff.Role, "pro") || !strings.EqualFold(reassignStaff.UserStatus, "active") {
+				return &deactivationValidationError{msg: "Reassignment staff must be an active pro"}
+			}
+			for _, session := range futureSessions {
+				if _, err := qtx.UpdateReservation(ctx, dbgen.UpdateReservationParams{
+					ReservationTypeID: session.ReservationTypeID,
+					RecurrenceRuleID:  session.RecurrenceRuleID,
+					PrimaryUserID:     session.PrimaryUserID,
+					ProID:             sql.NullInt64{Int64: reassignID, Valid: true},
+					OpenPlayRuleID:    session.OpenPlayRuleID,
+					StartTime:         session.StartTime,
+					EndTime:           session.EndTime,
+					IsOpenEvent:       session.IsOpenEvent,
+					TeamsPerCourt:     session.TeamsPerCourt,
+					PeoplePerTeam:     session.PeoplePerTeam,
+					ID:                session.ID,
+					FacilityID:        session.FacilityID,
+				}); err != nil {
+					return err
+				}
+			}
+		case "cancel":
+			for _, session := range futureSessions {
+				if err := qtx.DeleteReservationParticipantsByReservationID(ctx, session.ID); err != nil {
+					return err
+				}
+				if err := qtx.DeleteReservationCourtsByReservationID(ctx, session.ID); err != nil {
+					return err
+				}
+				if _, err := qtx.DeleteReservation(ctx, dbgen.DeleteReservationParams{
+					ID:         session.ID,
+					FacilityID: session.FacilityID,
+				}); err != nil {
+					return err
+				}
+			}
+		case "abort":
+			updatedStaff = staffRow
+			return nil
+		default:
+			return &deactivationValidationError{msg: "Invalid deactivation action"}
+		}
+
+		if staffRow.UserStatus == "inactive" {
+			logger.Info().Int64("id", staffID).Int64("user_id", staffRow.UserID).Msg("Staff already inactive; skipping deactivation")
+			updatedStaff = staffRow
+			return nil
+		}
+
+		if err := qtx.UpdateUserStatus(ctx, dbgen.UpdateUserStatusParams{
+			ID:     staffRow.UserID,
+			Status: "inactive",
+		}); err != nil {
+			return err
+		}
+
+		updatedStaff, err = qtx.GetStaffByID(ctx, staffID)
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, errDeactivationSessionsChanged) {
+			component := stafftempl.DeactivateModal(
+				stafftempl.NewStaff(toListStaffRow(modalStaff)),
+				stafftempl.NewStaffList(modalPros),
+				modalSessionCount,
+				modalSelectedAction,
+				"Upcoming sessions changed since you opened this dialog. Review your choice and confirm again.",
+			)
+			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("HX-Trigger", "deactivationSessionsChanged")
+			w.Header().Set("HX-Retarget", "#modal")
+			w.Header().Set("HX-Reswap", "innerHTML")
+			if err := component.Render(r.Context(), w); err != nil {
+				logger.Error().Err(err).Msg("Failed to render deactivation modal")
+				http.Error(w, "Failed to render modal", http.StatusInternalServerError)
+			}
+			return
+		}
+		var validationErr *deactivationValidationError
+		if errors.As(err, &validationErr) {
+			http.Error(w, validationErr.Error(), http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Staff not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("id", staffID).Msg("Failed to confirm staff deactivation")
+		http.Error(w, "Failed to deactivate staff", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	if action != "abort" {
+		w.Header().Set("HX-Trigger", "refreshStaffList")
+	}
+	w.Header().Set("HX-Retarget", "#staff-detail")
+	w.Header().Set("HX-Reswap", "innerHTML")
+	if err := renderStaffDetail(w, r, updatedStaff); err != nil {
+		logger.Error().Err(err).Msg("Failed to render staff detail")
+		http.Error(w, "Failed to render staff detail", http.StatusInternalServerError)
+		return
+	}
+}
+
 func filterStaffRowsByRole(rows []dbgen.ListStaffRow, role string) []dbgen.ListStaffRow {
 	filtered := make([]dbgen.ListStaffRow, 0, len(rows))
 	for _, row := range rows {
@@ -585,6 +930,49 @@ func filterStaffRowsByRole(rows []dbgen.ListStaffRow, role string) []dbgen.ListS
 		filtered = append(filtered, row)
 	}
 	return filtered
+}
+
+func buildActiveProOptions(rows []dbgen.ListStaffRow, staffID int64) []dbgen.ListStaffRow {
+	filtered := make([]dbgen.ListStaffRow, 0, len(rows))
+	for _, row := range rows {
+		if row.ID == staffID {
+			continue
+		}
+		if strings.EqualFold(row.Role, "pro") && strings.EqualFold(row.UserStatus, "active") {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
+}
+
+func requireStaffAdminOrManager(w http.ResponseWriter, r *http.Request, ctx context.Context) bool {
+	logger := log.Ctx(r.Context())
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		logger.Warn().Msg("Staff deactivation denied: unauthenticated")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return false
+	}
+
+	staffRow, err := queries.GetStaffByUserID(ctx, user.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			logger.Warn().Int64("user_id", user.ID).Msg("Staff deactivation denied: not staff")
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return false
+		}
+		logger.Error().Err(err).Int64("user_id", user.ID).Msg("Staff deactivation denied: failed to load staff role")
+		http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
+		return false
+	}
+
+	if !strings.EqualFold(staffRow.Role, "admin") && !strings.EqualFold(staffRow.Role, "manager") {
+		logger.Warn().Int64("user_id", user.ID).Str("role", staffRow.Role).Msg("Staff deactivation denied: insufficient role")
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+
+	return true
 }
 
 func validateStaffInput(r *http.Request) error {
@@ -620,6 +1008,16 @@ func staffRoleAllowed(role string) bool {
 	default:
 		return false
 	}
+}
+
+func parseStaffIDFromPath(path string, indexFromEnd int) (int64, error) {
+	path = strings.TrimSuffix(path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) < indexFromEnd {
+		return 0, fmt.Errorf("invalid path")
+	}
+	idStr := parts[len(parts)-indexFromEnd]
+	return strconv.ParseInt(idStr, 10, 64)
 }
 
 func loadFacilities(ctx context.Context) ([]dbgen.Facility, error) {
@@ -698,6 +1096,11 @@ func filterStaffRowsBySearch(rows []dbgen.ListStaffRow, search string) []dbgen.L
 	}
 
 	return filtered
+}
+
+func renderStaffDetail(w http.ResponseWriter, r *http.Request, staffRow dbgen.GetStaffByIDRow) error {
+	templStaff := stafftempl.NewStaff(toListStaffRow(staffRow))
+	return stafftempl.StaffDetail(templStaff).Render(r.Context(), w)
 }
 
 // toListStaffRow converts any staff-like struct to ListStaffRow.

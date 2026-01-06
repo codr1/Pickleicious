@@ -113,3 +113,11 @@ WHERE id = @id;
 SELECT id, name, description, color, created_at, updated_at
 FROM reservation_types
 ORDER BY name;
+
+-- name: DeleteReservationParticipantsByReservationID :exec
+DELETE FROM reservation_participants
+WHERE reservation_id = @reservation_id;
+
+-- name: DeleteReservationCourtsByReservationID :exec
+DELETE FROM reservation_courts
+WHERE reservation_id = @reservation_id;

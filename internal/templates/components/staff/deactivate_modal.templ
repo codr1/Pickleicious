@@ -1,0 +1,91 @@
+// internal/templates/components/staff/deactivate_modal.templ
+package staff
+
+import "fmt"
+
+templ DeactivateModal(staffMember Staff, proOptions []Staff, futureSessions int, selectedAction string, notice string) {
+	<div class="fixed inset-0 z-50 flex items-center justify-center">
+		<div class="absolute inset-0 bg-black bg-opacity-50" onclick="document.getElementById('modal').innerHTML=''"></div>
+		<div class="relative w-full max-w-lg rounded-lg bg-white shadow-lg">
+			<div class="border-b border-gray-200 px-6 py-4">
+				<h3 class="text-lg font-semibold text-gray-900">Deactivate Staff</h3>
+				<p class="mt-1 text-sm text-gray-600">
+					{staffMember.FirstName} {staffMember.LastName} has {fmt.Sprintf("%d", futureSessions)} upcoming pro sessions.
+				</p>
+				if notice != "" {
+					<p class="mt-2 text-sm text-amber-700">{notice}</p>
+				}
+			</div>
+			<form
+				class="space-y-4 px-6 py-4"
+				hx-post={fmt.Sprintf("/api/v1/staff/%d/deactivate", staffMember.ID)}
+				hx-target="#staff-detail"
+				hx-on::after-request="var trigger=event.detail.xhr.getResponseHeader('HX-Trigger')||'';if(event.detail.xhr.status===200&&trigger.indexOf('deactivationSessionsChanged')===-1){document.getElementById('modal').innerHTML='';}"
+			>
+				<input type="hidden" name="expected_sessions" value={fmt.Sprintf("%d", futureSessions)} />
+				<div class="space-y-3">
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input
+							type="radio"
+							name="deactivation_action"
+							value="reassign"
+							checked={resolveAction(proOptions, selectedAction) == "reassign"}
+							disabled={len(proOptions) == 0}
+						/>
+						Reassign upcoming sessions to another pro
+					</label>
+					<div>
+						<select
+							name="reassign_to"
+							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+							disabled={len(proOptions) == 0}
+						>
+							if len(proOptions) == 0 {
+								<option value="">No other pros available</option>
+							} else {
+								<option value="">Select a pro</option>
+								for _, pro := range proOptions {
+									<option value={fmt.Sprintf("%d", pro.ID)}>{pro.FirstName} {pro.LastName}</option>
+								}
+							}
+						</select>
+					</div>
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input type="radio" name="deactivation_action" value="cancel" checked={resolveAction(proOptions, selectedAction) == "cancel"} />
+						Cancel upcoming sessions
+					</label>
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input type="radio" name="deactivation_action" value="abort" checked={resolveAction(proOptions, selectedAction) == "abort"} />
+						Abort deactivation
+					</label>
+				</div>
+				<div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4">
+					<button
+						type="button"
+						class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+						onclick="document.getElementById('modal').innerHTML=''"
+					>
+						Close
+					</button>
+					<button type="submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+						Confirm
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+func defaultAction(proOptions []Staff) string {
+	if len(proOptions) > 0 {
+		return "reassign"
+	}
+	return "cancel"
+}
+
+func resolveAction(proOptions []Staff, selectedAction string) string {
+	if selectedAction != "" {
+		return selectedAction
+	}
+	return defaultAction(proOptions)
+}
