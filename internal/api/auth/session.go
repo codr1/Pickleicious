@@ -22,8 +22,8 @@ const (
 	authSessionTTL         = 8 * time.Hour
 	sessionTokenBytes      = 32
 	sessionCleanupInterval = 15 * time.Minute
-	sessionTypeStaff       = "staff"
-	sessionTypeMember      = "member"
+	SessionTypeStaff       = "staff"
+	SessionTypeMember      = "member"
 )
 
 var errAuthConfigMissing = errors.New("auth configuration missing")
@@ -180,7 +180,7 @@ func UserFromRequest(w http.ResponseWriter, r *http.Request) (*authz.AuthUser, e
 
 	return &authz.AuthUser{
 		ID:             session.UserID,
-		IsStaff:        session.SessionType == sessionTypeStaff,
+		IsStaff:        session.SessionType == SessionTypeStaff,
 		SessionType:    session.SessionType,
 		HomeFacilityID: session.HomeFacilityID,
 	}, nil
@@ -291,18 +291,18 @@ func parseAuthCookie(r *http.Request) (*authSession, error) {
 
 func normalizeSessionType(sessionType string) string {
 	switch sessionType {
-	case sessionTypeStaff, sessionTypeMember:
+	case SessionTypeStaff, SessionTypeMember:
 		return sessionType
 	default:
-		return sessionTypeMember
+		return SessionTypeMember
 	}
 }
 
 func sessionTypeFromStaff(isStaff bool) string {
 	if isStaff {
-		return sessionTypeStaff
+		return SessionTypeStaff
 	}
-	return sessionTypeMember
+	return SessionTypeMember
 }
 
 func signPayload(payload string) (string, error) {

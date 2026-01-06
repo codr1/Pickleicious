@@ -13,6 +13,7 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/auth"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
@@ -128,9 +129,12 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Auth routes
 	mux.HandleFunc("/login", auth.HandleLoginPage)
+	mux.HandleFunc("/member/login", auth.HandleMemberLoginPage)
 	mux.HandleFunc("/api/v1/auth/check-staff", auth.HandleCheckStaff)
 	mux.HandleFunc("/api/v1/auth/send-code", auth.HandleSendCode)
 	mux.HandleFunc("/api/v1/auth/verify-code", auth.HandleVerifyCode)
+	mux.HandleFunc("/api/v1/auth/member/send-code", auth.HandleMemberSendCode)
+	mux.HandleFunc("/api/v1/auth/member/verify-code", auth.HandleMemberVerifyCode)
 	mux.HandleFunc("/api/v1/auth/resend-code", auth.HandleResendCode)
 	mux.HandleFunc("/api/v1/auth/staff-login", auth.HandleStaffLogin)
 	mux.HandleFunc("/api/v1/auth/reset-password", auth.HandleResetPassword)
@@ -138,6 +142,23 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/auth/standard-login", auth.HandleStandardLogin)
 
 	// Member routes
+	mux.HandleFunc("/member", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		user := authz.UserFromContext(r.Context())
+		if user == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if user.SessionType != auth.SessionTypeMember {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Member portal"))
+	})
 	mux.HandleFunc("/members", members.HandleMembersPage)
 	mux.HandleFunc("/api/v1/members", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  members.HandleMembersList,

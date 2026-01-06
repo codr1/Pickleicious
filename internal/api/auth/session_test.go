@@ -21,7 +21,7 @@ func TestParseAuthCookieSessionType(t *testing.T) {
 
 	sessionPayload := authSession{
 		UserID:      42,
-		SessionType: sessionTypeStaff,
+		SessionType: SessionTypeStaff,
 		ExpiresAt:   time.Now().Add(time.Hour).Unix(),
 	}
 
@@ -39,8 +39,8 @@ func TestParseAuthCookieSessionType(t *testing.T) {
 	if session == nil {
 		t.Fatal("expected session, got nil")
 	}
-	if session.SessionType != sessionTypeStaff {
-		t.Fatalf("expected session type %q, got %q", sessionTypeStaff, session.SessionType)
+	if session.SessionType != SessionTypeStaff {
+		t.Fatalf("expected session type %q, got %q", SessionTypeStaff, session.SessionType)
 	}
 }
 
@@ -54,7 +54,7 @@ func TestParseAuthCookieSessionTypeMember(t *testing.T) {
 
 	sessionPayload := authSession{
 		UserID:      42,
-		SessionType: sessionTypeMember,
+		SessionType: SessionTypeMember,
 		ExpiresAt:   time.Now().Add(time.Hour).Unix(),
 	}
 
@@ -72,15 +72,15 @@ func TestParseAuthCookieSessionTypeMember(t *testing.T) {
 	if session == nil {
 		t.Fatal("expected session, got nil")
 	}
-	if session.SessionType != sessionTypeMember {
-		t.Fatalf("expected session type %q, got %q", sessionTypeMember, session.SessionType)
+	if session.SessionType != SessionTypeMember {
+		t.Fatalf("expected session type %q, got %q", SessionTypeMember, session.SessionType)
 	}
 }
 
 func TestNormalizeSessionTypeUnknownDefaultsToMember(t *testing.T) {
 	normalized := normalizeSessionType("unknown")
-	if normalized != sessionTypeMember {
-		t.Fatalf("expected session type %q, got %q", sessionTypeMember, normalized)
+	if normalized != SessionTypeMember {
+		t.Fatalf("expected session type %q, got %q", SessionTypeMember, normalized)
 	}
 }
 

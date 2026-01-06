@@ -62,6 +62,11 @@ func InitHandlers(q *dbgen.Queries, cfg *config.Config) {
 func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	if queries == nil {
 		logger.Error().Msg("Database queries not initialized")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -73,6 +78,30 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	err := component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render login page")
+		http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleMemberLoginPage(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	organizationID := r.FormValue("organization_id")
+	component := authtempl.MemberLoginLayout(organizationID)
+	err := component.Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render member login page")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
 		return
 	}
@@ -117,6 +146,11 @@ func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 
 func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	identifier := r.FormValue("identifier")
 	organizationIDStr := r.FormValue("organization_id")
 
@@ -150,6 +184,11 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Error().Err(err).Msg("Failed to load user for auth")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !user.IsStaff {
+		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
@@ -200,6 +239,11 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 
 func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	code := r.FormValue("code")
 	identifier := r.FormValue("identifier")
 	organizationIDStr := r.FormValue("organization_id")
@@ -207,6 +251,11 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 
 	if code == "" || identifier == "" || organizationIDStr == "" || session == "" {
 		http.Error(w, "Code, identifier, organization, and session are required", http.StatusBadRequest)
+		return
+	}
+
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 
@@ -230,6 +279,11 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Error().Err(err).Msg("Failed to load user for auth")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !user.IsStaff {
+		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
@@ -295,6 +349,214 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
+}
+
+func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	identifier := r.FormValue("identifier")
+	organizationIDStr := r.FormValue("organization_id")
+
+	if identifier == "" || organizationIDStr == "" {
+		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+		return
+	}
+
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to load user for auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !user.IsMember {
+		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// Get Cognito config for this organization
+	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get Cognito config")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Initialize Cognito client with organization-specific config
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	authMethod := ""
+	if user.PreferredAuthMethod.Valid {
+		authMethod = user.PreferredAuthMethod.String
+	}
+
+	authResponse, err := client.InitiateCustomAuth(r.Context(), identifier, authMethod)
+	if err != nil {
+		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to initiate Cognito auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	session := ""
+	if authResponse != nil && authResponse.Session != nil {
+		session = *authResponse.Session
+	}
+
+	component := authtempl.MemberCodeVerification(identifier, organizationIDStr, session)
+	err = component.Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render member verification screen")
+		http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	code := r.FormValue("code")
+	identifier := r.FormValue("identifier")
+	organizationIDStr := r.FormValue("organization_id")
+	session := r.FormValue("session")
+
+	if code == "" || identifier == "" || organizationIDStr == "" || session == "" {
+		http.Error(w, "Code, identifier, organization, and session are required", http.StatusBadRequest)
+		return
+	}
+
+	if limiter != nil && !limiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to load user for auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !user.IsMember {
+		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// Get Cognito config for this organization
+	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get Cognito config")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Verify code with Cognito
+	client, err := newCognitoClient(cognitoConfig)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	authResponse, err := client.RespondToAuthChallenge(r.Context(), session, identifier, code)
+	if err != nil {
+		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to respond to Cognito challenge")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if authResponse == nil || authResponse.AuthenticationResult == nil || authResponse.ChallengeName != "" {
+		writeHTMXError(w, r, http.StatusUnauthorized, "Additional verification required")
+		return
+	}
+
+	// Update user's Cognito status if needed
+	err = queries.UpdateUserCognitoStatus(r.Context(), dbgen.UpdateUserCognitoStatusParams{
+		ID:            user.ID,
+		CognitoStatus: sql.NullString{String: "CONFIRMED", Valid: true},
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to update Cognito status")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	var homeFacilityID *int64
+	if user.HomeFacilityID.Valid {
+		id := user.HomeFacilityID.Int64
+		homeFacilityID = &id
+	}
+
+	authUser := &authz.AuthUser{
+		ID:             user.ID,
+		IsStaff:        false,
+		SessionType:    SessionTypeMember,
+		HomeFacilityID: homeFacilityID,
+	}
+
+	if err := SetAuthCookie(w, r, authUser); err != nil {
+		logger.Error().Err(err).Msg("Failed to set auth session")
+		http.Error(w, "Failed to start session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/member")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -643,7 +905,7 @@ func devModeBypass(r *http.Request, identifier, password string) (*authz.AuthUse
 	return &authz.AuthUser{
 		ID:             0,
 		IsStaff:        true,
-		SessionType:    sessionTypeStaff,
+		SessionType:    SessionTypeStaff,
 		HomeFacilityID: homeFacilityID,
 	}, true
 }
