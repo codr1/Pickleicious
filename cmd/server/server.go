@@ -51,7 +51,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 
 	operatinghours.InitHandlers(database.Queries)
 
-	staff.InitHandlers(database.Queries)
+	staff.InitHandlers(database)
 
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)

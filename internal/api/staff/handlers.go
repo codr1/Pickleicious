@@ -283,6 +283,17 @@ func HandleCreateStaff(w http.ResponseWriter, r *http.Request) {
 		homeFacilityID = sql.NullInt64{Int64: facilityID, Valid: true}
 	}
 
+	targetAccess := staffAccessFromRoleAndFacility(role, homeFacilityID)
+	requesterAccess, ok := requireStaffManagement(w, r, ctx, targetAccess, "creation")
+	if !ok {
+		return
+	}
+	if !canAssignStaffRole(requesterAccess, targetAccess) {
+		logger.Warn().Str("action", "creation").Msg("Staff management denied: role assignment not permitted")
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	var userID int64
 	var staffID int64
 	err := store.RunInTx(ctx, func(txdb *appdb.DB) error {
@@ -480,9 +491,26 @@ func HandleUpdateStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentAccess := staffAccessFromRoleAndFacility(staffRow.Role, staffRow.HomeFacilityID)
+	requesterAccess, ok := requireStaffManagement(w, r, ctx, currentAccess, "update")
+	if !ok {
+		return
+	}
+
 	homeFacilityID := sql.NullInt64{}
 	if facilityID, ok := request.ParseFacilityID(r.FormValue("home_facility_id")); ok {
 		homeFacilityID = sql.NullInt64{Int64: facilityID, Valid: true}
+	}
+	newAccess := staffAccessFromRoleAndFacility(role, homeFacilityID)
+	if !authz.CanManageStaff(requesterAccess, newAccess) {
+		logger.Warn().Str("action", "update").Msg("Staff management denied: insufficient permissions")
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !canAssignStaffRole(requesterAccess, newAccess) {
+		logger.Warn().Str("action", "update").Msg("Staff management denied: role assignment not permitted")
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
 	}
 
 	email := strings.TrimSpace(r.FormValue("email"))
@@ -612,7 +640,19 @@ func HandleDeactivateStaff(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), staffQueryTimeout)
 	defer cancel()
 
-	if !requireStaffAdminOrManager(w, r, ctx) {
+	targetStaff, err := queries.GetStaffByID(ctx, staffID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Staff not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("id", staffID).Msg("Failed to fetch staff for authorization")
+		http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
+		return
+	}
+
+	targetAccess := staffAccessFromRoleAndFacility(targetStaff.Role, targetStaff.HomeFacilityID)
+	if _, ok := requireStaffManagement(w, r, ctx, targetAccess, "deactivation"); !ok {
 		return
 	}
 	user := authz.UserFromContext(r.Context())
@@ -764,7 +804,19 @@ func HandleConfirmDeactivation(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), staffDeactivationTimeout)
 	defer cancel()
 
-	if !requireStaffAdminOrManager(w, r, ctx) {
+	targetStaff, err := queries.GetStaffByID(ctx, staffID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Staff not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("id", staffID).Msg("Failed to fetch staff for authorization")
+		http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
+		return
+	}
+
+	targetAccess := staffAccessFromRoleAndFacility(targetStaff.Role, targetStaff.HomeFacilityID)
+	if _, ok := requireStaffManagement(w, r, ctx, targetAccess, "deactivation"); !ok {
 		return
 	}
 	user := authz.UserFromContext(r.Context())
@@ -945,34 +997,51 @@ func buildActiveProOptions(rows []dbgen.ListStaffRow, staffID int64) []dbgen.Lis
 	return filtered
 }
 
-func requireStaffAdminOrManager(w http.ResponseWriter, r *http.Request, ctx context.Context) bool {
+func staffAccessFromRoleAndFacility(role string, homeFacilityID sql.NullInt64) authz.StaffAccess {
+	var facilityID *int64
+	if homeFacilityID.Valid {
+		id := homeFacilityID.Int64
+		facilityID = &id
+	}
+	return authz.StaffAccess{
+		Role:           role,
+		HomeFacilityID: facilityID,
+	}
+}
+
+func requireStaffManagement(w http.ResponseWriter, r *http.Request, ctx context.Context, target authz.StaffAccess, action string) (authz.StaffAccess, bool) {
 	logger := log.Ctx(r.Context())
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		logger.Warn().Msg("Staff deactivation denied: unauthenticated")
+		logger.Warn().Str("action", action).Msg("Staff management denied: unauthenticated")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return false
+		return authz.StaffAccess{}, false
 	}
 
 	staffRow, err := queries.GetStaffByUserID(ctx, user.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			logger.Warn().Int64("user_id", user.ID).Msg("Staff deactivation denied: not staff")
+			logger.Warn().Int64("user_id", user.ID).Str("action", action).Msg("Staff management denied: not staff")
 			http.Error(w, "Forbidden", http.StatusForbidden)
-			return false
+			return authz.StaffAccess{}, false
 		}
-		logger.Error().Err(err).Int64("user_id", user.ID).Msg("Staff deactivation denied: failed to load staff role")
+		logger.Error().Err(err).Int64("user_id", user.ID).Str("action", action).Msg("Staff management denied: failed to load staff role")
 		http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
-		return false
+		return authz.StaffAccess{}, false
 	}
 
-	if !strings.EqualFold(staffRow.Role, "admin") && !strings.EqualFold(staffRow.Role, "manager") {
-		logger.Warn().Int64("user_id", user.ID).Str("role", staffRow.Role).Msg("Staff deactivation denied: insufficient role")
+	requesterAccess := staffAccessFromRoleAndFacility(staffRow.Role, staffRow.HomeFacilityID)
+	if !authz.CanManageStaff(requesterAccess, target) {
+		logger.Warn().
+			Int64("user_id", user.ID).
+			Str("role", staffRow.Role).
+			Str("action", action).
+			Msg("Staff management denied: insufficient permissions")
 		http.Error(w, "Forbidden", http.StatusForbidden)
-		return false
+		return requesterAccess, false
 	}
 
-	return true
+	return requesterAccess, true
 }
 
 func validateStaffInput(r *http.Request) error {
@@ -1008,6 +1077,16 @@ func staffRoleAllowed(role string) bool {
 	default:
 		return false
 	}
+}
+
+func canAssignStaffRole(requester authz.StaffAccess, target authz.StaffAccess) bool {
+	if strings.EqualFold(requester.Role, "admin") {
+		return true
+	}
+	if strings.EqualFold(target.Role, "admin") || strings.EqualFold(target.Role, "manager") {
+		return false
+	}
+	return true
 }
 
 func parseStaffIDFromPath(path string, indexFromEnd int) (int64, error) {

@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 var (
@@ -13,6 +14,11 @@ var (
 type AuthUser struct {
 	ID             int64
 	IsStaff        bool
+	HomeFacilityID *int64
+}
+
+type StaffAccess struct {
+	Role           string
 	HomeFacilityID *int64
 }
 
@@ -33,6 +39,22 @@ func UserFromContext(ctx context.Context) *AuthUser {
 	}
 
 	return user
+}
+
+func CanManageStaff(requesterStaff, targetStaff StaffAccess) bool {
+	if !strings.EqualFold(requesterStaff.Role, "admin") && !strings.EqualFold(requesterStaff.Role, "manager") {
+		return false
+	}
+
+	if requesterStaff.HomeFacilityID == nil {
+		return true
+	}
+
+	if targetStaff.HomeFacilityID == nil {
+		return false
+	}
+
+	return *requesterStaff.HomeFacilityID == *targetStaff.HomeFacilityID
 }
 
 func RequireFacilityAccess(ctx context.Context, requestedFacilityID int64) error {
