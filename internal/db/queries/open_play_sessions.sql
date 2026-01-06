@@ -213,11 +213,26 @@ INSERT INTO staff_notifications (
 RETURNING id, facility_id, notification_type, message, related_session_id, read,
     created_at, updated_at;
 
+-- name: CountUnreadStaffNotifications :one
+SELECT COUNT(*)
+FROM staff_notifications
+WHERE (@facility_id IS NULL OR facility_id = @facility_id)
+  AND read = 0;
+
 -- name: ListStaffNotifications :many
 SELECT id, facility_id, notification_type, message, related_session_id, read,
     created_at, updated_at
 FROM staff_notifications
 WHERE facility_id = @facility_id
+ORDER BY created_at DESC
+LIMIT @limit OFFSET @offset;
+
+-- name: ListStaffNotificationsForFacilityOrCorporate :many
+SELECT id, facility_id, notification_type, message, related_session_id, read,
+    created_at, updated_at
+FROM staff_notifications
+WHERE @facility_id IS NULL
+   OR facility_id = @facility_id
 ORDER BY created_at DESC
 LIMIT @limit OFFSET @offset;
 
