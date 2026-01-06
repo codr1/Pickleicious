@@ -153,12 +153,14 @@ Complete member record structure:
 
 ### 3.3 Membership Levels
 
+<!-- BEGIN WIP: STORY-0021 -->
 | Level | Name | Description |
 |-------|------|-------------|
 | 0 | Unverified Guest | New registrant, identity not confirmed |
 | 1 | Verified Guest | Identity confirmed, limited access |
 | 2 | Member | Full membership, standard benefits |
 | 3+ | Member+ | Premium tiers with additional benefits |
+<!-- END WIP -->
 
 ### 3.4 Member Photo System
 
@@ -365,7 +367,9 @@ WHERE id = @id;
 
 | Type | Description | Visual |
 |------|-------------|--------|
+<!-- BEGIN WIP: STORY-0021 -->
 | `GAME` | Regular member play | Standard color |
+<!-- END WIP -->
 | `PRO_SESSION` | Lesson with pro | Accent color + pattern |
 | `EVENT` | Special events | Custom styling |
 | `MAINTENANCE` | Court maintenance | Tertiary + diagonal |
@@ -1026,7 +1030,9 @@ A self-service marketplace where members discover and book coaches directly, red
 | Peak/Off-Peak Pricing | Higher rates during busy times |
 | Member vs. Guest Pricing | Discounts for members |
 | Dynamic Pricing | Adjust based on demand |
+<!-- BEGIN WIP: STORY-0021 -->
 | Minimum Duration | Shortest bookable slot |
+<!-- END WIP -->
 
 ### 9.10 Access Control & Check-In
 
@@ -1152,6 +1158,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Digital Member Card | QR code for access |
 | Offline Mode | View bookings without connection |
 
+<!-- BEGIN WIP: STORY-0021 -->
 **Additional Portal Features:**
 | Feature | Description |
 |---------|-------------|
@@ -1160,6 +1167,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Waitlist Management | Join/leave waitlists |
 | Guest Booking | Reserve for guests |
 | Message Center | View communications |
+<!-- END WIP -->
 
 ### 9.15 Staff Management
 
