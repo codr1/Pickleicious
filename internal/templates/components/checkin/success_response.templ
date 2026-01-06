@@ -1,0 +1,11 @@
+// internal/templates/components/checkin/success_response.templ
+package checkin
+
+templ CheckinSuccessResponse(member CheckinMember, visits []FacilityVisit, arrivals []FacilityVisit) {
+	<div class="p-6">
+		@CheckinSuccess(member, visits)
+	</div>
+	<div id="checkin-arrivals" hx-swap-oob="innerHTML">
+		@ArrivalsList(arrivals)
+	</div>
+}
