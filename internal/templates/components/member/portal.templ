@@ -34,27 +34,37 @@ templ MemberReservations(reservations ReservationListData) {
 	<div id="member-reservations" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
 		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 			<h2 class="text-xl font-bold text-gray-900">Your reservations</h2>
-			if reservations.ShowFacilityFilter {
-				<div class="flex items-center gap-2">
-					<label for="facility-filter" class="text-sm text-gray-500">Facility</label>
-					<select
-						id="facility-filter"
-						name="facility_id"
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
-						hx-get="/member/reservations"
-						hx-trigger="change"
-						hx-target="#member-reservations"
-						hx-swap="outerHTML">
-						for _, facility := range reservations.Facilities {
-							if facility.ID == reservations.SelectedFacilityID {
-								<option value={ fmt.Sprint(facility.ID) } selected>{facility.Name}</option>
-							} else {
-								<option value={ fmt.Sprint(facility.ID) }>{facility.Name}</option>
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					type="button"
+					class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+					hx-get="/member/booking/new"
+					hx-target="#modal"
+					hx-swap="innerHTML">
+					Book a Court
+				</button>
+				if reservations.ShowFacilityFilter {
+					<div class="flex items-center gap-2">
+						<label for="facility-filter" class="text-sm text-gray-500">Facility</label>
+						<select
+							id="facility-filter"
+							name="facility_id"
+							class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
+							hx-get="/member/reservations"
+							hx-trigger="change"
+							hx-target="#member-reservations"
+							hx-swap="outerHTML">
+							for _, facility := range reservations.Facilities {
+								if facility.ID == reservations.SelectedFacilityID {
+									<option value={ fmt.Sprint(facility.ID) } selected>{facility.Name}</option>
+								} else {
+									<option value={ fmt.Sprint(facility.ID) }>{facility.Name}</option>
+								}
 							}
-						}
-					</select>
-				</div>
-			}
+						</select>
+					</div>
+				}
+			</div>
 		</div>
 		if len(reservations.Upcoming) == 0 && len(reservations.Past) == 0 {
 			<p class="mt-4 text-gray-500">No reservations found yet.</p>
