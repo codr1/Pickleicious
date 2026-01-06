@@ -79,7 +79,7 @@ func NewVisitHistory(visits []dbgen.FacilityVisit, facilityNames map[int64]strin
 }
 
 func (v VisitHistory) FacilityLabel() string {
-	if strings.TrimSpace(v.FacilityName) != "" {
+	if v.FacilityName != "" {
 		return v.FacilityName
 	}
 	return fmt.Sprintf("Facility #%d", v.FacilityID)

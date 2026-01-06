@@ -436,6 +436,12 @@ func HandleMemberBilling(w http.ResponseWriter, r *http.Request) {
 func HandleMemberVisits(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 5 {
 		http.Error(w, "Invalid visits URL", http.StatusBadRequest)
