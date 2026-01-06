@@ -470,7 +470,7 @@ func listReservationCourts(ctx context.Context, queries *dbgen.Queries, reservat
 }
 
 func listAvailableCourts(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, reservationID int64) ([]courtAssignment, error) {
-	rows, err := queries.ListAvailableCourtsForOpenPlay(ctx, dbgen.ListAvailableCourtsForOpenPlayParams{
+	rows, err := queries.ListAvailableCourts(ctx, dbgen.ListAvailableCourtsParams{
 		FacilityID:    session.FacilityID,
 		ReservationID: reservationID,
 		EndTime:       session.EndTime,
@@ -517,7 +517,7 @@ func mapReservationCourts(rows []dbgen.ListReservationCourtsRow) []courtAssignme
 	return assignments
 }
 
-func mapAvailableCourts(rows []dbgen.ListAvailableCourtsForOpenPlayRow) []courtAssignment {
+func mapAvailableCourts(rows []dbgen.ListAvailableCourtsRow) []courtAssignment {
 	assignments := make([]courtAssignment, 0, len(rows))
 	for _, row := range rows {
 		assignments = append(assignments, courtAssignment{

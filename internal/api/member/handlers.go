@@ -467,7 +467,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reservationID, err := reservationIDFromRequest(r)
+	reservationID, err := apiutil.ReservationIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid reservation ID", http.StatusBadRequest)
 		return
@@ -780,7 +780,7 @@ func buildMemberBookingSlots(
 
 	var slots []membertempl.MemberBookingSlot
 	for start := slotStart; start.Add(memberBookingMinDuration).Before(dayClose) || start.Add(memberBookingMinDuration).Equal(dayClose); start = start.Add(memberBookingMinDuration) {
-		available, err := q.ListAvailableCourtsForOpenPlay(ctx, dbgen.ListAvailableCourtsForOpenPlayParams{
+		available, err := q.ListAvailableCourts(ctx, dbgen.ListAvailableCourtsParams{
 			FacilityID:    facilityID,
 			ReservationID: 0,
 			StartTime:     start,
@@ -858,18 +858,6 @@ func parseMemberCourtID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("court_ids must be a positive integer")
-	}
-	return id, nil
-}
-
-func reservationIDFromRequest(r *http.Request) (int64, error) {
-	pathID := strings.TrimSpace(r.PathValue("id"))
-	if pathID == "" {
-		return 0, fmt.Errorf("invalid reservation ID")
-	}
-	id, err := strconv.ParseInt(pathID, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("invalid reservation ID")
 	}
 	return id, nil
 }

@@ -20,7 +20,7 @@ JOIN courts c ON c.id = rc.court_id
 WHERE rc.reservation_id = @reservation_id
 ORDER BY c.court_number;
 
--- name: ListAvailableCourtsForOpenPlay :many
+-- name: ListAvailableCourts :many
 SELECT c.id, c.court_number
 FROM courts c
 WHERE c.facility_id = @facility_id

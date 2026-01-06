@@ -13,8 +13,8 @@ import (
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog/log"
 
-	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	operatinghourstempl "github.com/codr1/Pickleicious/internal/templates/components/operatinghours"

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	"github.com/codr1/Pickleicious/internal/request"
@@ -197,13 +197,13 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	component := reservationstempl.BookingForm(reservationstempl.BookingFormData{
-		FacilityID:        facilityID,
-		StartTime:         startTime,
-		EndTime:           endTime,
-		Courts:            reservationstempl.NewCourtOptions(courtsList),
-		ReservationTypes:  reservationstempl.NewReservationTypeOptions(reservationTypes),
-		Members:           reservationstempl.NewMemberOptions(memberRows),
-		SelectedCourtID:   selectedCourtID,
+		FacilityID:       facilityID,
+		StartTime:        startTime,
+		EndTime:          endTime,
+		Courts:           reservationstempl.NewCourtOptions(courtsList),
+		ReservationTypes: reservationstempl.NewReservationTypeOptions(reservationTypes),
+		Members:          reservationstempl.NewMemberOptions(memberRows),
+		SelectedCourtID:  selectedCourtID,
 	})
 	if err := component.Render(r.Context(), &buf); err != nil {
 		logger.Error().Err(err).Msg("Failed to render booking form")

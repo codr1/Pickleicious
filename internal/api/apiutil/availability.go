@@ -11,7 +11,7 @@ import (
 )
 
 func EnsureCourtsAvailable(ctx context.Context, q *dbgen.Queries, facilityID, reservationID int64, startTime, endTime time.Time, courtIDs []int64) error {
-	available, err := q.ListAvailableCourtsForOpenPlay(ctx, dbgen.ListAvailableCourtsForOpenPlayParams{
+	available, err := q.ListAvailableCourts(ctx, dbgen.ListAvailableCourtsParams{
 		FacilityID:    facilityID,
 		ReservationID: reservationID,
 		StartTime:     startTime,

@@ -325,7 +325,7 @@ func HandleReservationEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reservationID, err := reservationIDFromRequest(r)
+	reservationID, err := apiutil.ReservationIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid reservation ID", http.StatusBadRequest)
 		return
@@ -446,7 +446,7 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reservationID, err := reservationIDFromRequest(r)
+	reservationID, err := apiutil.ReservationIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid reservation ID", http.StatusBadRequest)
 		return
@@ -652,7 +652,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reservationID, err := reservationIDFromRequest(r)
+	reservationID, err := apiutil.ReservationIDFromRequest(r)
 	if err != nil {
 		http.Error(w, "Invalid reservation ID", http.StatusBadRequest)
 		return
@@ -1095,18 +1095,6 @@ func resolveFacilityID(r *http.Request, payloadFacilityID int64) (int64, error) 
 		return 0, fmt.Errorf("facility_id is required")
 	}
 	return payloadFacilityID, nil
-}
-
-func reservationIDFromRequest(r *http.Request) (int64, error) {
-	pathID := strings.TrimSpace(r.PathValue("id"))
-	if pathID == "" {
-		return 0, fmt.Errorf("invalid reservation ID")
-	}
-	id, err := strconv.ParseInt(pathID, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("invalid reservation ID")
-	}
-	return id, nil
 }
 
 func facilityExists(ctx context.Context, q *dbgen.Queries, facilityID int64) (bool, error) {

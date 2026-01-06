@@ -121,6 +121,18 @@ func ParseOptionalInt64Field(raw string, field string) (*int64, error) {
 	return &value, nil
 }
 
+func ReservationIDFromRequest(r *http.Request) (int64, error) {
+	pathID := strings.TrimSpace(r.PathValue("id"))
+	if pathID == "" {
+		return 0, fmt.Errorf("invalid reservation ID")
+	}
+	id, err := strconv.ParseInt(pathID, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid reservation ID")
+	}
+	return id, nil
+}
+
 func FirstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if value != "" {
