@@ -64,6 +64,7 @@
 - Validate system types exist at startup
 
 #### 0.0.2 Simple Date Picker for Member Booking
+<!-- BEGIN WIP: STORY-0022 -->
 **Problem**: Member booking form only shows same-day slots. No way to book future dates.
 
 **Required**:
@@ -73,8 +74,10 @@
 - Click on year -> dropdown (current year + 1)
 - Focus on near-term bookings (next few days), not 5 years out
 - Reload available slots when date changes (hx-get)
+<!-- END WIP -->
 
 #### 0.0.3 Member Reservation Limits
+<!-- BEGIN WIP: STORY-0022 -->
 **Problem**: No rate limiting - a member could book every available slot.
 
 **Required**:
@@ -83,6 +86,7 @@
 - Exclude staff-created reservations from count
 - Exclude league/tournament reservations from count (different booking flow)
 - Return friendly error when limit reached
+<!-- END WIP -->
 
 ---
 
