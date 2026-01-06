@@ -138,6 +138,7 @@ Each facility operates in its own timezone and sets its own hours. A facility mi
 - Name, slug, timezone
 - Active theme selection
 - Operating hours per day of week
+- Booking configuration (max_advance_booking_days, max_member_reservations)
 
 ### Courts
 
@@ -791,6 +792,17 @@ Changes save automatically via HTMX PUT requests with a 300ms debounce. Each day
 
 Only authenticated staff with facility access can view or edit operating hours. Uses the same facility-scoped authorization as other admin pages.
 
+### Booking Configuration
+
+The operating hours page includes a booking configuration section for facility-wide member booking settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| max_advance_booking_days | 7 | How far in advance members can book courts |
+| max_member_reservations | 30 | Maximum active future reservations per member |
+
+Settings save via POST to `/api/v1/facility-settings`. Both values must be positive integers.
+
 ---
 
 ## Authentication and Access
@@ -972,6 +984,7 @@ Authorization failures are logged with facility_id and user_id.
 | POST | `/member/reservations` | Create member booking |
 | DELETE | `/member/reservations/{id}` | Cancel member reservation |
 | GET | `/member/booking/new` | Booking form modal |
+| GET | `/member/booking/slots` | Reload available slots for selected date |
 | GET | `/api/v1/member/reservations/widget` | Reservations widget data |
 
 ### Courts and Calendar
@@ -1030,6 +1043,7 @@ Authorization failures are logged with facility_id and user_id.
 |--------|------|-------------|
 | GET | `/admin/operating-hours` | Operating hours admin page |
 | PUT | `/api/v1/operating-hours/{day_of_week}` | Update hours for a day (0=Sunday through 6=Saturday) |
+| POST | `/api/v1/facility-settings` | Update facility booking configuration |
 
 ### Staff
 
@@ -1151,7 +1165,7 @@ Every response includes `X-Request-ID` for tracing issues through logs.
 | hx-trigger | Custom events, delays |
 | hx-target | Where to swap content |
 | hx-swap | How to swap (innerHTML, outerHTML) |
-| HX-Trigger | Server-sent events (e.g., calendar-refresh) |
+| HX-Trigger | Server-sent events (e.g., calendar-refresh, refreshMemberReservations) |
 | HX-Redirect | Server-initiated redirects (used after login) |
 
 ---
@@ -1429,11 +1443,21 @@ Members with verified accounts (membership_level >= 1) can access a self-service
 
 Members can book courts through a booking form accessible from the portal:
 
+- **Date Selection**: Three-dropdown date picker (year, month, day) for selecting booking date
 - **Slot Selection**: Shows available 1-hour time slots based on facility operating hours
 - **Court Selection**: Lists active courts at the member's home facility
 - **Availability Check**: Validates court availability before creating reservation
 - **Automatic Participant**: Member is added as primary_user_id and participant
 - **Default Type**: Reservations use type 'GAME'
+
+#### Date Picker
+
+The booking form includes an inline date picker with three dropdowns:
+- **Year**: Current year and next year
+- **Month**: 1-12 (all months)
+- **Day**: Adjusts dynamically based on selected month/year (28-31 days)
+
+Changing any dropdown triggers an HTMX request to `/member/booking/slots` to reload available time slots for the selected date. The date picker pre-selects today's date on initial load.
 
 ### Booking Constraints
 
@@ -1443,7 +1467,18 @@ Members can book courts through a booking form accessible from the portal:
 | Membership Level | Must be >= 1 (verified) |
 | Duration | Minimum 1 hour |
 | Timing | Start time must be in the future |
+| Advance Booking | Date must be within facility's max_advance_booking_days (default: 7) |
+| Reservation Limit | Member cannot exceed max_member_reservations active future bookings |
 | Single Court | Members book one court at a time |
+
+### Reservation Limits
+
+The system enforces a per-member limit on active future reservations:
+
+- Counts only GAME-type reservations where member is `primary_user_id`
+- Excludes LEAGUE and TOURNAMENT types from the count
+- Staff-created reservations (where creator differs from primary_user) do not count against member limit
+- When limit is reached, returns HTTP 409 with JSON: `{"error": "You have reached the maximum of X active reservations", "current_count": N, "limit": X}`
 
 ### Reservation Cancellation
 

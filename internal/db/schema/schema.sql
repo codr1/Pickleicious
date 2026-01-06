@@ -19,6 +19,8 @@ CREATE TABLE facilities (
     slug TEXT NOT NULL UNIQUE,
     timezone TEXT NOT NULL,
     active_theme_id INTEGER,
+    max_advance_booking_days INTEGER NOT NULL DEFAULT 7,
+    max_member_reservations INTEGER NOT NULL DEFAULT 30,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id),

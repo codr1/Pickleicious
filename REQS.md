@@ -64,6 +64,7 @@
 - Validate system types exist at startup
 
 #### 0.0.2 Simple Date Picker for Member Booking
+<!-- BEGIN WIP: STORY-0022 -->
 **Problem**: Member booking form only shows same-day slots. No way to book future dates.
 
 **Required**:
@@ -73,8 +74,10 @@
 - Click on year -> dropdown (current year + 1)
 - Focus on near-term bookings (next few days), not 5 years out
 - Reload available slots when date changes (hx-get)
+<!-- END WIP -->
 
 #### 0.0.3 Member Reservation Limits
+<!-- BEGIN WIP: STORY-0022 -->
 **Problem**: No rate limiting - a member could book every available slot.
 
 **Required**:
@@ -83,6 +86,7 @@
 - Exclude staff-created reservations from count
 - Exclude league/tournament reservations from count (different booking flow)
 - Return friendly error when limit reached
+<!-- END WIP -->
 
 ---
 
@@ -110,7 +114,9 @@
 - Private clubs with pickleball amenities
 
 ### 1.3 Key Value Propositions
+<!-- BEGIN WIP: STORY-0023 -->
 1. **Rapid member check-in** with photo identification and camera capture
+<!-- END WIP -->
 2. **Visual court scheduling** with drag-and-click booking
 3. **Multi-facility operations** under a single organizational umbrella
 4. **White-label theming** for brand consistency per facility
@@ -1028,13 +1034,17 @@ A self-service marketplace where members discover and book coaches directly, red
 | Member Retention | % retained year-over-year | 80%+ |
 | Churn Rate | Members lost per period | < 20% |
 | New Member Growth | Acquisition rate | Track trend |
+<!-- BEGIN WIP: STORY-0023 -->
 | Visit Frequency | Average visits per member | Engagement proxy |
+<!-- END WIP -->
 | Guest Conversion | Guests who become members | Acquisition funnel |
 
 **Operational Reports:**
 | Report | Description |
 |--------|-------------|
+<!-- BEGIN WIP: STORY-0023 -->
 | Daily Summary | Bookings, revenue, check-ins |
+<!-- END WIP -->
 | Staff Performance | Lessons taught, revenue generated |
 | Inventory Status | Pro shop stock levels |
 | Maintenance Log | Equipment/facility issues |
@@ -1072,6 +1082,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Minimum Duration | Shortest bookable slot |
 ### 9.10 Access Control & Check-In
 
+<!-- BEGIN WIP: STORY-0023 -->
 **Check-In Methods:**
 | Method | Description |
 |--------|-------------|
@@ -1080,6 +1091,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Mobile App | Check in via smartphone |
 | Front Desk | Staff manual check-in |
 | Facial Recognition | Photo-based verification (future) |
+<!-- END WIP -->
 
 **Kiosk Mode:**
 | Feature | Description |
@@ -1097,6 +1109,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Court Lighting | Auto-on with booking |
 | Locker Access | Electronic locker assignment |
 
+<!-- BEGIN WIP: STORY-0023 -->
 **Verification:**
 | Feature | Description |
 |---------|-------------|
@@ -1104,6 +1117,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Waiver Status | Block if waiver expired |
 | Payment Status | Block if balance due |
 | Membership Status | Verify active membership |
+<!-- END WIP -->
 
 ### 9.11 Waiver & Compliance Management
 
@@ -1998,6 +2012,10 @@ handler := api.ChainMiddleware(
 | POST | `/api/v1/members/restore` | Restore/create decision |
 | GET | `/courts` | Courts page |
 | GET | `/api/v1/courts/calendar` | Calendar view |
+<!-- BEGIN WIP: STORY-0023 -->
+| GET | `/checkin` | Check-in page |
+| POST | `/api/v1/checkin` | Create visit record |
+<!-- END WIP -->
 
 ---
 
@@ -2100,6 +2118,9 @@ handler := api.ChainMiddleware(
 | `reservation_types` | Booking type lookup |
 | `recurrence_rules` | Recurring patterns |
 | `cognito_config` | Per-org auth settings |
+<!-- BEGIN WIP: STORY-0023 -->
+| `facility_visits` | Member check-in records |
+<!-- END WIP -->
 
 ### 14.2 Key Constraints
 

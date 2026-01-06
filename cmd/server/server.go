@@ -162,6 +162,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.Handle("/member/booking/new", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: member.HandleMemberBookingFormNew,
 	}))))
+	mux.Handle("/member/booking/slots", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: member.HandleMemberBookingSlots,
+	}))))
 	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  member.HandleMemberReservationsPartial,
 		http.MethodPost: member.HandleMemberBookingCreate,
@@ -330,6 +333,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Operating hours API
 	mux.HandleFunc("/api/v1/operating-hours/{day_of_week}", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: operatinghours.HandleOperatingHoursUpdate,
+	}))
+	mux.HandleFunc("/api/v1/facility-settings", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: operatinghours.HandleFacilitySettingsUpdate,
 	}))
 
 	// Static file handling with logging and environment awareness

@@ -1,0 +1,33 @@
+// internal/templates/components/member/date_picker.templ
+package member
+
+import "fmt"
+
+templ DatePicker(data DatePickerData) {
+	<div class="flex flex-wrap items-center gap-2">
+		<select
+			name="booking_year"
+			aria-label="Booking year"
+			class="block w-24 rounded-md border border-gray-300 px-3 py-2 text-sm">
+			for _, year := range data.YearOptions() {
+				<option value={fmt.Sprintf("%d", year)} selected?={year == data.Year}>{year}</option>
+			}
+		</select>
+		<select
+			name="booking_month"
+			aria-label="Booking month"
+			class="block w-20 rounded-md border border-gray-300 px-3 py-2 text-sm">
+			for _, month := range data.MonthOptions() {
+				<option value={fmt.Sprintf("%d", month)} selected?={month == data.Month}>{month}</option>
+			}
+		</select>
+		<select
+			name="booking_day"
+			aria-label="Booking day"
+			class="block w-20 rounded-md border border-gray-300 px-3 py-2 text-sm">
+			for _, day := range data.DayOptions() {
+				<option value={fmt.Sprintf("%d", day)} selected?={day == data.Day}>{day}</option>
+			}
+		</select>
+	</div>
+}
