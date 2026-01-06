@@ -87,7 +87,8 @@ func HandleStaffPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	templateStaff := stafftempl.NewStaffList(staffRows)
-	page := layouts.Base(stafftempl.StaffLayout(templateStaff), activeTheme)
+	sessionType := authz.SessionTypeFromContext(r.Context())
+	page := layouts.Base(stafftempl.StaffLayout(templateStaff), activeTheme, sessionType)
 	if err := page.Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render staff layout")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)

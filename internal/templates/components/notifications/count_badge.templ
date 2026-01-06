@@ -1,0 +1,10 @@
+// internal/templates/components/notifications/count_badge.templ
+package notifications
+
+templ NotificationCountBadge(count int64) {
+	if count > 0 {
+		<span class="inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+			{count}
+		</span>
+	}
+}
