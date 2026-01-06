@@ -31,7 +31,12 @@ templ MemberPortal(profile PortalProfile, reservations ReservationListData) {
 }
 
 templ MemberReservations(reservations ReservationListData) {
-	<div id="member-reservations" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+	<div
+		id="member-reservations"
+		class="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+		hx-get="/member/reservations"
+		hx-trigger="refreshMemberReservations from:body"
+		hx-swap="outerHTML">
 		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 			<h2 class="text-xl font-bold text-gray-900">Your reservations</h2>
 			<div class="flex flex-wrap items-center gap-2">
@@ -87,11 +92,20 @@ templ MemberReservations(reservations ReservationListData) {
 										<p class="text-sm text-gray-500">Type: {reservation.ReservationTypeLabel()}</p>
 										<p class="text-sm text-gray-500">Participants: {reservation.OtherParticipantsLabel()}</p>
 									</div>
-									if reservation.IsOpenEvent {
-										<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-											Open Play
-										</span>
-									}
+									<div class="flex items-center gap-2">
+										if reservation.IsOpenEvent {
+											<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+												Open Play
+											</span>
+										}
+										<button
+											type="button"
+											class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100"
+											hx-delete={fmt.Sprintf("/member/reservations/%d", reservation.ID)}
+											hx-confirm="Cancel this reservation?">
+											Cancel
+										</button>
+									</div>
 								</li>
 							}
 						</ul>

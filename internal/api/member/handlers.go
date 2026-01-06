@@ -442,6 +442,108 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleMemberReservationCancel handles DELETE /member/reservations/{id}.
+func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	reservationID, err := reservationIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid reservation ID", http.StatusBadRequest)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	var deleted int64
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		reservation, err := qtx.GetReservationByID(ctx, reservationID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch reservation", Err: err}
+		}
+		if !reservation.PrimaryUserID.Valid || reservation.PrimaryUserID.Int64 != user.ID {
+			return apiutil.HandlerError{Status: http.StatusForbidden, Message: "Forbidden"}
+		}
+		if !reservation.StartTime.After(time.Now()) {
+			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Reservation must be in the future"}
+		}
+		facilityID := reservation.FacilityID
+
+		courts, err := qtx.ListReservationCourts(ctx, reservationID)
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
+		}
+		for _, court := range courts {
+			if err := qtx.RemoveReservationCourt(ctx, dbgen.RemoveReservationCourtParams{
+				ReservationID: reservationID,
+				CourtID:       court.CourtID,
+			}); err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove reservation court", Err: err}
+			}
+		}
+
+		participants, err := qtx.ListParticipantsForReservation(ctx, reservationID)
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation participants", Err: err}
+		}
+		for _, participant := range participants {
+			if err := qtx.RemoveParticipant(ctx, dbgen.RemoveParticipantParams{
+				ReservationID: reservationID,
+				UserID:        participant.ID,
+			}); err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove reservation participant", Err: err}
+			}
+		}
+
+		deleted, err = qtx.DeleteReservation(ctx, dbgen.DeleteReservationParams{
+			ID:         reservationID,
+			FacilityID: facilityID,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to delete reservation", Err: err}
+		}
+		if deleted == 0 {
+			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: sql.ErrNoRows}
+		}
+		return nil
+	})
+	if err != nil {
+		var herr apiutil.HandlerError
+		if errors.As(err, &herr) {
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("reservation_id", reservationID).Msg(herr.Message)
+			}
+			http.Error(w, herr.Message, herr.Status)
+			return
+		}
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to delete reservation")
+		http.Error(w, "Failed to delete reservation", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Trigger", "refreshMemberReservations")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
 	resTypes, err := q.ListReservationTypes(ctx)
 	if err != nil {
@@ -743,6 +845,18 @@ func parseMemberCourtID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("court_ids must be a positive integer")
+	}
+	return id, nil
+}
+
+func reservationIDFromRequest(r *http.Request) (int64, error) {
+	pathID := strings.TrimSpace(r.PathValue("id"))
+	if pathID == "" {
+		return 0, fmt.Errorf("invalid reservation ID")
+	}
+	id, err := strconv.ParseInt(pathID, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid reservation ID")
 	}
 	return id, nil
 }
