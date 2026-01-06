@@ -16,9 +16,10 @@ func TestRequireFacilityAccessUnauthenticated(t *testing.T) {
 func TestRequireFacilityAccessStaffForbidden(t *testing.T) {
 	homeFacilityID := int64(2)
 	ctx := ContextWithUser(context.Background(), &AuthUser{
-		ID:             10,
-		IsStaff:        true,
-		HomeFacilityID: &homeFacilityID,
+		ID:              10,
+		IsStaff:         true,
+		HomeFacilityID:  &homeFacilityID,
+		MembershipLevel: 0,
 	})
 
 	err := RequireFacilityAccess(ctx, 1)
@@ -29,8 +30,9 @@ func TestRequireFacilityAccessStaffForbidden(t *testing.T) {
 
 func TestRequireFacilityAccessStaffNilHomeFacilityForbidden(t *testing.T) {
 	ctx := ContextWithUser(context.Background(), &AuthUser{
-		ID:      10,
-		IsStaff: true,
+		ID:              10,
+		IsStaff:         true,
+		MembershipLevel: 0,
 	})
 
 	err := RequireFacilityAccess(ctx, 1)
@@ -41,8 +43,9 @@ func TestRequireFacilityAccessStaffNilHomeFacilityForbidden(t *testing.T) {
 
 func TestRequireFacilityAccessNonStaffAllowed(t *testing.T) {
 	ctx := ContextWithUser(context.Background(), &AuthUser{
-		ID:      10,
-		IsStaff: false,
+		ID:              10,
+		IsStaff:         false,
+		MembershipLevel: 1,
 	})
 
 	err := RequireFacilityAccess(ctx, 1)
@@ -54,9 +57,10 @@ func TestRequireFacilityAccessNonStaffAllowed(t *testing.T) {
 func TestRequireFacilityAccessStaffAllowed(t *testing.T) {
 	homeFacilityID := int64(1)
 	ctx := ContextWithUser(context.Background(), &AuthUser{
-		ID:             10,
-		IsStaff:        true,
-		HomeFacilityID: &homeFacilityID,
+		ID:              10,
+		IsStaff:         true,
+		HomeFacilityID:  &homeFacilityID,
+		MembershipLevel: 0,
 	})
 
 	err := RequireFacilityAccess(ctx, 1)

@@ -29,10 +29,11 @@ const (
 var errAuthConfigMissing = errors.New("auth configuration missing")
 
 type authSession struct {
-	UserID         int64  `json:"user_id"`
-	SessionType    string `json:"session_type"`
-	HomeFacilityID *int64 `json:"home_facility_id,omitempty"`
-	ExpiresAt      int64  `json:"exp"`
+	UserID          int64  `json:"user_id"`
+	SessionType     string `json:"session_type"`
+	HomeFacilityID  *int64 `json:"home_facility_id,omitempty"`
+	MembershipLevel int64  `json:"membership_level"`
+	ExpiresAt       int64  `json:"exp"`
 }
 
 type sessionRecord struct {
@@ -136,10 +137,11 @@ func SetAuthCookie(w http.ResponseWriter, r *http.Request, user *authz.AuthUser)
 	}
 	sessionType = normalizeSessionType(sessionType)
 	session := authSession{
-		UserID:         user.ID,
-		SessionType:    sessionType,
-		HomeFacilityID: user.HomeFacilityID,
-		ExpiresAt:      expiresAt,
+		UserID:          user.ID,
+		SessionType:     sessionType,
+		HomeFacilityID:  user.HomeFacilityID,
+		MembershipLevel: user.MembershipLevel,
+		ExpiresAt:       expiresAt,
 	}
 
 	payload, err := json.Marshal(session)
@@ -179,10 +181,11 @@ func UserFromRequest(w http.ResponseWriter, r *http.Request) (*authz.AuthUser, e
 	}
 
 	return &authz.AuthUser{
-		ID:             session.UserID,
-		IsStaff:        session.SessionType == SessionTypeStaff,
-		SessionType:    session.SessionType,
-		HomeFacilityID: session.HomeFacilityID,
+		ID:              session.UserID,
+		IsStaff:         session.SessionType == SessionTypeStaff,
+		SessionType:     session.SessionType,
+		HomeFacilityID:  session.HomeFacilityID,
+		MembershipLevel: session.MembershipLevel,
 	}, nil
 }
 
@@ -230,10 +233,11 @@ func userFromSessionToken(w http.ResponseWriter, r *http.Request) (*authz.AuthUs
 	}
 
 	return &authz.AuthUser{
-		ID:             user.ID,
-		IsStaff:        user.IsStaff,
-		SessionType:    sessionTypeFromStaff(user.IsStaff),
-		HomeFacilityID: homeFacilityID,
+		ID:              user.ID,
+		IsStaff:         user.IsStaff,
+		SessionType:     sessionTypeFromStaff(user.IsStaff),
+		HomeFacilityID:  homeFacilityID,
+		MembershipLevel: user.MembershipLevel,
 	}, nil
 }
 

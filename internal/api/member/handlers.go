@@ -61,9 +61,37 @@ func loadDB() *appdb.DB {
 // RequireMemberSession ensures member-authenticated sessions reach member routes.
 func RequireMemberSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger := log.Ctx(r.Context())
+
 		user := authz.UserFromContext(r.Context())
 		if user == nil || user.SessionType != auth.SessionTypeMember {
 			http.Redirect(w, r, "/member/login", http.StatusFound)
+			return
+		}
+
+		q := loadQueries()
+		if q == nil {
+			logger.Error().Msg("Database queries not initialized")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+		defer cancel()
+
+		memberRow, err := q.GetMemberByID(ctx, user.ID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Redirect(w, r, "/member/login", http.StatusFound)
+				return
+			}
+			logger.Error().Err(err).Int64("member_id", user.ID).Msg("Failed to load member profile")
+			http.Error(w, "Failed to load member profile", http.StatusInternalServerError)
+			return
+		}
+
+		if memberRow.MembershipLevel < 1 {
+			http.Error(w, "Active membership required", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -310,21 +338,6 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
-
-	memberRow, err := q.GetMemberByID(ctx, user.ID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Redirect(w, r, "/member/login", http.StatusFound)
-			return
-		}
-		logger.Error().Err(err).Int64("member_id", user.ID).Msg("Failed to load member profile")
-		http.Error(w, "Failed to load member profile", http.StatusInternalServerError)
-		return
-	}
-	if memberRow.MembershipLevel < 1 {
-		http.Error(w, "Membership required", http.StatusForbidden)
-		return
-	}
 
 	startTime, err := parseMemberBookingTime(r.FormValue("start_time"), "start_time")
 	if err != nil {

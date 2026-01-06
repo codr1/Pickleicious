@@ -12,10 +12,11 @@ var (
 )
 
 type AuthUser struct {
-	ID             int64
-	IsStaff        bool
-	SessionType    string
-	HomeFacilityID *int64
+	ID              int64
+	IsStaff         bool
+	SessionType     string
+	HomeFacilityID  *int64
+	MembershipLevel int64
 }
 
 type StaffAccess struct {

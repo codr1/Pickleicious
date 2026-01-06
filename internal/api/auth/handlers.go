@@ -336,10 +336,11 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authUser := &authz.AuthUser{
-		ID:             user.ID,
-		IsStaff:        user.IsStaff,
-		SessionType:    sessionTypeFromStaff(user.IsStaff),
-		HomeFacilityID: homeFacilityID,
+		ID:              user.ID,
+		IsStaff:         user.IsStaff,
+		SessionType:     sessionTypeFromStaff(user.IsStaff),
+		HomeFacilityID:  homeFacilityID,
+		MembershipLevel: user.MembershipLevel,
 	}
 
 	if err := SetAuthCookie(w, r, authUser); err != nil {
@@ -544,10 +545,11 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authUser := &authz.AuthUser{
-		ID:             user.ID,
-		IsStaff:        false,
-		SessionType:    SessionTypeMember,
-		HomeFacilityID: homeFacilityID,
+		ID:              user.ID,
+		IsStaff:         false,
+		SessionType:     SessionTypeMember,
+		HomeFacilityID:  homeFacilityID,
+		MembershipLevel: user.MembershipLevel,
 	}
 
 	if err := SetAuthCookie(w, r, authUser); err != nil {
@@ -903,10 +905,11 @@ func devModeBypass(r *http.Request, identifier, password string) (*authz.AuthUse
 		Msg("Dev mode staff login bypass used")
 
 	return &authz.AuthUser{
-		ID:             0,
-		IsStaff:        true,
-		SessionType:    SessionTypeStaff,
-		HomeFacilityID: homeFacilityID,
+		ID:              0,
+		IsStaff:         true,
+		SessionType:     SessionTypeStaff,
+		HomeFacilityID:  homeFacilityID,
+		MembershipLevel: 0,
 	}, true
 }
 
