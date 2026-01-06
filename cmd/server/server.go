@@ -13,8 +13,8 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/auth"
-	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/courts"
+	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
 	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
@@ -49,7 +49,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
-
+	member.InitHandlers(database.Queries)
 	operatinghours.InitHandlers(database.Queries)
 
 	staff.InitHandlers(database)
@@ -142,23 +142,7 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/auth/standard-login", auth.HandleStandardLogin)
 
 	// Member routes
-	mux.HandleFunc("/member", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		user := authz.UserFromContext(r.Context())
-		if user == nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if user.SessionType != auth.SessionTypeMember {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Member portal"))
-	})
+	mux.Handle("/member", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberPortal)))
 	mux.HandleFunc("/members", members.HandleMembersPage)
 	mux.HandleFunc("/api/v1/members", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  members.HandleMembersList,

@@ -121,3 +121,31 @@ WHERE reservation_id = @reservation_id;
 -- name: DeleteReservationCourtsByReservationID :exec
 DELETE FROM reservation_courts
 WHERE reservation_id = @reservation_id;
+
+-- name: ListReservationsByUserID :many
+SELECT DISTINCT
+    r.id,
+    r.facility_id,
+    r.reservation_type_id,
+    r.recurrence_rule_id,
+    r.primary_user_id,
+    r.pro_id,
+    r.open_play_rule_id,
+    r.start_time,
+    r.end_time,
+    r.is_open_event,
+    r.teams_per_court,
+    r.people_per_team,
+    r.created_at,
+    r.updated_at,
+    f.name AS facility_name
+FROM reservations r
+JOIN facilities f ON f.id = r.facility_id
+WHERE r.primary_user_id = @user_id
+   OR EXISTS (
+       SELECT 1
+       FROM reservation_participants rp
+       WHERE rp.reservation_id = r.id
+         AND rp.user_id = @user_id
+   )
+ORDER BY r.start_time DESC;
