@@ -68,6 +68,14 @@ type checkinBlockResponse struct {
 	MembershipLevel int64  `json:"membershipLevel"`
 }
 
+type checkinActivityUpdateRequest struct {
+	VisitID              int64  `json:"visitId"`
+	UserID               int64  `json:"userId"`
+	FacilityID           int64  `json:"facilityId"`
+	ActivityType         string `json:"activityType"`
+	RelatedReservationID *int64 `json:"relatedReservationId"`
+}
+
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(q *dbgen.Queries) {
 	if q == nil {
@@ -341,10 +349,16 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isHTMXRequest(r) {
+		currentVisit := checkintempl.NewFacilityVisit(visit)
 		visits, err := listTodayVisitsByUser(ctx, q, req.UserID)
 		if err != nil {
 			logger.Error().Err(err).Int64("user_id", req.UserID).Msg("Failed to load visits for check-in success")
 			visits = nil
+		}
+		activities, err := listMemberTodayActivities(ctx, q, req.UserID, req.FacilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("user_id", req.UserID).Int64("facility_id", req.FacilityID).Msg("Failed to load activities for check-in success")
+			activities = nil
 		}
 		arrivals, err := listTodayVisitsWithMembers(ctx, q, req.FacilityID)
 		if err != nil {
@@ -353,8 +367,11 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 		}
 		component := checkintempl.CheckinSuccessResponse(
 			checkintempl.NewCheckinMemberFromMember(member),
+			currentVisit,
+			activities,
 			checkintempl.NewFacilityVisits(visits),
 			arrivals,
+			req.FacilityID,
 		)
 		renderHTMLWithStatus(r.Context(), w, component, http.StatusCreated, "Failed to render check-in success response", "Failed to render check-in success")
 		return
@@ -412,6 +429,134 @@ func respondCheckinBlocked(w http.ResponseWriter, response checkinBlockResponse)
 	}
 }
 
+// /api/v1/checkin/activity
+func HandleCheckinActivityUpdate(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	req, err := decodeCheckinActivityUpdateRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.VisitID <= 0 {
+		http.Error(w, "Visit ID is required", http.StatusBadRequest)
+		return
+	}
+	if req.UserID <= 0 {
+		http.Error(w, "User ID is required", http.StatusBadRequest)
+		return
+	}
+	if req.FacilityID <= 0 {
+		http.Error(w, "Facility ID is required", http.StatusBadRequest)
+		return
+	}
+	if req.RelatedReservationID != nil && *req.RelatedReservationID <= 0 {
+		http.Error(w, "Related reservation ID must be a positive integer", http.StatusBadRequest)
+		return
+	}
+
+	activityType, err := normalizeActivityType(req.ActivityType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !activityType.Valid {
+		http.Error(w, "Activity type is required", http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, req.FacilityID) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), checkinQueryTimeout)
+	defer cancel()
+
+	relatedReservationID := sql.NullInt64{Valid: false}
+	if req.RelatedReservationID != nil {
+		relatedReservationID = sql.NullInt64{Int64: *req.RelatedReservationID, Valid: true}
+	}
+
+	updatedVisit, err := q.UpdateFacilityVisitActivity(ctx, dbgen.UpdateFacilityVisitActivityParams{
+		ID:                   req.VisitID,
+		UserID:               req.UserID,
+		FacilityID:           req.FacilityID,
+		ActivityType:         activityType,
+		RelatedReservationID: relatedReservationID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Visit not found", http.StatusNotFound)
+			return
+		}
+		if apiutil.IsSQLiteForeignKeyViolation(err) {
+			http.Error(w, "Invalid related record", http.StatusBadRequest)
+			return
+		}
+		logger.Error().Err(err).Int64("visit_id", req.VisitID).Msg("Failed to update visit activity")
+		http.Error(w, "Failed to update visit activity", http.StatusInternalServerError)
+		return
+	}
+
+	if isHTMXRequest(r) {
+		member, err := q.GetMemberByID(ctx, req.UserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Member not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Int64("user_id", req.UserID).Msg("Failed to fetch member for activity update")
+			http.Error(w, "Failed to fetch member", http.StatusInternalServerError)
+			return
+		}
+
+		visits, err := listTodayVisitsByUser(ctx, q, req.UserID)
+		if err != nil {
+			logger.Error().Err(err).Int64("user_id", req.UserID).Msg("Failed to load visits for activity update")
+			visits = nil
+		}
+		activities, err := listMemberTodayActivities(ctx, q, req.UserID, req.FacilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("user_id", req.UserID).Int64("facility_id", req.FacilityID).Msg("Failed to load activities for activity update")
+			activities = nil
+		}
+		arrivals, err := listTodayVisitsWithMembers(ctx, q, req.FacilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", req.FacilityID).Msg("Failed to refresh arrivals list after activity update")
+			arrivals = nil
+		}
+		component := checkintempl.CheckinSuccessResponse(
+			checkintempl.NewCheckinMemberFromMember(member),
+			checkintempl.NewFacilityVisit(updatedVisit),
+			activities,
+			checkintempl.NewFacilityVisits(visits),
+			arrivals,
+			req.FacilityID,
+		)
+		renderHTMLWithStatus(r.Context(), w, component, http.StatusOK, "Failed to render activity update response", "Failed to render activity update")
+		return
+	}
+
+	if err := apiutil.WriteJSON(w, http.StatusOK, updatedVisit); err != nil {
+		logger.Error().Err(err).Int64("visit_id", updatedVisit.ID).Msg("Failed to write activity update response")
+		return
+	}
+}
+
 func isHTMXRequest(r *http.Request) bool {
 	return r.Header.Get("HX-Request") == "true"
 }
@@ -451,6 +596,48 @@ func decodeCheckinRequest(r *http.Request) (checkinRequest, error) {
 	req.ActivityType = apiutil.FirstNonEmpty(r.FormValue("activityType"), r.FormValue("activity_type"))
 	req.RelatedReservationID = relatedReservationID
 	req.Override = parseBool(r.FormValue("override"))
+	return req, nil
+}
+
+func decodeCheckinActivityUpdateRequest(r *http.Request) (checkinActivityUpdateRequest, error) {
+	var req checkinActivityUpdateRequest
+	if apiutil.IsJSONRequest(r) {
+		if err := apiutil.DecodeJSON(r, &req); err != nil {
+			return req, err
+		}
+		return req, nil
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return req, err
+	}
+
+	visitID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("visitId"), r.FormValue("visit_id")), "visitId")
+	if err != nil {
+		return req, err
+	}
+	userID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("userId"), r.FormValue("user_id")), "userId")
+	if err != nil {
+		return req, err
+	}
+	facilityID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("facilityId"), r.FormValue("facility_id")), "facilityId")
+	if err != nil {
+		return req, err
+	}
+
+	relatedReservationID, err := apiutil.ParseOptionalInt64Field(
+		apiutil.FirstNonEmpty(r.FormValue("relatedReservationId"), r.FormValue("related_reservation_id")),
+		"relatedReservationId",
+	)
+	if err != nil {
+		return req, err
+	}
+
+	req.VisitID = visitID
+	req.UserID = userID
+	req.FacilityID = facilityID
+	req.ActivityType = apiutil.FirstNonEmpty(r.FormValue("activityType"), r.FormValue("activity_type"))
+	req.RelatedReservationID = relatedReservationID
 	return req, nil
 }
 
@@ -517,6 +704,20 @@ func listTodayVisitsByUser(ctx context.Context, q *dbgen.Queries, userID int64) 
 		}
 	}
 	return visits, nil
+}
+
+func listMemberTodayActivities(ctx context.Context, q *dbgen.Queries, userID int64, facilityID int64) ([]checkintempl.CheckinActivity, error) {
+	start, end := todayRange(time.Now())
+	rows, err := q.GetMemberTodayActivities(ctx, dbgen.GetMemberTodayActivitiesParams{
+		UserID:     userID,
+		FacilityID: facilityID,
+		TodayStart: start,
+		TodayEnd:   end,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return checkintempl.NewCheckinActivities(rows), nil
 }
 
 func todayRange(now time.Time) (time.Time, time.Time) {

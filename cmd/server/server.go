@@ -224,6 +224,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/checkin", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: checkin.HandleCheckin,
 	}))
+	mux.HandleFunc("/api/v1/checkin/activity", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: checkin.HandleCheckinActivityUpdate,
+	}))
 
 	// Staff routes
 	mux.HandleFunc("/staff", staff.HandleStaffPage)

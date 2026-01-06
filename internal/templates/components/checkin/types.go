@@ -160,6 +160,74 @@ func (v FacilityVisit) ActivityLabel() string {
 	}
 }
 
+type CheckinActivity struct {
+	dbgen.GetMemberTodayActivitiesRow
+}
+
+func NewCheckinActivity(row dbgen.GetMemberTodayActivitiesRow) CheckinActivity {
+	return CheckinActivity{GetMemberTodayActivitiesRow: row}
+}
+
+func NewCheckinActivities(rows []dbgen.GetMemberTodayActivitiesRow) []CheckinActivity {
+	activities := make([]CheckinActivity, len(rows))
+	for i, row := range rows {
+		activities[i] = NewCheckinActivity(row)
+	}
+	return activities
+}
+
+func (a CheckinActivity) Label() string {
+	switch strings.TrimSpace(a.ActivityType) {
+	case "open_play":
+		return "Open Play"
+	case "league":
+		return "League"
+	}
+
+	switch strings.TrimSpace(a.ReservationTypeName) {
+	case "EVENT":
+		return "Event Booking"
+	case "PRO_SESSION":
+		return "Pro Session"
+	case "MAINTENANCE":
+		return "Maintenance"
+	case "GAME":
+		return "Court Reservation"
+	}
+	return "Court Reservation"
+}
+
+func (a CheckinActivity) TimeLabel() string {
+	return fmt.Sprintf("%s - %s", a.StartTime.Format("3:04 PM"), a.EndTime.Format("3:04 PM"))
+}
+
+func (a CheckinActivity) CourtSummary() string {
+	switch value := a.CourtLabel.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(value)
+	case []byte:
+		return strings.TrimSpace(string(value))
+	default:
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+}
+
+func (a CheckinActivity) SelectedFor(visit FacilityVisit) bool {
+	activity := strings.TrimSpace(visit.ActivityType.String)
+	if !visit.ActivityType.Valid || activity == "" {
+		return false
+	}
+	if activity != strings.TrimSpace(a.ActivityType) {
+		return false
+	}
+	if !visit.RelatedReservationID.Valid {
+		return false
+	}
+	return visit.RelatedReservationID.Int64 == a.ReservationID
+}
+
 func firstInitial(name string) string {
 	for _, r := range name {
 		return string(r)
