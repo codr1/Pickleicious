@@ -401,6 +401,52 @@ If they return months later, the system offers to restore their account when som
 
 ---
 
+## Staff Management
+
+Staff records are managed through the `/staff` page. Admins and managers can create, edit, and deactivate staff members.
+
+### Staff List
+
+The staff list shows all staff with name, email, role, and home facility. The list can be filtered by:
+- **Facility**: Show only staff assigned to a specific facility
+- **Role**: Filter by admin, manager, desk, or pro
+- **Search**: Text search across name and email
+
+### Staff Creation
+
+Creating new staff requires:
+- First name and last name (required)
+- Email (required, must be unique)
+- Phone (optional)
+- Role (admin, manager, desk, pro)
+- Home facility (optional - NULL for corporate-level staff)
+- Local authentication toggle
+
+The form reuses the photo capture component from the members module (camera.js, Base64 upload pattern).
+
+### Staff Editing
+
+Admins and managers can:
+- Update staff profile information
+- Change staff role
+- Transfer staff between facilities (update home_facility_id)
+- Enable/disable local password authentication
+
+### Staff Deactivation
+
+Staff deactivation performs a soft delete by setting user status to 'inactive'. When deactivating a staff member who has future assigned pro sessions:
+
+1. System queries for future reservations where staff is the primary user
+2. If sessions exist, a modal presents options:
+   - **Reassign**: Transfer sessions to another pro at the same facility
+   - **Cancel**: Delete the affected sessions
+   - **Abort**: Cancel the deactivation
+3. A confirmation hash prevents race conditions if sessions change between modal display and confirmation
+
+Sessions are validated again at confirmation time. If the session count changes, the operation aborts and forces a fresh decision.
+
+---
+
 ## Court Reservations
 
 Courts can be reserved for different purposes, and the system handles each appropriately.
@@ -842,6 +888,20 @@ type AuthUser struct {
 | Non-staff | Denied |
 | Unauthenticated | Denied |
 
+### Staff Management Authorization
+
+Staff management operations require the requester to have admin or manager role. Authorization is further scoped:
+
+| Requester | Can Manage |
+|-----------|------------|
+| Corporate admin (HomeFacilityID=NULL) | All staff at any facility |
+| Facility admin/manager | Only staff at their facility |
+| Desk or pro staff | No staff management access |
+
+Role assignment restrictions:
+- Facility-scoped managers cannot assign corporate admin roles
+- Cannot manage staff at other facilities
+
 ### Protected Endpoints
 
 All facility-scoped endpoints enforce authorization:
@@ -959,6 +1019,19 @@ Authorization failures are logged with facility_id and user_id.
 |--------|------|-------------|
 | GET | `/admin/operating-hours` | Operating hours admin page |
 | PUT | `/api/v1/operating-hours/{day_of_week}` | Update hours for a day (0=Sunday through 6=Saturday) |
+
+### Staff
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/staff` | Staff management page |
+| GET | `/api/v1/staff` | List staff (filterable by facility_id, role, search) |
+| GET | `/api/v1/staff/new` | New staff form |
+| GET | `/api/v1/staff/{id}` | Staff detail |
+| GET | `/api/v1/staff/{id}/edit` | Edit staff form |
+| POST | `/api/v1/staff` | Create staff |
+| PUT | `/api/v1/staff/{id}` | Update staff |
+| POST | `/api/v1/staff/{id}/deactivate` | Deactivate staff (soft delete via user status) |
 
 ---
 
@@ -1236,6 +1309,7 @@ pickleicious/
 │   │   ├── openplay/        # Open play rules
 │   │   ├── operatinghours/  # Operating hours management
 │   │   ├── reservations/    # Reservation CRUD
+│   │   ├── staff/           # Staff management
 │   │   └── themes/          # Theme management
 │   ├── config/              # Configuration loading
 │   ├── db/
@@ -1249,7 +1323,8 @@ pickleicious/
 │   │   └── components/
 │   │       ├── courts/          # Calendar components
 │   │       ├── operatinghours/  # Operating hours UI
-│   │       └── reservations/    # Booking form components
+│   │       ├── reservations/    # Booking form components
+│   │       └── staff/           # Staff management UI
 │   └── testutil/            # Test helpers
 ├── tests/
 │   └── smoke/               # Smoke tests
@@ -1361,6 +1436,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Staff Local Login | Complete | Bcrypt, rate limiting, timing attack mitigation |
 | Authorization | Complete | Facility-scoped access, admin override |
 | Operating Hours | Complete | Admin UI, per-day CRUD, default hours, HTMX updates |
+| Staff Management | Complete | CRUD, facility-scoped authorization, deactivation with session handling |
 
 ### Partial Implementation
 
@@ -1369,7 +1445,6 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Cognito Auth | Framework only | Handlers exist, SDK integration TODO |
 | Open Play Enforcement | Scheduled | gocron job configured, evaluation logic partial |
 | Password Reset | Not implemented | Returns 501 |
-| Staff Management | Schema only | Tables exist, no handlers |
 | Recurrence Rules | Schema only | Tables exist, not used in handlers |
 
 ### Not Yet Started

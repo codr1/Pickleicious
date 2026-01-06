@@ -19,6 +19,7 @@ import (
 	openplayapi "github.com/codr1/Pickleicious/internal/api/openplay"
 	"github.com/codr1/Pickleicious/internal/api/operatinghours"
 	"github.com/codr1/Pickleicious/internal/api/reservations"
+	"github.com/codr1/Pickleicious/internal/api/staff"
 	"github.com/codr1/Pickleicious/internal/api/themes"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
@@ -47,7 +48,11 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
+
 	operatinghours.InitHandlers(database.Queries)
+
+	staff.InitHandlers(database)
+
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
 	}
@@ -170,6 +175,26 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	// Staff routes
+	mux.HandleFunc("/staff", staff.HandleStaffPage)
+	mux.HandleFunc("/api/v1/staff", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: staff.HandleStaffList,
+	}))
+	mux.HandleFunc("/api/v1/staff/new", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		staff.HandleNewStaffForm(w, r)
+	})
+	mux.HandleFunc("/api/v1/staff/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		staff.HandleStaffDetail(w, r)
 	})
 
 	// Court routes

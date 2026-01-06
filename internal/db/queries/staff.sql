@@ -101,3 +101,12 @@ JOIN users u ON u.id = s.user_id
 WHERE s.role = @role
     AND u.status <> 'deleted'
 ORDER BY s.last_name, s.first_name;
+
+-- name: GetFutureProSessionsByStaffID :many
+SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
+    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    is_open_event, teams_per_court, people_per_team
+FROM reservations
+WHERE pro_id = @pro_id
+  AND start_time > @start_time
+ORDER BY start_time;
