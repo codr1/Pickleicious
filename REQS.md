@@ -106,9 +106,6 @@
 | **Facility** | Organization | name, slug (unique), timezone |
 | **User** | — | email, phone, cognito_sub, auth preferences |
 | **Member** | User → Facility | profile, membership_level, billing, photo |
-<!-- BEGIN WIP: STORY-0018 -->
-| **Staff** | User → Facility | role, home_facility (optional for admins) |
-<!-- END WIP -->
 | **Court** | Facility | name, court_number, status |
 | **Reservation** | Facility | type, courts, times, participants |
 
@@ -131,10 +128,6 @@ The `users` table is the authentication foundation:
 | `cognito_sub` | TEXT | AWS Cognito unique user ID |
 | `cognito_status` | TEXT | 'CONFIRMED' or 'UNCONFIRMED' |
 | `preferred_auth_method` | TEXT | 'SMS', 'EMAIL', or 'PUSH' |
-<!-- BEGIN WIP: STORY-0018 -->
-| `password_hash` | TEXT | For staff local authentication |
-| `local_auth_enabled` | BOOLEAN | Staff password login toggle |
-<!-- END WIP -->
 | `status` | TEXT | 'active', 'suspended', 'archived' |
 
 ### 3.2 Member Entity (Customer Profile)
@@ -210,18 +203,6 @@ Separate billing table for payment data:
 
 ### 3.6 Staff Entity
 
-<!-- BEGIN WIP: STORY-0018 -->
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | INTEGER PK | Staff identifier |
-| `user_id` | FK→users | Links to auth record |
-| `first_name` | TEXT | First name |
-| `last_name` | TEXT | Last name |
-| `home_facility_id` | FK→facilities | NULL for corporate admins |
-| `role` | TEXT | Role identifier |
-
-**Staff Roles:**
-<!-- END WIP -->
 
 ---
 
