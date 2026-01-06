@@ -43,6 +43,44 @@ func loadQueries() *dbgen.Queries {
 	return queries
 }
 
+// /api/v1/notifications/count
+func HandleNotificationCount(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), notificationsQueryTimeout)
+	defer cancel()
+
+	var facilityFilter interface{}
+	if user.HomeFacilityID != nil {
+		facilityFilter = *user.HomeFacilityID
+	}
+
+	count, err := q.CountUnreadStaffNotifications(ctx, facilityFilter)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to count staff notifications")
+		http.Error(w, "Failed to load notifications", http.StatusInternalServerError)
+		return
+	}
+
+	component := notificationtempl.NotificationCountBadge(count)
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render notifications count", "Failed to render notifications count") {
+		return
+	}
+}
+
 // /api/v1/notifications
 func HandleNotificationsList(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -144,7 +182,13 @@ func HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := notificationtempl.NotificationListItem(notificationtempl.NewNotification(notification))
+	w.Header().Set("HX-Trigger", "refreshNotificationCount")
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render notification item", "Failed to render notification") {
 		return
 	}
+}
+
+// /api/v1/notifications/close
+func HandleNotificationsClose(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(""))
 }

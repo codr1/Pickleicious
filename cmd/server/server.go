@@ -130,8 +130,14 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/nav/menu", nav.HandleMenu)
 	mux.HandleFunc("/api/v1/nav/menu/close", nav.HandleMenuClose)
 	mux.HandleFunc("/api/v1/nav/search", nav.HandleSearch)
+	mux.HandleFunc("/api/v1/notifications/count", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: notifications.HandleNotificationCount,
+	}))
 	mux.HandleFunc("/api/v1/notifications", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: notifications.HandleNotificationsList,
+	}))
+	mux.HandleFunc("/api/v1/notifications/close", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: notifications.HandleNotificationsClose,
 	}))
 	mux.HandleFunc("/api/v1/notifications/", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: notifications.HandleNotificationRead,
