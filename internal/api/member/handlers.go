@@ -371,6 +371,15 @@ func HandleMemberBookingSlots(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type reservationLimitError struct {
+	currentCount int64
+	limit        int64
+}
+
+func (e reservationLimitError) Error() string {
+	return fmt.Sprintf("reservation limit reached (%d/%d)", e.currentCount, e.limit)
+}
+
 // HandleMemberBookingCreate handles POST /member/reservations for member booking.
 func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -418,11 +427,13 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	var maxMemberReservations int64
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
 		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		maxMemberReservations = facility.MaxMemberReservations
 	}
 
 	now := time.Now()
@@ -480,6 +491,19 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
+		if maxMemberReservations > 0 {
+			activeCount, err := qtx.CountActiveMemberReservations(ctx, dbgen.CountActiveMemberReservationsParams{
+				FacilityID:    *user.HomeFacilityID,
+				PrimaryUserID: sql.NullInt64{Int64: user.ID, Valid: true},
+			})
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check reservation limits", Err: err}
+			}
+			if activeCount >= maxMemberReservations {
+				return reservationLimitError{currentCount: activeCount, limit: maxMemberReservations}
+			}
+		}
+
 		if err := apiutil.EnsureCourtsAvailable(ctx, qtx, *user.HomeFacilityID, 0, startTime, endTime, []int64{courtID}); err != nil {
 			var availErr apiutil.AvailabilityError
 			if errors.As(err, &availErr) {
@@ -523,6 +547,18 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
+		var limitErr reservationLimitError
+		if errors.As(err, &limitErr) {
+			message := fmt.Sprintf("You have reached the maximum of %d active reservations", limitErr.limit)
+			if err := apiutil.WriteJSON(w, http.StatusConflict, map[string]any{
+				"error":         message,
+				"current_count": limitErr.currentCount,
+				"limit":         limitErr.limit,
+			}); err != nil {
+				logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to write reservation limit response")
+			}
+			return
+		}
 		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
 			logger.Error().Err(herr.Err).Int64("facility_id", *user.HomeFacilityID).Msg(herr.Message)
