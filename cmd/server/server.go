@@ -51,7 +51,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
-	member.InitHandlers(database.Queries)
+	member.InitHandlers(database)
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
 
@@ -159,9 +159,12 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Member routes
 	mux.Handle("/member", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberPortal)))
+	mux.Handle("/member/booking/new", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: member.HandleMemberBookingFormNew,
+	}))))
 	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  member.HandleMemberReservationsPartial,
-		http.MethodPost: member.HandleMemberReservationCreate,
+		http.MethodPost: member.HandleMemberBookingCreate,
 	}))))
 	mux.Handle("/api/v1/member/reservations/widget", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsWidget)))
 	mux.HandleFunc("/members", members.HandleMembersPage)

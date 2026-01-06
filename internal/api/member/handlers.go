@@ -15,35 +15,47 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	"github.com/codr1/Pickleicious/internal/api/auth"
 	"github.com/codr1/Pickleicious/internal/api/authz"
-	"github.com/codr1/Pickleicious/internal/api/reservations"
+	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
+	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
 var (
 	queries     *dbgen.Queries
+	store       *appdb.DB
 	queriesOnce sync.Once
 )
 
 const portalQueryTimeout = 5 * time.Second
 const memberReservationTypeName = "GAME"
+const memberBookingTimeLayout = "2006-01-02T15:04"
+const memberBookingMinDuration = time.Hour
+const memberBookingDefaultOpensAt = "08:00"
+const memberBookingDefaultClosesAt = "21:00"
 
 // InitHandlers must be called during server startup before handling requests.
-func InitHandlers(q *dbgen.Queries) {
-	if q == nil {
+func InitHandlers(database *appdb.DB) {
+	if database == nil {
 		return
 	}
 	queriesOnce.Do(func() {
-		queries = q
+		queries = database.Queries
+		store = database
 	})
 }
 
 func loadQueries() *dbgen.Queries {
 	return queries
+}
+
+func loadDB() *appdb.DB {
+	return store
 }
 
 // RequireMemberSession ensures member-authenticated sessions reach member routes.
@@ -204,11 +216,11 @@ func HandleMemberReservationsWidget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleMemberReservationCreate handles POST /member/reservations for member booking.
-func HandleMemberReservationCreate(w http.ResponseWriter, r *http.Request) {
+// HandleMemberBookingFormNew handles GET /member/booking/new.
+func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -220,13 +232,63 @@ func HandleMemberReservationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	reservationTypeID, err := lookupReservationTypeID(ctx, q, memberReservationTypeName)
+	courtsList, err := q.ListCourts(ctx, *user.HomeFacilityID)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to resolve reservation type")
-		http.Error(w, "Reservation type not available", http.StatusInternalServerError)
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load courts")
+		http.Error(w, "Failed to load courts", http.StatusInternalServerError)
+		return
+	}
+	activeCourts := courtsList[:0]
+	for _, court := range courtsList {
+		if court.Status == "active" {
+			activeCourts = append(activeCourts, court)
+		}
+	}
+
+	availableSlots, err := buildMemberBookingSlots(ctx, q, *user.HomeFacilityID, bookingDateFromRequest(r), logger)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load available slots")
+		http.Error(w, "Failed to load available slots", http.StatusInternalServerError)
+		return
+	}
+
+	component := membertempl.MemberBookingForm(membertempl.MemberBookingFormData{
+		FacilityID:     *user.HomeFacilityID,
+		Courts:         reservationstempl.NewCourtOptions(activeCourts),
+		AvailableSlots: availableSlots,
+	})
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render member booking form", "Failed to render booking form") {
+		return
+	}
+}
+
+// HandleMemberBookingCreate handles POST /member/reservations for member booking.
+func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
@@ -241,37 +303,143 @@ func HandleMemberReservationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityIDValue := r.Form.Get("facility_id")
 	if user.HomeFacilityID == nil {
 		http.Error(w, "Home facility is required", http.StatusForbidden)
 		return
 	}
-	if facilityIDValue != "" {
-		facilityID, err := strconv.ParseInt(facilityIDValue, 10, 64)
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	memberRow, err := q.GetMemberByID(ctx, user.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Redirect(w, r, "/member/login", http.StatusFound)
+			return
+		}
+		logger.Error().Err(err).Int64("member_id", user.ID).Msg("Failed to load member profile")
+		http.Error(w, "Failed to load member profile", http.StatusInternalServerError)
+		return
+	}
+	if memberRow.MembershipLevel < 1 {
+		http.Error(w, "Membership required", http.StatusForbidden)
+		return
+	}
+
+	startTime, err := parseMemberBookingTime(r.FormValue("start_time"), "start_time")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if startTime.Before(time.Now()) {
+		http.Error(w, "start_time must be in the future", http.StatusBadRequest)
+		return
+	}
+	endTime, err := parseMemberBookingTime(r.FormValue("end_time"), "end_time")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !endTime.After(startTime) {
+		http.Error(w, "end_time must be after start_time", http.StatusBadRequest)
+		return
+	}
+	if endTime.Sub(startTime) < memberBookingMinDuration {
+		http.Error(w, "Reservation must be at least 1 hour", http.StatusBadRequest)
+		return
+	}
+
+	courtID, err := parseMemberCourtID(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	court, err := q.GetCourt(ctx, courtID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Court not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("court_id", courtID).Msg("Failed to load court")
+		http.Error(w, "Failed to validate court", http.StatusInternalServerError)
+		return
+	}
+	if court.FacilityID != *user.HomeFacilityID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	reservationTypeID, err := lookupReservationTypeID(ctx, q, memberReservationTypeName)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to resolve reservation type")
+		http.Error(w, "Reservation type not available", http.StatusInternalServerError)
+		return
+	}
+
+	var created dbgen.Reservation
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		if err := apiutil.EnsureCourtsAvailable(ctx, qtx, *user.HomeFacilityID, 0, startTime, endTime, []int64{courtID}); err != nil {
+			var availErr apiutil.AvailabilityError
+			if errors.As(err, &availErr) {
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: err.Error(), Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check court availability", Err: err}
+		}
+
+		var err error
+		created, err = qtx.CreateReservation(ctx, dbgen.CreateReservationParams{
+			FacilityID:        *user.HomeFacilityID,
+			ReservationTypeID: reservationTypeID,
+			RecurrenceRuleID:  sql.NullInt64{},
+			PrimaryUserID:     sql.NullInt64{Int64: user.ID, Valid: true},
+			ProID:             sql.NullInt64{},
+			OpenPlayRuleID:    sql.NullInt64{},
+			StartTime:         startTime,
+			EndTime:           endTime,
+			IsOpenEvent:       false,
+			TeamsPerCourt:     sql.NullInt64{},
+			PeoplePerTeam:     sql.NullInt64{},
+		})
 		if err != nil {
-			http.Error(w, "Invalid facility", http.StatusBadRequest)
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to create reservation", Err: err}
+		}
+
+		if err := qtx.AddReservationCourt(ctx, dbgen.AddReservationCourtParams{
+			ReservationID: created.ID,
+			CourtID:       courtID,
+		}); err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to assign reservation court", Err: err}
+		}
+
+		if err := qtx.AddParticipant(ctx, dbgen.AddParticipantParams{
+			ReservationID: created.ID,
+			UserID:        user.ID,
+		}); err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add reservation participant", Err: err}
+		}
+
+		return nil
+	})
+	if err != nil {
+		var herr apiutil.HandlerError
+		if errors.As(err, &herr) {
+			logger.Error().Err(herr.Err).Int64("facility_id", *user.HomeFacilityID).Msg(herr.Message)
+			http.Error(w, herr.Message, herr.Status)
 			return
 		}
-		if facilityID != *user.HomeFacilityID {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-	}
-	facilityIDValue = strconv.FormatInt(*user.HomeFacilityID, 10)
-	r.Form.Set("facility_id", facilityIDValue)
-	if r.PostForm != nil {
-		r.PostForm.Set("facility_id", facilityIDValue)
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to create reservation")
+		http.Error(w, "Failed to create reservation", http.StatusInternalServerError)
+		return
 	}
 
-	resTypeValue := strconv.FormatInt(reservationTypeID, 10)
-	r.Form.Set("reservation_type_id", resTypeValue)
-	r.Form.Set("primary_user_id", strconv.FormatInt(user.ID, 10))
-	if r.PostForm != nil {
-		r.PostForm.Set("reservation_type_id", resTypeValue)
-		r.PostForm.Set("primary_user_id", strconv.FormatInt(user.ID, 10))
+	w.Header().Set("HX-Trigger", "refreshMemberReservations")
+	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
+		logger.Error().Err(err).Int64("reservation_id", created.ID).Msg("Failed to write reservation response")
+		return
 	}
-
-	reservations.HandleReservationCreate(w, r)
 }
 
 func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
@@ -422,4 +590,171 @@ func buildReservationWidgetData(
 	})
 
 	return membertempl.NewReservationWidgetData(upcoming), nil
+}
+
+func bookingDateFromRequest(r *http.Request) time.Time {
+	now := time.Now()
+	dateParam := strings.TrimSpace(r.URL.Query().Get("date"))
+	if dateParam == "" {
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	}
+	parsed, err := time.ParseInLocation("2006-01-02", dateParam, now.Location())
+	if err != nil {
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if parsed.Before(today) {
+		return today
+	}
+	return parsed
+}
+
+func buildMemberBookingSlots(
+	ctx context.Context,
+	q *dbgen.Queries,
+	facilityID int64,
+	baseDate time.Time,
+	logger *zerolog.Logger,
+) ([]membertempl.MemberBookingSlot, error) {
+	opensAt := memberBookingDefaultOpensAt
+	closesAt := memberBookingDefaultClosesAt
+
+	hours, err := q.GetFacilityHours(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load operating hours")
+		hours = nil
+	}
+	weekday := int64(baseDate.Weekday())
+	for _, hour := range hours {
+		if hour.DayOfWeek == weekday {
+			opensAtRaw := formatOperatingHourValue(hour.OpensAt)
+			if strings.TrimSpace(opensAtRaw) != "" {
+				opensAt = opensAtRaw
+			}
+			closesAtRaw := formatOperatingHourValue(hour.ClosesAt)
+			if strings.TrimSpace(closesAtRaw) != "" {
+				closesAt = closesAtRaw
+			}
+			break
+		}
+	}
+
+	openTime, err := parseBookingTimeOfDay(opensAt, "opens_at")
+	if err != nil {
+		openTime, _ = parseBookingTimeOfDay(memberBookingDefaultOpensAt, "opens_at")
+	}
+	closeTime, err := parseBookingTimeOfDay(closesAt, "closes_at")
+	if err != nil {
+		closeTime, _ = parseBookingTimeOfDay(memberBookingDefaultClosesAt, "closes_at")
+	}
+
+	dayOpen := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), openTime.Hour(), openTime.Minute(), 0, 0, baseDate.Location())
+	dayClose := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), closeTime.Hour(), closeTime.Minute(), 0, 0, baseDate.Location())
+	if !dayClose.After(dayOpen) {
+		return nil, nil
+	}
+
+	slotStart := dayOpen
+	now := time.Now().In(baseDate.Location())
+	if sameDay(now, baseDate) && now.After(dayOpen) {
+		slotStart = roundUpToHour(now)
+		if slotStart.Before(dayOpen) {
+			slotStart = dayOpen
+		}
+	}
+
+	var slots []membertempl.MemberBookingSlot
+	for start := slotStart; start.Add(memberBookingMinDuration).Before(dayClose) || start.Add(memberBookingMinDuration).Equal(dayClose); start = start.Add(memberBookingMinDuration) {
+		available, err := q.ListAvailableCourtsForOpenPlay(ctx, dbgen.ListAvailableCourtsForOpenPlayParams{
+			FacilityID:    facilityID,
+			ReservationID: 0,
+			StartTime:     start,
+			EndTime:       start.Add(memberBookingMinDuration),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(available) == 0 {
+			continue
+		}
+		slots = append(slots, membertempl.MemberBookingSlot{
+			StartTime: start,
+			EndTime:   start.Add(memberBookingMinDuration),
+		})
+	}
+	return slots, nil
+}
+
+func parseBookingTimeOfDay(raw string, field string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("%s is required", field)
+	}
+	parsed, err := time.Parse("15:04", raw)
+	if err != nil {
+		parsed, err = time.Parse("3:04 PM", strings.ToUpper(raw))
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%s must be in HH:MM or H:MM AM/PM format", field)
+		}
+	}
+	return parsed, nil
+}
+
+func formatOperatingHourValue(value interface{}) string {
+	switch typed := value.(type) {
+	case time.Time:
+		return typed.Format("15:04")
+	case []byte:
+		return string(typed)
+	case string:
+		return typed
+	default:
+		if value == nil {
+			return ""
+		}
+		return fmt.Sprint(value)
+	}
+}
+
+func parseMemberBookingTime(raw string, field string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("%s is required", field)
+	}
+	parsed, err := time.ParseInLocation(memberBookingTimeLayout, raw, time.Local)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s must be in YYYY-MM-DDTHH:MM format", field)
+	}
+	return parsed, nil
+}
+
+func parseMemberCourtID(r *http.Request) (int64, error) {
+	values := r.Form["court_ids"]
+	if len(values) == 0 {
+		values = r.Form["court_ids[]"]
+	}
+	if len(values) == 0 {
+		return 0, fmt.Errorf("court_ids is required")
+	}
+	value := strings.TrimSpace(values[0])
+	if value == "" {
+		return 0, fmt.Errorf("court_ids is required")
+	}
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("court_ids must be a positive integer")
+	}
+	return id, nil
+}
+
+func sameDay(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.Month() == b.Month() && a.Day() == b.Day()
+}
+
+func roundUpToHour(value time.Time) time.Time {
+	truncated := time.Date(value.Year(), value.Month(), value.Day(), value.Hour(), 0, 0, 0, value.Location())
+	if value.After(truncated) {
+		return truncated.Add(time.Hour)
+	}
+	return truncated
 }

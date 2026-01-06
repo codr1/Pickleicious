@@ -105,8 +105,8 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 	if req.ParticipantIDsSet {
 		req.ParticipantIDs = normalizeParticipantIDs(req.ParticipantIDs)
 	}
-	if err := ensureCourtsAvailable(ctx, q, facilityID, 0, startTime, endTime, req.CourtIDs); err != nil {
-		var availErr availabilityError
+	if err := apiutil.EnsureCourtsAvailable(ctx, q, facilityID, 0, startTime, endTime, req.CourtIDs); err != nil {
+		var availErr apiutil.AvailabilityError
 		if errors.As(err, &availErr) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
@@ -513,8 +513,8 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch reservation", Err: err}
 		}
 
-		if err := ensureCourtsAvailable(ctx, qtx, facilityID, reservationID, startTime, endTime, req.CourtIDs); err != nil {
-			var availErr availabilityError
+		if err := apiutil.EnsureCourtsAvailable(ctx, qtx, facilityID, reservationID, startTime, endTime, req.CourtIDs); err != nil {
+			var availErr apiutil.AvailabilityError
 			if errors.As(err, &availErr) {
 				return apiutil.HandlerError{Status: http.StatusConflict, Message: err.Error(), Err: err}
 			}
@@ -905,43 +905,6 @@ func validateReservationInput(req reservationRequest, startTime, endTime time.Ti
 	}
 
 	return nil
-}
-
-func ensureCourtsAvailable(ctx context.Context, q *dbgen.Queries, facilityID, reservationID int64, startTime, endTime time.Time, courtIDs []int64) error {
-	available, err := q.ListAvailableCourtsForOpenPlay(ctx, dbgen.ListAvailableCourtsForOpenPlayParams{
-		FacilityID:    facilityID,
-		ReservationID: reservationID,
-		StartTime:     startTime,
-		EndTime:       endTime,
-	})
-	if err != nil {
-		return fmt.Errorf("availability check failed: %w", err)
-	}
-
-	availableMap := make(map[int64]struct{}, len(available))
-	for _, court := range available {
-		availableMap[court.ID] = struct{}{}
-	}
-
-	var unavailable []string
-	for _, courtID := range courtIDs {
-		if _, ok := availableMap[courtID]; ok {
-			continue
-		}
-		unavailable = append(unavailable, strconv.FormatInt(courtID, 10))
-	}
-	if len(unavailable) > 0 {
-		return availabilityError{Courts: unavailable}
-	}
-	return nil
-}
-
-type availabilityError struct {
-	Courts []string
-}
-
-func (e availabilityError) Error() string {
-	return fmt.Sprintf("courts unavailable: %s", strings.Join(e.Courts, ", "))
 }
 
 func normalizeCourtIDs(courtIDs []int64) []int64 {
