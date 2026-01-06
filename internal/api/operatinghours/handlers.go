@@ -3,6 +3,8 @@ package operatinghours
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -75,6 +77,13 @@ func HandleOperatingHoursPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), operatingHoursQueryTimeout)
 	defer cancel()
 
+	facility, err := q.GetFacilityByID(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to load facility booking config", http.StatusInternalServerError)
+		return
+	}
+
 	hours, err := q.GetFacilityHours(ctx, facilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch operating hours")
@@ -92,7 +101,12 @@ func HandleOperatingHoursPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionType := authz.SessionTypeFromContext(r.Context())
-	page := layouts.Base(operatingHoursPageComponent(facilityID, hours), activeTheme, sessionType)
+	bookingConfig := operatinghourstempl.BookingConfigData{
+		FacilityID:            facilityID,
+		MaxAdvanceBookingDays: facility.MaxAdvanceBookingDays,
+		MaxMemberReservations: facility.MaxMemberReservations,
+	}
+	page := layouts.Base(operatingHoursPageComponent(facilityID, hours, bookingConfig), activeTheme, sessionType)
 	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render operating hours page", "Failed to render page") {
 		return
 	}
@@ -214,7 +228,67 @@ func HandleOperatingHoursUpdate(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteHTMLFeedback(w, http.StatusOK, "Operating hours saved.")
 }
 
-func operatingHoursPageComponent(facilityID int64, hours []dbgen.OperatingHour) templ.Component {
+// POST /api/v1/facility-settings
+func HandleFacilitySettingsUpdate(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := parsePositiveInt64Field(r.FormValue("facility_id"), "facility_id")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	maxAdvanceDays, err := parsePositiveInt64Field(r.FormValue("max_advance_booking_days"), "max_advance_booking_days")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	maxMemberReservations, err := parsePositiveInt64Field(r.FormValue("max_member_reservations"), "max_member_reservations")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), operatingHoursQueryTimeout)
+	defer cancel()
+
+	_, err = q.UpdateFacilityBookingConfig(ctx, dbgen.UpdateFacilityBookingConfigParams{
+		ID:                    facilityID,
+		MaxAdvanceBookingDays: maxAdvanceDays,
+		MaxMemberReservations: maxMemberReservations,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			logger.Warn().Int64("facility_id", facilityID).Msg("Facility not found for booking config update")
+			http.Error(w, "Facility not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to update facility booking config")
+		http.Error(w, "Failed to update booking configuration", http.StatusInternalServerError)
+		return
+	}
+
+	apiutil.WriteHTMLFeedback(w, http.StatusOK, "Booking configuration updated.")
+}
+
+func operatingHoursPageComponent(facilityID int64, hours []dbgen.OperatingHour, bookingConfig operatinghourstempl.BookingConfigData) templ.Component {
 	hoursByDay := make(map[int64]dbgen.OperatingHour, len(hours))
 	for _, hour := range hours {
 		hoursByDay[hour.DayOfWeek] = hour
@@ -234,7 +308,7 @@ func operatingHoursPageComponent(facilityID int64, hours []dbgen.OperatingHour) 
 		days = append(days, entry)
 	}
 
-	return operatinghourstempl.OperatingHoursLayout(facilityID, days)
+	return operatinghourstempl.OperatingHoursLayout(facilityID, days, bookingConfig)
 }
 
 func defaultOperatingHours(facilityID int64) []dbgen.OperatingHour {
@@ -278,6 +352,18 @@ func parseOptionalBool(raw string) (bool, error) {
 	default:
 		return false, fmt.Errorf("is_closed must be true or false")
 	}
+}
+
+func parsePositiveInt64Field(raw string, field string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", field)
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", field)
+	}
+	return value, nil
 }
 
 func facilityIDFromQuery(r *http.Request) (int64, error) {

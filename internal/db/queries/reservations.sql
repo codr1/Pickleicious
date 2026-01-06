@@ -178,4 +178,4 @@ JOIN reservation_types rt ON rt.id = r.reservation_type_id
 WHERE r.facility_id = @facility_id
   AND r.primary_user_id = @primary_user_id
   AND r.start_time > CURRENT_TIMESTAMP
-  AND rt.name = 'GAME'
+  AND rt.name = 'GAME';

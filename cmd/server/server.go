@@ -334,6 +334,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/operating-hours/{day_of_week}", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: operatinghours.HandleOperatingHoursUpdate,
 	}))
+	mux.HandleFunc("/api/v1/facility-settings", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: operatinghours.HandleFacilitySettingsUpdate,
+	}))
 
 	// Static file handling with logging and environment awareness
 	staticDir := os.Getenv("STATIC_DIR")
