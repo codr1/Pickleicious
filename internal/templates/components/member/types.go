@@ -6,6 +6,7 @@ import (
 	"time"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/templates/components/reservations"
 )
 
 type PortalProfile struct {
@@ -85,6 +86,18 @@ type ReservationListData struct {
 type ReservationWidgetData struct {
 	Upcoming []ReservationSummary
 	Count    int
+}
+
+type MemberBookingSlot struct {
+	StartTime time.Time
+	EndTime   time.Time
+	Label     string
+}
+
+type MemberBookingFormData struct {
+	FacilityID     int64
+	Courts         []reservations.CourtOption
+	AvailableSlots []MemberBookingSlot
 }
 
 func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []ReservationSummary {

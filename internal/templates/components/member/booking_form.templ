@@ -1,0 +1,128 @@
+// internal/templates/components/member/booking_form.templ
+package member
+
+import (
+	"fmt"
+)
+
+templ MemberBookingForm(data MemberBookingFormData) {
+	<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+		<div class="flex items-center justify-between">
+			<h2 class="text-xl font-semibold text-gray-900">Book a court</h2>
+		</div>
+
+		<div id="member-booking-indicator" class="htmx-indicator mt-4">
+			<div class="flex items-center justify-center">
+				<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+				<span class="ml-2 text-sm text-gray-600">Submitting...</span>
+			</div>
+		</div>
+
+		<div
+			id="member-booking-errors"
+			class="hidden mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+		</div>
+
+		<div
+			id="member-booking-success"
+			class="hidden mt-4 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700">
+			Reservation submitted.
+		</div>
+
+		<form
+			hx-post="/member/reservations"
+			hx-indicator="#member-booking-indicator"
+			hx-swap="none"
+			hx-on::before-request="document.getElementById('member-booking-errors').classList.add('hidden');document.getElementById('member-booking-success').classList.add('hidden');"
+			hx-on::response-error="document.getElementById('member-booking-errors').textContent = event.detail.xhr.responseText; document.getElementById('member-booking-errors').classList.remove('hidden');"
+			hx-on::after-request="if(event.detail.xhr.status === 201 || event.detail.xhr.status === 200){document.getElementById('member-booking-success').classList.remove('hidden');}"
+			class="mt-4 space-y-4">
+			<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)}/>
+
+			<div>
+				<label for="member_time_slot" class="block text-sm font-medium text-gray-700">Time slot</label>
+				<select
+					id="member_time_slot"
+					name="start_time"
+					required
+					disabled?={len(data.AvailableSlots) == 0}
+					onchange="setMemberReservationEndTime(this)"
+					class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+					if len(data.AvailableSlots) == 0 {
+						<option value="">No slots available</option>
+					} else {
+						for _, slot := range data.AvailableSlots {
+							<option
+								value={slot.StartTime.Format("2006-01-02T15:04")}
+								data-end-time={slot.EndTime.Format("2006-01-02T15:04")}>
+								if slot.Label != "" {
+									{slot.Label}
+								} else {
+									{slot.StartTime.Format("3:04 PM")} - {slot.EndTime.Format("3:04 PM")}
+								}
+							</option>
+						}
+					}
+				</select>
+				<input
+					type="hidden"
+					id="member_end_time"
+					name="end_time"
+					value={defaultEndTimeValue(data.AvailableSlots)}/>
+				<p class="mt-1 text-xs text-gray-500">Select a time slot for your reservation.</p>
+			</div>
+
+			<div>
+				<label for="member_court_id" class="block text-sm font-medium text-gray-700">Court</label>
+				<select
+					id="member_court_id"
+					name="court_ids"
+					required
+					disabled?={len(data.Courts) == 0}
+					class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+					if len(data.Courts) == 0 {
+						<option value="">No courts available</option>
+					} else {
+						for _, court := range data.Courts {
+							<option value={fmt.Sprintf("%d", court.ID)}>{court.Label}</option>
+						}
+					}
+				</select>
+			</div>
+
+			<div class="flex justify-end pt-2">
+				<button
+					type="submit"
+					disabled?={len(data.AvailableSlots) == 0 || len(data.Courts) == 0}
+					class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700">
+					Book reservation
+				</button>
+			</div>
+		</form>
+	</div>
+
+	<script>
+		function setMemberReservationEndTime(select) {
+			if (!select) {
+				return;
+			}
+			const option = select.options[select.selectedIndex];
+			const endTime = option ? option.getAttribute("data-end-time") : "";
+			const endInput = document.getElementById("member_end_time");
+			if (endInput) {
+				endInput.value = endTime || "";
+			}
+		}
+
+		document.addEventListener("DOMContentLoaded", function () {
+			setMemberReservationEndTime(document.getElementById("member_time_slot"));
+		});
+	</script>
+}
+
+func defaultEndTimeValue(slots []MemberBookingSlot) string {
+	if len(slots) == 0 {
+		return ""
+	}
+	return slots[0].EndTime.Format("2006-01-02T15:04")
+}

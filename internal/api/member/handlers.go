@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api/auth"
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/reservations"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
@@ -28,6 +30,7 @@ var (
 )
 
 const portalQueryTimeout = 5 * time.Second
+const memberReservationTypeName = "GAME"
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(q *dbgen.Queries) {
@@ -199,6 +202,89 @@ func HandleMemberReservationsWidget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to render reservations widget", http.StatusInternalServerError)
 		return
 	}
+}
+
+// HandleMemberReservationCreate handles POST /member/reservations for member booking.
+func HandleMemberReservationCreate(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	reservationTypeID, err := lookupReservationTypeID(ctx, q, memberReservationTypeName)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to resolve reservation type")
+		http.Error(w, "Reservation type not available", http.StatusInternalServerError)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+
+	facilityIDValue := r.Form.Get("facility_id")
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+	if facilityIDValue != "" {
+		facilityID, err := strconv.ParseInt(facilityIDValue, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid facility", http.StatusBadRequest)
+			return
+		}
+		if facilityID != *user.HomeFacilityID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+	facilityIDValue = strconv.FormatInt(*user.HomeFacilityID, 10)
+	r.Form.Set("facility_id", facilityIDValue)
+	if r.PostForm != nil {
+		r.PostForm.Set("facility_id", facilityIDValue)
+	}
+
+	resTypeValue := strconv.FormatInt(reservationTypeID, 10)
+	r.Form.Set("reservation_type_id", resTypeValue)
+	r.Form.Set("primary_user_id", strconv.FormatInt(user.ID, 10))
+	if r.PostForm != nil {
+		r.PostForm.Set("reservation_type_id", resTypeValue)
+		r.PostForm.Set("primary_user_id", strconv.FormatInt(user.ID, 10))
+	}
+
+	reservations.HandleReservationCreate(w, r)
+}
+
+func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
+	resTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, resType := range resTypes {
+		if strings.EqualFold(resType.Name, name) {
+			return resType.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("reservation type %q not found", name)
 }
 
 func requestedFacilityID(r *http.Request) *int64 {
