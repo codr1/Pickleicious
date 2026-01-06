@@ -15,6 +15,7 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/htmx"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/request"
 	notificationtempl "github.com/codr1/Pickleicious/internal/templates/components/notifications"
@@ -124,7 +125,7 @@ func HandleNotificationsList(w http.ResponseWriter, r *http.Request) {
 }
 
 // /api/v1/notifications/{id}/read
-func HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
+func HandleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
 	q := loadQueries()
@@ -140,14 +141,11 @@ func HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := strings.TrimSuffix(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 6 || parts[len(parts)-1] != "read" {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+	idStr := strings.TrimSpace(r.PathValue("id"))
+	if idStr == "" {
+		http.Error(w, "Invalid notification ID", http.StatusBadRequest)
 		return
 	}
-
-	idStr := parts[len(parts)-2]
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid notification ID", http.StatusBadRequest)
@@ -164,10 +162,14 @@ func HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), notificationsQueryTimeout)
 	defer cancel()
 
-	notification, err := q.MarkStaffNotificationAsRead(ctx, dbgen.MarkStaffNotificationAsReadParams{
+	_, err = q.MarkStaffNotificationAsRead(ctx, dbgen.MarkStaffNotificationAsReadParams{
 		ID:         id,
 		FacilityID: facilityID,
 	})
@@ -181,9 +183,25 @@ func HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	component := notificationtempl.NotificationListItem(notificationtempl.NewNotification(notification))
 	w.Header().Set("HX-Trigger", "refreshNotificationCount")
-	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render notification item", "Failed to render notification") {
+	if !htmx.IsRequest(r) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	notifications, err := q.ListStaffNotificationsForFacilityOrCorporate(ctx, dbgen.ListStaffNotificationsForFacilityOrCorporateParams{
+		FacilityID: facilityID,
+		Offset:     0,
+		Limit:      notificationsListLimit,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list staff notifications")
+		http.Error(w, "Failed to load notifications", http.StatusInternalServerError)
+		return
+	}
+
+	component := notificationtempl.NotificationsPanel(notificationtempl.NewNotifications(notifications))
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render notifications panel", "Failed to render notifications panel") {
 		return
 	}
 }

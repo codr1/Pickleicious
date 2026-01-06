@@ -46,8 +46,8 @@ templ NotificationListItem(notification Notification) {
 				templ.KV("opacity-70", notification.Read),
 			)}
 			hx-put={fmt.Sprintf("/api/v1/notifications/%d/read?facility_id=%d", notification.ID, notification.FacilityID)}
-			hx-target="closest li"
-			hx-swap="outerHTML"
+			hx-target="#notifications-panel"
+			hx-swap="innerHTML"
 		>
 			<div>
 				<p class="text-sm font-medium text-gray-900">{notification.Message}</p>
