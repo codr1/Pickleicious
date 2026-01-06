@@ -43,6 +43,49 @@
 
 ## 0. INFRASTRUCTURE DEBT (Priority)
 
+### 0.0 Member Booking Enhancements (NEXT)
+
+**Context**: Follow-up from member-booking feature (STORY-0021). These are enhancements identified during implementation.
+
+#### 0.0.1 Seed System Reservation Types
+**Problem**: The "GAME" reservation type is hard-coded but not guaranteed to exist in the database.
+
+**Required**:
+- Add SEED data for system reservation types (not user-editable):
+  - GAME - Casual/pickup play (member self-service)
+  - LESSON - Private/group instruction with pro
+  - LEAGUE - Scheduled league play
+  - TOURNAMENT - Competition events
+  - CLINIC - Group instruction sessions
+  - EVENT - Special events, parties
+  - OPEN_PLAY - Facility-organized open sessions
+  - MAINTENANCE - Court blocked for maintenance
+- Add `is_system` boolean column to reservation_types table
+- Validate system types exist at startup
+
+#### 0.0.2 Simple Date Picker for Member Booking
+**Problem**: Member booking form only shows same-day slots. No way to book future dates.
+
+**Required**:
+- Add inline date picker to booking form (not a calendar popup)
+- Click on day (1-31) -> dropdown to select day
+- Click on month (Jan-Dec) -> dropdown to select month
+- Click on year -> dropdown (current year + 1)
+- Focus on near-term bookings (next few days), not 5 years out
+- Reload available slots when date changes (hx-get)
+
+#### 0.0.3 Member Reservation Limits
+**Problem**: No rate limiting - a member could book every available slot.
+
+**Required**:
+- Add `MAX_MEMBER_RESERVATIONS` setting (default: 30)
+- Count only active future reservations where member is primary_user_id
+- Exclude staff-created reservations from count
+- Exclude league/tournament reservations from count (different booking flow)
+- Return friendly error when limit reached
+
+---
+
 ### 0.1 Comprehensive Test Infrastructure
 
 ### 0.2 Build System Modernization
@@ -153,14 +196,12 @@ Complete member record structure:
 
 ### 3.3 Membership Levels
 
-<!-- BEGIN WIP: STORY-0021 -->
 | Level | Name | Description |
 |-------|------|-------------|
 | 0 | Unverified Guest | New registrant, identity not confirmed |
 | 1 | Verified Guest | Identity confirmed, limited access |
 | 2 | Member | Full membership, standard benefits |
 | 3+ | Member+ | Premium tiers with additional benefits |
-<!-- END WIP -->
 
 ### 3.4 Member Photo System
 
@@ -367,9 +408,7 @@ WHERE id = @id;
 
 | Type | Description | Visual |
 |------|-------------|--------|
-<!-- BEGIN WIP: STORY-0021 -->
 | `GAME` | Regular member play | Standard color |
-<!-- END WIP -->
 | `PRO_SESSION` | Lesson with pro | Accent color + pattern |
 | `EVENT` | Special events | Custom styling |
 | `MAINTENANCE` | Court maintenance | Tertiary + diagonal |
@@ -1030,10 +1069,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Peak/Off-Peak Pricing | Higher rates during busy times |
 | Member vs. Guest Pricing | Discounts for members |
 | Dynamic Pricing | Adjust based on demand |
-<!-- BEGIN WIP: STORY-0021 -->
 | Minimum Duration | Shortest bookable slot |
-<!-- END WIP -->
-
 ### 9.10 Access Control & Check-In
 
 **Check-In Methods:**
@@ -1158,7 +1194,6 @@ A self-service marketplace where members discover and book coaches directly, red
 | Digital Member Card | QR code for access |
 | Offline Mode | View bookings without connection |
 
-<!-- BEGIN WIP: STORY-0021 -->
 **Additional Portal Features:**
 | Feature | Description |
 |---------|-------------|
@@ -1167,7 +1202,6 @@ A self-service marketplace where members discover and book coaches directly, red
 | Waitlist Management | Join/leave waitlists |
 | Guest Booking | Reserve for guests |
 | Message Center | View communications |
-<!-- END WIP -->
 
 ### 9.15 Staff Management
 
