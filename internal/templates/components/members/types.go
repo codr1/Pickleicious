@@ -2,6 +2,7 @@ package members
 
 import (
 	"fmt"
+	"strings"
 
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 )
@@ -58,4 +59,50 @@ func (m Member) StateStr() string {
 
 func (m Member) PostalCodeStr() string {
 	return m.PostalCode.String
+}
+
+type VisitHistory struct {
+	dbgen.FacilityVisit
+	FacilityName string
+}
+
+func NewVisitHistory(visits []dbgen.FacilityVisit, facilityNames map[int64]string) []VisitHistory {
+	items := make([]VisitHistory, len(visits))
+	for i, visit := range visits {
+		name := strings.TrimSpace(facilityNames[visit.FacilityID])
+		items[i] = VisitHistory{
+			FacilityVisit: visit,
+			FacilityName:  name,
+		}
+	}
+	return items
+}
+
+func (v VisitHistory) FacilityLabel() string {
+	if strings.TrimSpace(v.FacilityName) != "" {
+		return v.FacilityName
+	}
+	return fmt.Sprintf("Facility #%d", v.FacilityID)
+}
+
+func (v VisitHistory) CheckInTimeLabel() string {
+	return v.CheckInTime.Format("Jan 2, 2006 3:04 PM")
+}
+
+func (v VisitHistory) ActivityLabel() string {
+	activity := strings.TrimSpace(v.ActivityType.String)
+	if !v.ActivityType.Valid || activity == "" {
+		return "Facility Visit"
+	}
+
+	switch activity {
+	case "court_reservation":
+		return "Court Reservation"
+	case "open_play":
+		return "Open Play"
+	case "league":
+		return "League"
+	default:
+		return activity
+	}
 }

@@ -196,6 +196,15 @@ templ MemberDetail(member Member) {
                     Loading billing information...
                 </div>
             </div>
+
+            <div
+                id="visit-history"
+                hx-get={fmt.Sprintf("/api/v1/members/%d/visits", member.ID)}
+                hx-trigger="load">
+                <div class="htmx-indicator">
+                    Loading visit history...
+                </div>
+            </div>
         </div>
     </div>
 }

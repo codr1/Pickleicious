@@ -197,6 +197,11 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 			return
 		}
 
+		if strings.HasSuffix(path, "/visits") {
+			members.HandleMemberVisits(w, r)
+			return
+		}
+
 		// Handle other member routes
 		switch r.Method {
 		case http.MethodGet:
