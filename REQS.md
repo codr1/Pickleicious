@@ -1790,9 +1790,6 @@ Video technology and digital scoreboards create a premium, professional experien
 - **Menu Toggle:** Opens slide-out navigation
 - **Global Search:** Debounced search (500ms) - ✅ Fixed (#31)
 - **Theme Toggle:** Light/dark mode switch
-<!-- BEGIN WIP: STORY-0020 -->
-- **Notifications:** Bell icon - TODO
-<!-- END WIP -->
 
 ### 9.3 Slide-Out Menu
 
