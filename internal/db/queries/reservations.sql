@@ -123,7 +123,7 @@ DELETE FROM reservation_courts
 WHERE reservation_id = @reservation_id;
 
 -- name: ListReservationsByUserID :many
-SELECT DISTINCT
+SELECT
     r.id,
     r.facility_id,
     r.reservation_type_id,
@@ -138,9 +138,14 @@ SELECT DISTINCT
     r.people_per_team,
     r.created_at,
     r.updated_at,
-    f.name AS facility_name
+    f.name AS facility_name,
+    rt.name AS reservation_type_name,
+    group_concat(DISTINCT COALESCE(NULLIF(c.name, ''), 'Court ' || c.court_number)) AS court_name
 FROM reservations r
 JOIN facilities f ON f.id = r.facility_id
+LEFT JOIN reservation_types rt ON rt.id = r.reservation_type_id
+LEFT JOIN reservation_courts rc ON rc.reservation_id = r.id
+LEFT JOIN courts c ON c.id = rc.court_id
 WHERE r.primary_user_id = @user_id
    OR EXISTS (
        SELECT 1
@@ -148,4 +153,20 @@ WHERE r.primary_user_id = @user_id
        WHERE rp.reservation_id = r.id
          AND rp.user_id = @user_id
    )
+GROUP BY r.id,
+    r.facility_id,
+    r.reservation_type_id,
+    r.recurrence_rule_id,
+    r.primary_user_id,
+    r.pro_id,
+    r.open_play_rule_id,
+    r.start_time,
+    r.end_time,
+    r.is_open_event,
+    r.teams_per_court,
+    r.people_per_team,
+    r.created_at,
+    r.updated_at,
+    f.name,
+    rt.name
 ORDER BY r.start_time DESC;

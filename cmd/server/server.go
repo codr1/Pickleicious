@@ -143,6 +143,7 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Member routes
 	mux.Handle("/member", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberPortal)))
+	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsPartial)))
 	mux.HandleFunc("/members", members.HandleMembersPage)
 	mux.HandleFunc("/api/v1/members", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  members.HandleMembersList,

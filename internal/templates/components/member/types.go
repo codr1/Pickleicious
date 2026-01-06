@@ -58,23 +58,72 @@ func (p PortalProfile) MembershipLabel() string {
 }
 
 type ReservationSummary struct {
-	ID           int64
-	FacilityName string
-	StartTime    time.Time
-	EndTime      time.Time
-	IsOpenEvent  bool
+	ID                  int64
+	FacilityID          int64
+	FacilityName        string
+	CourtName           string
+	ReservationTypeName string
+	StartTime           time.Time
+	EndTime             time.Time
+	IsOpenEvent         bool
+	OtherParticipants   []string
+}
+
+type ReservationFacility struct {
+	ID   int64
+	Name string
+}
+
+type ReservationListData struct {
+	Upcoming           []ReservationSummary
+	Past               []ReservationSummary
+	Facilities         []ReservationFacility
+	SelectedFacilityID int64
+	ShowFacilityFilter bool
 }
 
 func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []ReservationSummary {
 	summaries := make([]ReservationSummary, len(rows))
 	for i, row := range rows {
+		var reservationTypeName string
+		if row.ReservationTypeName.Valid {
+			reservationTypeName = row.ReservationTypeName.String
+		}
+		courtName := row.CourtName
 		summaries[i] = ReservationSummary{
-			ID:           row.ID,
-			FacilityName: row.FacilityName,
-			StartTime:    row.StartTime,
-			EndTime:      row.EndTime,
-			IsOpenEvent:  row.IsOpenEvent,
+			ID:                  row.ID,
+			FacilityID:          row.FacilityID,
+			FacilityName:        row.FacilityName,
+			CourtName:           courtName,
+			ReservationTypeName: reservationTypeName,
+			StartTime:           row.StartTime,
+			EndTime:             row.EndTime,
+			IsOpenEvent:         row.IsOpenEvent,
 		}
 	}
 	return summaries
+}
+
+func (r ReservationSummary) ReservationTypeLabel() string {
+	if r.ReservationTypeName != "" {
+		return r.ReservationTypeName
+	}
+	if r.IsOpenEvent {
+		return "Open Play"
+	}
+	return "Reservation"
+}
+
+func (r ReservationSummary) CourtLabel() string {
+	if r.CourtName != "" {
+		return r.CourtName
+	}
+	return "TBD"
+}
+
+func (r ReservationSummary) OtherParticipantsLabel() string {
+	if len(r.OtherParticipants) == 0 {
+		return "No other participants"
+	}
+	return strings.Join(r.OtherParticipants, ", ")
 }
