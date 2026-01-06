@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -76,7 +77,8 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	calendar := courts.Calendar(calendarData)
-	page := layouts.Base(calendar, activeTheme)
+	sessionType := authz.SessionTypeFromContext(r.Context())
+	page := layouts.Base(calendar, activeTheme, sessionType)
 	page.Render(r.Context(), w)
 }
 

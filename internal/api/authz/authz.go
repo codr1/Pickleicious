@@ -58,6 +58,14 @@ func CanManageStaff(requesterStaff, targetStaff StaffAccess) bool {
 	return *requesterStaff.HomeFacilityID == *targetStaff.HomeFacilityID
 }
 
+func SessionTypeFromContext(ctx context.Context) string {
+	user := UserFromContext(ctx)
+	if user == nil {
+		return ""
+	}
+	return user.SessionType
+}
+
 func RequireFacilityAccess(ctx context.Context, requestedFacilityID int64) error {
 	user := UserFromContext(ctx)
 	if user == nil {

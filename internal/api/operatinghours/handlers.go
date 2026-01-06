@@ -13,6 +13,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog/log"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -90,7 +91,8 @@ func HandleOperatingHoursPage(w http.ResponseWriter, r *http.Request) {
 		activeTheme = nil
 	}
 
-	page := layouts.Base(operatingHoursPageComponent(facilityID, hours), activeTheme)
+	sessionType := authz.SessionTypeFromContext(r.Context())
+	page := layouts.Base(operatingHoursPageComponent(facilityID, hours), activeTheme, sessionType)
 	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render operating hours page", "Failed to render page") {
 		return
 	}

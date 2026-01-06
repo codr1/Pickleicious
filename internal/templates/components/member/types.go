@@ -82,6 +82,11 @@ type ReservationListData struct {
 	ShowFacilityFilter bool
 }
 
+type ReservationWidgetData struct {
+	Upcoming []ReservationSummary
+	Count    int
+}
+
 func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []ReservationSummary {
 	summaries := make([]ReservationSummary, len(rows))
 	for i, row := range rows {
@@ -102,6 +107,20 @@ func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []Reserva
 		}
 	}
 	return summaries
+}
+
+func NewReservationWidgetData(upcoming []ReservationSummary) ReservationWidgetData {
+	return ReservationWidgetData{
+		Upcoming: upcoming,
+		Count:    len(upcoming),
+	}
+}
+
+func (r ReservationWidgetData) BadgeLabel() string {
+	if r.Count > 9 {
+		return "9+"
+	}
+	return fmt.Sprintf("%d", r.Count)
 }
 
 func (r ReservationSummary) ReservationTypeLabel() string {

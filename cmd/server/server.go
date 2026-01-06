@@ -13,6 +13,7 @@ import (
 
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/auth"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
@@ -112,7 +113,8 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 				activeTheme = nil
 			}
 		}
-		component := layouts.Base(nil, activeTheme)
+		sessionType := authz.SessionTypeFromContext(r.Context())
+		component := layouts.Base(nil, activeTheme, sessionType)
 		component.Render(r.Context(), w)
 	})
 
@@ -144,6 +146,7 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Member routes
 	mux.Handle("/member", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberPortal)))
 	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsPartial)))
+	mux.Handle("/api/v1/member/reservations/widget", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsWidget)))
 	mux.HandleFunc("/members", members.HandleMembersPage)
 	mux.HandleFunc("/api/v1/members", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  members.HandleMembersList,

@@ -116,7 +116,7 @@ func HandleMemberPortal(w http.ResponseWriter, r *http.Request) {
 		HasPhoto:        memberRow.PhotoID.Valid,
 	}
 
-	page := layouts.Base(membertempl.MemberPortal(profile, reservationData), activeTheme)
+	page := layouts.Base(membertempl.MemberPortal(profile, reservationData), activeTheme, user.SessionType)
 	if err := page.Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render member portal")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -159,6 +159,44 @@ func HandleMemberReservationsPartial(w http.ResponseWriter, r *http.Request) {
 	if err := membertempl.MemberReservations(reservationData).Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render member reservations")
 		http.Error(w, "Failed to render reservations", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleMemberReservationsWidget renders the upcoming reservations widget for the nav.
+func HandleMemberReservationsWidget(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	widgetData, err := buildReservationWidgetData(ctx, q, user.ID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to load upcoming reservations")
+		widgetData = membertempl.NewReservationWidgetData(nil)
+	}
+
+	if err := membertempl.MemberReservationsWidget(widgetData).Render(r.Context(), w); err != nil {
+		logger.Error().Err(err).Msg("Failed to render reservations widget")
+		http.Error(w, "Failed to render reservations widget", http.StatusInternalServerError)
 		return
 	}
 }
@@ -272,4 +310,30 @@ func buildReservationListData(
 		SelectedFacilityID: selectedFacilityID,
 		ShowFacilityFilter: showFilter,
 	}, nil
+}
+
+func buildReservationWidgetData(
+	ctx context.Context,
+	q *dbgen.Queries,
+	userID int64,
+) (membertempl.ReservationWidgetData, error) {
+	rows, err := q.ListReservationsByUserID(ctx, sql.NullInt64{Int64: userID, Valid: true})
+	if err != nil {
+		return membertempl.ReservationWidgetData{}, err
+	}
+
+	summaries := membertempl.NewReservationSummaries(rows)
+	now := time.Now()
+	upcoming := make([]membertempl.ReservationSummary, 0, len(summaries))
+	for _, summary := range summaries {
+		if summary.StartTime.After(now) {
+			upcoming = append(upcoming, summary)
+		}
+	}
+
+	sort.Slice(upcoming, func(i, j int) bool {
+		return upcoming[i].StartTime.Before(upcoming[j].StartTime)
+	})
+
+	return membertempl.NewReservationWidgetData(upcoming), nil
 }

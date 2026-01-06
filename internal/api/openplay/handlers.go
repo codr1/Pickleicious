@@ -18,6 +18,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog/log"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	"github.com/codr1/Pickleicious/internal/api/htmx"
 	appdb "github.com/codr1/Pickleicious/internal/db"
@@ -90,7 +91,8 @@ func HandleOpenPlayRulesPage(w http.ResponseWriter, r *http.Request) {
 		activeTheme = nil
 	}
 
-	page := layouts.Base(openPlayRulesPageComponent(rules), activeTheme)
+	sessionType := authz.SessionTypeFromContext(r.Context())
+	page := layouts.Base(openPlayRulesPageComponent(rules), activeTheme, sessionType)
 	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render open play rules page", "Failed to render page") {
 		return
 	}
