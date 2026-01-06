@@ -133,6 +133,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/notifications", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: notifications.HandleNotificationsList,
 	}))
+	mux.HandleFunc("/api/v1/notifications/", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: notifications.HandleNotificationRead,
+	}))
 
 	// Auth routes
 	mux.HandleFunc("/login", auth.HandleLoginPage)
