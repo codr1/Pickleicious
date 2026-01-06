@@ -39,38 +39,7 @@ templ MemberBookingForm(data MemberBookingFormData) {
 			class="mt-4 space-y-4">
 			<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)}/>
 
-			<div>
-				<label for="member_time_slot" class="block text-sm font-medium text-gray-700">Time slot</label>
-				<select
-					id="member_time_slot"
-					name="start_time"
-					required
-					disabled?={len(data.AvailableSlots) == 0}
-					onchange="setMemberReservationEndTime(this)"
-					class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
-					if len(data.AvailableSlots) == 0 {
-						<option value="">No slots available</option>
-					} else {
-						for _, slot := range data.AvailableSlots {
-							<option
-								value={slot.StartTime.Format("2006-01-02T15:04")}
-								data-end-time={slot.EndTime.Format("2006-01-02T15:04")}>
-								if slot.Label != "" {
-									{slot.Label}
-								} else {
-									{slot.StartTime.Format("3:04 PM")} - {slot.EndTime.Format("3:04 PM")}
-								}
-							</option>
-						}
-					}
-				</select>
-				<input
-					type="hidden"
-					id="member_end_time"
-					name="end_time"
-					value={defaultEndTimeValue(data.AvailableSlots)}/>
-				<p class="mt-1 text-xs text-gray-500">Select a time slot for your reservation.</p>
-			</div>
+			@MemberBookingDateTime(data)
 
 			<div>
 				<label for="member_court_id" class="block text-sm font-medium text-gray-700">Court</label>
@@ -117,7 +86,70 @@ templ MemberBookingForm(data MemberBookingFormData) {
 		document.addEventListener("DOMContentLoaded", function () {
 			setMemberReservationEndTime(document.getElementById("member_time_slot"));
 		});
+
+		document.body.addEventListener("htmx:afterSwap", function (event) {
+			if (event.target && event.target.id === "member-booking-date-time") {
+				setMemberReservationEndTime(document.getElementById("member_time_slot"));
+			}
+		});
 	</script>
+}
+
+templ MemberBookingDateTime(data MemberBookingFormData) {
+	<div
+		id="member-booking-date-time"
+		hx-get="/member/booking/slots"
+		hx-trigger="change from:select[name^='booking_']"
+		hx-target="#member-booking-date-time"
+		hx-swap="outerHTML"
+		hx-include="#member-booking-date-time"
+		hx-indicator="#member-booking-indicator"
+		class="space-y-4">
+		<div>
+			<label class="block text-sm font-medium text-gray-700">Date</label>
+			@DatePicker(data.DatePicker)
+			<p class="mt-1 text-xs text-gray-500">
+				{fmt.Sprintf("Bookings open up to %d days in advance.", data.MaxAdvanceBookingDays)}
+			</p>
+		</div>
+
+		@MemberBookingSlotSelect(data.AvailableSlots)
+	</div>
+}
+
+templ MemberBookingSlotSelect(slots []MemberBookingSlot) {
+	<div id="member-booking-slot-select">
+		<label for="member_time_slot" class="block text-sm font-medium text-gray-700">Time slot</label>
+		<select
+			id="member_time_slot"
+			name="start_time"
+			required
+			disabled?={len(slots) == 0}
+			onchange="setMemberReservationEndTime(this)"
+			class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+			if len(slots) == 0 {
+				<option value="">No slots available</option>
+			} else {
+				for _, slot := range slots {
+					<option
+						value={slot.StartTime.Format("2006-01-02T15:04")}
+						data-end-time={slot.EndTime.Format("2006-01-02T15:04")}>
+						if slot.Label != "" {
+							{slot.Label}
+						} else {
+							{slot.StartTime.Format("3:04 PM")} - {slot.EndTime.Format("3:04 PM")}
+						}
+					</option>
+				}
+			}
+		</select>
+		<input
+			type="hidden"
+			id="member_end_time"
+			name="end_time"
+			value={defaultEndTimeValue(slots)}/>
+		<p class="mt-1 text-xs text-gray-500">Select a time slot for your reservation.</p>
+	</div>
 }
 
 func defaultEndTimeValue(slots []MemberBookingSlot) string {

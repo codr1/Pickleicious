@@ -162,6 +162,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.Handle("/member/booking/new", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: member.HandleMemberBookingFormNew,
 	}))))
+	mux.Handle("/member/booking/slots", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: member.HandleMemberBookingSlots,
+	}))))
 	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  member.HandleMemberReservationsPartial,
 		http.MethodPost: member.HandleMemberBookingCreate,

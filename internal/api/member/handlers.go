@@ -38,6 +38,7 @@ const memberBookingTimeLayout = "2006-01-02T15:04"
 const memberBookingMinDuration = time.Hour
 const memberBookingDefaultOpensAt = "08:00"
 const memberBookingDefaultClosesAt = "21:00"
+const memberBookingDefaultMaxAdvanceDays int64 = 7
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
@@ -273,6 +274,14 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
+	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+	} else {
+		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+	}
+
 	courtsList, err := q.ListCourts(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load courts")
@@ -286,7 +295,8 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	availableSlots, err := buildMemberBookingSlots(ctx, q, *user.HomeFacilityID, bookingDateFromRequest(r), logger)
+	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
+	availableSlots, err := buildMemberBookingSlots(ctx, q, *user.HomeFacilityID, bookingDate, logger)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load available slots")
 		http.Error(w, "Failed to load available slots", http.StatusInternalServerError)
@@ -294,11 +304,69 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := membertempl.MemberBookingForm(membertempl.MemberBookingFormData{
-		FacilityID:     *user.HomeFacilityID,
-		Courts:         reservationstempl.NewCourtOptions(activeCourts),
-		AvailableSlots: availableSlots,
+		FacilityID:            *user.HomeFacilityID,
+		Courts:                reservationstempl.NewCourtOptions(activeCourts),
+		AvailableSlots:        availableSlots,
+		DatePicker:            membertempl.DatePickerData{Year: bookingDate.Year(), Month: int(bookingDate.Month()), Day: bookingDate.Day()},
+		MaxAdvanceBookingDays: maxAdvanceDays,
 	})
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render member booking form", "Failed to render booking form") {
+		return
+	}
+}
+
+// HandleMemberBookingSlots handles GET /member/booking/slots.
+func HandleMemberBookingSlots(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+	} else {
+		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+	}
+
+	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
+	availableSlots, err := buildMemberBookingSlots(ctx, q, *user.HomeFacilityID, bookingDate, logger)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load available slots")
+		http.Error(w, "Failed to load available slots", http.StatusInternalServerError)
+		return
+	}
+
+	component := membertempl.MemberBookingDateTime(membertempl.MemberBookingFormData{
+		FacilityID:            *user.HomeFacilityID,
+		AvailableSlots:        availableSlots,
+		DatePicker:            membertempl.DatePickerData{Year: bookingDate.Year(), Month: int(bookingDate.Month()), Day: bookingDate.Day()},
+		MaxAdvanceBookingDays: maxAdvanceDays,
+	})
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render booking slots", "Failed to render booking slots") {
 		return
 	}
 }
@@ -348,6 +416,24 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "start_time must be in the future", http.StatusBadRequest)
 		return
 	}
+
+	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+	} else {
+		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+	}
+
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
+	startDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, now.Location())
+	if startDay.After(maxDate) {
+		http.Error(w, fmt.Sprintf("start_time must be within %d days", maxAdvanceDays), http.StatusBadRequest)
+		return
+	}
+
 	endTime, err := parseMemberBookingTime(r.FormValue("end_time"), "end_time")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -707,21 +793,65 @@ func buildReservationWidgetData(
 	return membertempl.NewReservationWidgetData(upcoming), nil
 }
 
-func bookingDateFromRequest(r *http.Request) time.Time {
+func bookingDateFromRequest(r *http.Request, maxAdvanceDays int64) time.Time {
 	now := time.Now()
-	dateParam := strings.TrimSpace(r.URL.Query().Get("date"))
-	if dateParam == "" {
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	}
-	parsed, err := time.ParseInLocation("2006-01-02", dateParam, now.Location())
-	if err != nil {
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	}
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	if parsed.Before(today) {
+	if maxAdvanceDays <= 0 {
+		maxAdvanceDays = memberBookingDefaultMaxAdvanceDays
+	}
+	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
+
+	dateParam := strings.TrimSpace(r.URL.Query().Get("date"))
+	if dateParam != "" {
+		parsed, err := time.ParseInLocation("2006-01-02", dateParam, now.Location())
+		if err == nil {
+			return clampBookingDate(parsed, today, maxDate)
+		}
+	}
+
+	yearParam := strings.TrimSpace(r.URL.Query().Get("booking_year"))
+	monthParam := strings.TrimSpace(r.URL.Query().Get("booking_month"))
+	dayParam := strings.TrimSpace(r.URL.Query().Get("booking_day"))
+	if yearParam == "" || monthParam == "" || dayParam == "" {
 		return today
 	}
-	return parsed
+
+	year, err := strconv.Atoi(yearParam)
+	if err != nil {
+		return today
+	}
+	month, err := strconv.Atoi(monthParam)
+	if err != nil || month < 1 || month > 12 {
+		return today
+	}
+	day, err := strconv.Atoi(dayParam)
+	if err != nil || day < 1 {
+		return today
+	}
+
+	daysInMonth := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, now.Location()).Day()
+	if day > daysInMonth {
+		day = daysInMonth
+	}
+	selected := time.Date(year, time.Month(month), day, 0, 0, 0, 0, now.Location())
+	return clampBookingDate(selected, today, maxDate)
+}
+
+func clampBookingDate(selected time.Time, min time.Time, max time.Time) time.Time {
+	if selected.Before(min) {
+		return min
+	}
+	if selected.After(max) {
+		return max
+	}
+	return selected
+}
+
+func normalizedMaxAdvanceBookingDays(value int64) int64 {
+	if value <= 0 {
+		return memberBookingDefaultMaxAdvanceDays
+	}
+	return value
 }
 
 func buildMemberBookingSlots(

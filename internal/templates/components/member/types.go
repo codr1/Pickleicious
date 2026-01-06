@@ -94,10 +94,47 @@ type MemberBookingSlot struct {
 	Label     string
 }
 
+type DatePickerData struct {
+	Year  int
+	Month int
+	Day   int
+}
+
+func (d DatePickerData) YearOptions() []int {
+	now := time.Now()
+	return []int{now.Year(), now.Year() + 1}
+}
+
+func (d DatePickerData) MonthOptions() []int {
+	months := make([]int, 12)
+	for i := 1; i <= 12; i++ {
+		months[i-1] = i
+	}
+	return months
+}
+
+func (d DatePickerData) DayOptions() []int {
+	now := time.Now()
+	year := d.Year
+	month := d.Month
+	if year <= 0 || month < 1 || month > 12 {
+		year = now.Year()
+		month = int(now.Month())
+	}
+	daysInMonth := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, now.Location()).Day()
+	days := make([]int, daysInMonth)
+	for i := 1; i <= daysInMonth; i++ {
+		days[i-1] = i
+	}
+	return days
+}
+
 type MemberBookingFormData struct {
-	FacilityID     int64
-	Courts         []reservations.CourtOption
-	AvailableSlots []MemberBookingSlot
+	FacilityID            int64
+	Courts                []reservations.CourtOption
+	AvailableSlots        []MemberBookingSlot
+	DatePicker            DatePickerData
+	MaxAdvanceBookingDays int64
 }
 
 func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []ReservationSummary {
