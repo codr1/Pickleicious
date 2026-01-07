@@ -269,6 +269,12 @@ Organization (corporate entity)
 | reservation_courts | Multi-court junction |
 | reservation_participants | Multi-member junction |
 
+### Check-in System
+
+| Table | Purpose |
+|-------|---------|
+| facility_visits | Tracks member arrivals: user_id, facility_id, check_in_time, check_out_time (nullable), checked_in_by_staff_id, activity_type, related_reservation_id |
+
 ### Open Play System
 
 | Table | Purpose |
@@ -972,6 +978,7 @@ Authorization failures are logged with facility_id and user_id.
 | PUT | `/api/v1/members/{id}` | Update member |
 | DELETE | `/api/v1/members/{id}` | Soft delete member |
 | GET | `/api/v1/members/{id}/billing` | Billing info |
+| GET | `/api/v1/members/{id}/visits` | Member visit history (last 10 visits) |
 | GET | `/api/v1/members/photo/{id}` | Member photo |
 | POST | `/api/v1/members/restore` | Restore/create decision |
 
@@ -1044,6 +1051,15 @@ Authorization failures are logged with facility_id and user_id.
 | GET | `/admin/operating-hours` | Operating hours admin page |
 | PUT | `/api/v1/operating-hours/{day_of_week}` | Update hours for a day (0=Sunday through 6=Saturday) |
 | POST | `/api/v1/facility-settings` | Update facility booking configuration |
+
+### Check-in
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/checkin` | Check-in page with search and arrivals list |
+| GET | `/api/v1/checkin/search` | Search members for check-in |
+| POST | `/api/v1/checkin` | Record member check-in |
+| POST | `/api/v1/checkin/activity` | Update visit activity type after check-in |
 
 ### Staff
 
@@ -1336,6 +1352,7 @@ pickleicious/
 │   │   ├── apiutil/         # Shared handler utilities
 │   │   ├── auth/            # Authentication (handlers, password, session)
 │   │   ├── authz/           # Authorization helpers
+│   │   ├── checkin/         # Front desk check-in
 │   │   ├── courts/          # Court/calendar
 │   │   ├── htmx/            # HTMX helpers
 │   │   ├── member/          # Member portal handlers
@@ -1357,8 +1374,10 @@ pickleicious/
 │   ├── request/             # Request parsing utilities
 │   ├── templates/           # Templ components
 │   │   └── components/
+│   │       ├── checkin/         # Check-in page and cards
 │   │       ├── courts/          # Calendar components
 │   │       ├── member/          # Member portal and booking UI
+│   │       ├── members/         # Member list and visit history
 │   │       ├── notifications/   # Notification panel and badge
 │   │       ├── operatinghours/  # Operating hours UI
 │   │       ├── reservations/    # Booking form components
@@ -1497,6 +1516,91 @@ Members can cancel their own reservations with these restrictions:
 
 ---
 
+## Front Desk Check-in
+
+Staff use a dedicated check-in interface at `/checkin` for fast facility arrivals. The page is optimized for high-volume check-ins with minimal clicks.
+
+### Check-in Page Layout
+
+```
++-----------------------------------+------------------+
+|          Search Box               |   Today's        |
+|    (large, auto-focus)            |   Arrivals       |
++-----------------------------------+                  |
+|                                   |   - John D 8:15  |
+|    Search Results                 |   - Jane S 8:22  |
+|    +---------------------------+  |   - Bob K 8:30   |
+|    | Photo | Name  | Check In |  |   ...            |
+|    +---------------------------+  |                  |
+|    | Photo | Name  | Check In |  |                  |
+|    +---------------------------+  |                  |
+|                                   |                  |
++-----------------------------------+------------------+
+```
+
+### Check-in Workflow
+
+1. **Search**: Staff types member name, email, or phone in search box
+2. **Results**: Matching members display as cards with photo, name, membership level, and status badges
+3. **Status Badges**:
+   - Red badge: Waiver not signed - blocks check-in
+   - Yellow badge: Membership level 0 (unverified guest) - blocks check-in
+4. **Check In**: Click button to record arrival
+5. **Success**: Shows member photo, confirmation, and today's activities
+
+### Blocking and Override
+
+Check-in is blocked for members with issues:
+
+| Issue | Badge | Message |
+|-------|-------|---------|
+| Waiver unsigned | Red | "Waiver missing. Ask the member to sign the waiver before check-in." |
+| Membership unverified | Yellow | "Membership is unverified. Confirm membership status before check-in." |
+
+Staff can override blocks with confirmation. The override flag is passed to the check-in request, allowing staff discretion for exceptional cases.
+
+### Activity Selection
+
+After successful check-in, staff can select what the member is arriving for:
+
+| Activity Type | Description |
+|---------------|-------------|
+| court_reservation | Member has a court booking |
+| open_play | Joining an open play session |
+| league | League match participation |
+
+The activity selection updates the visit record via `/api/v1/checkin/activity`. Activities display from the member's today's schedule at this facility (court reservations, open play signups, league matches).
+
+### Today's Arrivals
+
+The right panel shows all facility arrivals for the current day:
+- Member name and check-in time
+- Updates automatically after each check-in
+- Sorted by most recent first
+
+### Visit History
+
+Member detail view (existing `/api/v1/members/{id}`) includes visit history showing the last 10 visits with:
+- Check-in timestamp
+- Facility name
+- Activity type (if recorded)
+
+### Multiple Check-ins
+
+The system allows multiple check-ins per day without warning. This supports members who:
+- Arrive for morning open play, leave, return for evening league
+- Step out for lunch and return
+- Attend multiple sessions throughout the day
+
+### Authorization
+
+Check-in is facility-scoped:
+- Staff can only check in members at their home facility
+- Requires `is_staff=true` authentication
+- Facility ID passed via query parameter
+
+---
+
 ## Staff Notifications
 
 Staff receive in-app notifications for operational events generated by the open play engine (session cancellations, court scaling). The notification bell icon in the top navigation displays for staff users only.
@@ -1558,6 +1662,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Staff Management | Complete | CRUD, facility-scoped authorization, deactivation with session handling |
 | Staff Notifications | Complete | Bell icon, dropdown panel, unread badge, mark-as-read, facility scoping |
 | Member Portal | Complete | Self-service portal, court booking, reservation cancellation |
+| Check-in Flow | Complete | Search, check-in, activity selection, arrivals list, visit history |
 
 ### Partial Implementation
 
@@ -1572,7 +1677,6 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 
 | Feature | Notes |
 |---------|-------|
-| Check-in Flow | The tap-to-arrive workflow |
 | Member Notifications | Email/SMS delivery |
 | Payment Processing | Stripe/Square integration |
 | Reporting | Usage stats, financials |

@@ -1,0 +1,84 @@
+// internal/templates/components/checkin/success.templ
+package checkin
+
+import "fmt"
+
+templ CheckinSuccess(member CheckinMember, currentVisit FacilityVisit, activities []CheckinActivity, visits []FacilityVisit, facilityID int64) {
+	<div class="bg-white border border-green-200 rounded-2xl p-6 shadow-sm">
+		<div class="flex items-center gap-4">
+			@CheckinMemberAvatar(member, "w-16 h-16")
+			<div>
+				<p class="text-sm text-green-700 font-semibold">Check-in complete</p>
+				<h2 class="text-xl font-semibold text-gray-900">{member.DisplayName()}</h2>
+				<p class="text-sm text-gray-500">Welcome in for today.</p>
+			</div>
+			<span class="ml-auto text-xs font-semibold text-green-700 bg-green-100 px-3 py-1 rounded-full">Success</span>
+		</div>
+
+		<div class="mt-6">
+			<div class="flex items-center justify-between">
+				<h3 class="text-sm font-semibold text-gray-700">Select activity</h3>
+				if currentVisit.ActivityType.Valid {
+					<span class="text-xs text-gray-500">Current: {currentVisit.ActivityLabel()}</span>
+				}
+			</div>
+			<div class="mt-3 space-y-2">
+				if len(activities) == 0 {
+					<div class="text-sm text-gray-500">No reservations or open play signups found for today.</div>
+				} else {
+					for _, activity := range activities {
+					<form
+						class="block"
+						hx-post="/api/v1/checkin/activity"
+						hx-target="#checkin-success"
+						hx-swap="outerHTML">
+						<input type="hidden" name="visitId" value={fmt.Sprintf("%d", currentVisit.ID)}/>
+						<input type="hidden" name="userId" value={fmt.Sprintf("%d", member.ID)}/>
+						<input type="hidden" name="facilityId" value={fmt.Sprintf("%d", facilityID)}/>
+						<input type="hidden" name="activityType" value={activity.ActivityType}/>
+						<input type="hidden" name="relatedReservationId" value={fmt.Sprintf("%d", activity.ReservationID)}/>
+						<button
+							type="submit"
+							class={templ.Classes(
+								"w-full text-left flex items-center justify-between rounded-lg border px-4 py-3 transition",
+								templ.KV("border-green-300 bg-green-50", activity.SelectedFor(currentVisit)),
+								templ.KV("border-gray-200 bg-gray-50 hover:border-blue-300", !activity.SelectedFor(currentVisit)),
+							)}>
+							<div>
+								<p class="text-sm font-semibold text-gray-900">{activity.Label()}</p>
+								<p class="text-xs text-gray-500">{activity.TimeLabel()}</p>
+								if activity.CourtSummary() != "" {
+									<p class="text-xs text-gray-400">{activity.CourtSummary()}</p>
+								}
+							</div>
+							if activity.SelectedFor(currentVisit) {
+								<span class="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">Selected</span>
+							} else {
+								<span class="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded-full">Set</span>
+							}
+						</button>
+					</form>
+					}
+				}
+			</div>
+		</div>
+
+		<div class="mt-6">
+			<h3 class="text-sm font-semibold text-gray-700">Today's activities</h3>
+			<div class="mt-3 space-y-2">
+				if len(visits) == 0 {
+					<div class="text-sm text-gray-500">No activities logged yet today.</div>
+				} else {
+					for _, visit := range visits {
+					<div class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">
+						<div>
+							<p class="text-sm font-semibold text-gray-900">{visit.ActivityLabel()}</p>
+							<p class="text-xs text-gray-500">Checked in at {visit.CheckInTimeLabel()}</p>
+						</div>
+					</div>
+					}
+				}
+			</div>
+		</div>
+	</div>
+}

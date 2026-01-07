@@ -433,6 +433,53 @@ func HandleMemberBilling(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func HandleMemberVisits(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 5 {
+		http.Error(w, "Invalid visits URL", http.StatusBadRequest)
+		return
+	}
+
+	memberID, err := strconv.ParseInt(parts[len(parts)-2], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid member ID", http.StatusBadRequest)
+		return
+	}
+
+	visits, err := queries.ListRecentVisitsByUser(r.Context(), memberID)
+	if err != nil {
+		logger.Error().Err(err).Int64("member_id", memberID).Msg("Failed to fetch visit history")
+		http.Error(w, "Failed to fetch visit history", http.StatusInternalServerError)
+		return
+	}
+
+	facilityNames := make(map[int64]string)
+	facilities, err := queries.ListFacilities(r.Context())
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch facilities for visit history")
+	} else {
+		for _, facility := range facilities {
+			facilityNames[facility.ID] = facility.Name
+		}
+	}
+
+	templateVisits := membertempl.NewVisitHistory(visits, facilityNames)
+	err = membertempl.VisitsHistory(templateVisits).Render(r.Context(), w)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to render visit history")
+		http.Error(w, "Failed to render visit history", http.StatusInternalServerError)
+		return
+	}
+}
+
 func HandleNewMemberForm(w http.ResponseWriter, r *http.Request) {
 	component := membertempl.NewMemberForm(membertempl.Member{})
 	component.Render(r.Context(), w)

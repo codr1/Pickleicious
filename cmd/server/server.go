@@ -14,6 +14,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/auth"
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/checkin"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
@@ -50,6 +51,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
+	checkin.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
 	member.InitHandlers(database)
 	operatinghours.InitHandlers(database.Queries)
@@ -195,6 +197,11 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 			return
 		}
 
+		if strings.HasSuffix(path, "/visits") {
+			members.HandleMemberVisits(w, r)
+			return
+		}
+
 		// Handle other member routes
 		switch r.Method {
 		case http.MethodGet:
@@ -211,6 +218,20 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+
+	// Check-in routes
+	mux.HandleFunc("/checkin", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: checkin.HandleCheckinPage,
+	}))
+	mux.HandleFunc("/api/v1/checkin/search", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: checkin.HandleCheckinSearch,
+	}))
+	mux.HandleFunc("/api/v1/checkin", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: checkin.HandleCheckin,
+	}))
+	mux.HandleFunc("/api/v1/checkin/activity", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: checkin.HandleCheckinActivityUpdate,
+	}))
 
 	// Staff routes
 	mux.HandleFunc("/staff", staff.HandleStaffPage)

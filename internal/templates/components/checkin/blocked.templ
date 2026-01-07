@@ -1,0 +1,19 @@
+// internal/templates/components/checkin/blocked.templ
+package checkin
+
+templ CheckinBlocked(member CheckinMember, message string, badge string) {
+	<div class="p-6">
+		<div class={templ.Classes(
+			"border rounded-2xl p-5 flex items-start gap-4",
+			templ.KV("border-red-200 bg-red-50 text-red-900", badge == "red"),
+			templ.KV("border-yellow-200 bg-yellow-50 text-yellow-900", badge == "yellow"),
+		)}>
+			@CheckinMemberAvatar(member, "w-12 h-12")
+			<div>
+				<p class="text-sm font-semibold uppercase tracking-wide">Check-in blocked</p>
+				<p class="mt-1 text-base font-semibold">{member.DisplayName()}</p>
+				<p class="mt-2 text-sm">{message}</p>
+			</div>
+		</div>
+	</div>
+}
