@@ -256,7 +256,7 @@ func HandleOpenPlayRuleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	autoScaleEnabled := parseBoolField(r, "auto_scale_enabled")
+	autoScaleEnabled := apiutil.ParseBool(r.FormValue("auto_scale_enabled"))
 
 	if err := validateOpenPlayRuleInput(minParticipants, maxParticipantsPerCourt, cancellationCutoffMinutes, minCourts, maxCourts); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -406,7 +406,7 @@ func HandleOpenPlayRuleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	autoScaleEnabled := parseBoolField(r, "auto_scale_enabled")
+	autoScaleEnabled := apiutil.ParseBool(r.FormValue("auto_scale_enabled"))
 
 	if err := validateOpenPlayRuleInput(minParticipants, maxParticipantsPerCourt, cancellationCutoffMinutes, minCourts, maxCourts); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1102,16 +1102,6 @@ func parseIntField(r *http.Request, name string) (int64, error) {
 		return 0, apiutil.FieldError{Field: name, Reason: "must be a number"}
 	}
 	return parsed, nil
-}
-
-func parseBoolField(r *http.Request, name string) bool {
-	value := strings.ToLower(strings.TrimSpace(r.FormValue(name)))
-	switch value {
-	case "1", "true", "on", "yes":
-		return true
-	default:
-		return false
-	}
 }
 
 func auditBoolValue(value sql.NullBool) any {

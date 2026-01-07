@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -171,7 +170,7 @@ func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 
 	searchTerm := strings.TrimSpace(r.URL.Query().Get("q"))
 	if searchTerm == "" {
-		if isHTMXRequest(r) {
+		if apiutil.IsHTMXRequest(r) {
 			component := checkintempl.CheckinMembersList([]checkintempl.CheckinMember{}, facilityID)
 			apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render empty check-in search results", "Failed to render search results")
 			return
@@ -219,7 +218,7 @@ func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if isHTMXRequest(r) {
+	if apiutil.IsHTMXRequest(r) {
 		component := checkintempl.CheckinMembersList(checkintempl.NewCheckinMembers(rows), facilityID)
 		apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render check-in search results", "Failed to render search results")
 		return
@@ -300,7 +299,7 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 				WaiverSigned:    member.WaiverSigned,
 				MembershipLevel: member.MembershipLevel,
 			}
-			if isHTMXRequest(r) {
+			if apiutil.IsHTMXRequest(r) {
 				renderCheckinBlocked(r.Context(), w, blocked, member)
 				return
 			}
@@ -315,7 +314,7 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 				WaiverSigned:    member.WaiverSigned,
 				MembershipLevel: member.MembershipLevel,
 			}
-			if isHTMXRequest(r) {
+			if apiutil.IsHTMXRequest(r) {
 				renderCheckinBlocked(r.Context(), w, blocked, member)
 				return
 			}
@@ -348,7 +347,7 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHTMXRequest(r) {
+	if apiutil.IsHTMXRequest(r) {
 		currentVisit := checkintempl.NewFacilityVisit(visit)
 		visits, err := listTodayVisitsByUser(ctx, q, req.UserID)
 		if err != nil {
@@ -512,7 +511,7 @@ func HandleCheckinActivityUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isHTMXRequest(r) {
+	if apiutil.IsHTMXRequest(r) {
 		member, err := q.GetMemberByID(ctx, req.UserID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -557,10 +556,6 @@ func HandleCheckinActivityUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func isHTMXRequest(r *http.Request) bool {
-	return r.Header.Get("HX-Request") == "true"
-}
-
 func decodeCheckinRequest(r *http.Request) (checkinRequest, error) {
 	var req checkinRequest
 	if apiutil.IsJSONRequest(r) {
@@ -574,11 +569,11 @@ func decodeCheckinRequest(r *http.Request) (checkinRequest, error) {
 		return req, err
 	}
 
-	userID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("userId"), r.FormValue("user_id")), "userId")
+	userID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("userId"), r.FormValue("user_id")), "userId")
 	if err != nil {
 		return req, err
 	}
-	facilityID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("facilityId"), r.FormValue("facility_id")), "facilityId")
+	facilityID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("facilityId"), r.FormValue("facility_id")), "facilityId")
 	if err != nil {
 		return req, err
 	}
@@ -595,7 +590,7 @@ func decodeCheckinRequest(r *http.Request) (checkinRequest, error) {
 	req.FacilityID = facilityID
 	req.ActivityType = apiutil.FirstNonEmpty(r.FormValue("activityType"), r.FormValue("activity_type"))
 	req.RelatedReservationID = relatedReservationID
-	req.Override = parseBool(r.FormValue("override"))
+	req.Override = apiutil.ParseBool(r.FormValue("override"))
 	return req, nil
 }
 
@@ -612,15 +607,15 @@ func decodeCheckinActivityUpdateRequest(r *http.Request) (checkinActivityUpdateR
 		return req, err
 	}
 
-	visitID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("visitId"), r.FormValue("visit_id")), "visitId")
+	visitID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("visitId"), r.FormValue("visit_id")), "visitId")
 	if err != nil {
 		return req, err
 	}
-	userID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("userId"), r.FormValue("user_id")), "userId")
+	userID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("userId"), r.FormValue("user_id")), "userId")
 	if err != nil {
 		return req, err
 	}
-	facilityID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("facilityId"), r.FormValue("facility_id")), "facilityId")
+	facilityID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("facilityId"), r.FormValue("facility_id")), "facilityId")
 	if err != nil {
 		return req, err
 	}
@@ -639,23 +634,6 @@ func decodeCheckinActivityUpdateRequest(r *http.Request) (checkinActivityUpdateR
 	req.ActivityType = apiutil.FirstNonEmpty(r.FormValue("activityType"), r.FormValue("activity_type"))
 	req.RelatedReservationID = relatedReservationID
 	return req, nil
-}
-
-func parseRequiredInt64Field(raw string, field string) (int64, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, fmt.Errorf("%s is required", field)
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", field)
-	}
-	return value, nil
-}
-
-func parseBool(raw string) bool {
-	raw = strings.TrimSpace(raw)
-	return raw == "1" || strings.EqualFold(raw, "true") || strings.EqualFold(raw, "yes")
 }
 
 func listTodayVisitsWithMembers(ctx context.Context, q *dbgen.Queries, facilityID int64) ([]checkintempl.FacilityVisit, error) {

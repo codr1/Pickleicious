@@ -797,7 +797,7 @@ func decodeThemeRequest(r *http.Request) (themeRequest, error) {
 
 	return themeRequest{
 		FacilityID:     facilityID,
-		IsSystem:       parseBoolField(apiutil.FirstNonEmpty(r.FormValue("is_system"), r.FormValue("isSystem"))),
+		IsSystem:       apiutil.ParseBool(apiutil.FirstNonEmpty(r.FormValue("is_system"), r.FormValue("isSystem"))),
 		Name:           apiutil.FirstNonEmpty(r.FormValue("name")),
 		PrimaryColor:   apiutil.FirstNonEmpty(r.FormValue("primary_color"), r.FormValue("primaryColor")),
 		SecondaryColor: apiutil.FirstNonEmpty(r.FormValue("secondary_color"), r.FormValue("secondaryColor")),
@@ -838,29 +838,12 @@ func decodeFacilityThemeRequest(r *http.Request) (facilityThemeRequest, error) {
 		return facilityThemeRequest{}, err
 	}
 
-	themeID, err := parseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("theme_id"), r.FormValue("themeId")), "theme_id")
+	themeID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("theme_id"), r.FormValue("themeId")), "theme_id")
 	if err != nil {
 		return facilityThemeRequest{}, err
 	}
 
 	return facilityThemeRequest{ThemeID: themeID}, nil
-}
-
-func parseRequiredInt64Field(raw string, field string) (int64, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, fmt.Errorf("%s is required", field)
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", field)
-	}
-	return value, nil
-}
-
-func parseBoolField(raw string) bool {
-	value := strings.ToLower(strings.TrimSpace(raw))
-	return value == "true" || value == "1" || value == "yes" || value == "on"
 }
 
 func newThemeEditorData(facilityID int64) themetempl.ThemeEditorData {

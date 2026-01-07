@@ -142,6 +142,32 @@ func FirstNonEmpty(values ...string) string {
 	return ""
 }
 
+func ParseRequiredInt64Field(raw string, field string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", field)
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", field)
+	}
+	return value, nil
+}
+
+func ParseBool(raw string) bool {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	switch raw {
+	case "1", "true", "on", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+func IsHTMXRequest(r *http.Request) bool {
+	return r.Header.Get("HX-Request") == "true"
+}
+
 func IsSQLiteForeignKeyViolation(err error) bool {
 	var sqliteErr sqlite3.Error
 	if !errors.As(err, &sqliteErr) {

@@ -832,7 +832,7 @@ func decodeReservationRequest(r *http.Request) (reservationRequest, error) {
 
 	req.StartTime = strings.TrimSpace(r.FormValue("start_time"))
 	req.EndTime = strings.TrimSpace(r.FormValue("end_time"))
-	req.IsOpenEvent = parseBoolField(r.FormValue("is_open_event"))
+	req.IsOpenEvent = apiutil.ParseBool(r.FormValue("is_open_event"))
 
 	req.TeamsPerCourt, err = parseOptionalPointer(r.FormValue("teams_per_court"), "teams_per_court")
 	if err != nil {
@@ -1054,16 +1054,6 @@ func parseOptionalPointer(value, name string) (*int64, error) {
 		return nil, apiutil.FieldError{Field: name, Reason: "must be a number"}
 	}
 	return &parsed, nil
-}
-
-func parseBoolField(value string) bool {
-	value = strings.ToLower(strings.TrimSpace(value))
-	switch value {
-	case "1", "true", "on", "yes":
-		return true
-	default:
-		return false
-	}
 }
 
 func facilityIDFromRequest(r *http.Request) (int64, error) {
