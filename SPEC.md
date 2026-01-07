@@ -263,7 +263,7 @@ Organization (corporate entity)
 
 | Table | Purpose |
 |-------|---------|
-| reservation_types | Booking type lookup (seeded: OPEN_PLAY, GAME, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE) |
+| reservation_types | Booking type lookup (system types: GAME, OPEN_PLAY, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE, LESSON, TOURNAMENT, CLINIC) |
 | recurrence_rules | Recurring patterns (WEEKLY, BIWEEKLY, MONTHLY) |
 | reservations | Booking records |
 | reservation_courts | Multi-court junction |
@@ -458,7 +458,9 @@ Sessions are validated again at confirmation time. If the session count changes,
 
 Courts can be reserved for different purposes, and the system handles each appropriately.
 
-### Reservation Types (Seeded)
+### Reservation Types (System)
+
+System reservation types are seeded on database creation and protected from deletion. User-defined types can be created but system types cannot be removed.
 
 | Type | Description | Multi-Court | Participants |
 |------|-------------|-------------|--------------|
@@ -468,6 +470,9 @@ Courts can be reserved for different purposes, and the system handles each appro
 | OPEN_PLAY | Drop-in rotation session | Yes | Dynamic signup |
 | MAINTENANCE | Blocks court from booking | No | None |
 | LEAGUE | Recurring competitive play | Yes | Team rosters |
+| LESSON | One-on-one or small group instruction | Optional | Pro + students |
+| TOURNAMENT | Competitive tournament play | Yes | Registered players |
+| CLINIC | Group instructional session | Optional | Instructor + participants |
 
 ### Reservation Structure
 
