@@ -50,6 +50,7 @@
 #### 0.0.1 Seed System Reservation Types
 **Problem**: The "GAME" reservation type is hard-coded but not guaranteed to exist in the database.
 
+<!-- BEGIN WIP: STORY-0024 -->
 **Required**:
 - Add SEED data for system reservation types (not user-editable):
   - GAME - Casual/pickup play (member self-service)
@@ -62,6 +63,7 @@
   - MAINTENANCE - Court blocked for maintenance
 - Add `is_system` boolean column to reservation_types table
 - Validate system types exist at startup
+<!-- END WIP -->
 
 #### 0.0.2 Simple Date Picker for Member Booking
 
