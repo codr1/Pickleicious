@@ -263,7 +263,6 @@ CREATE TABLE reservation_types (
     name TEXT NOT NULL UNIQUE,  -- e.g. 'GAME', 'PRO_SESSION', 'EVENT', 'MAINTENANCE', 'LEAGUE', etc.
     description TEXT,           -- optional: describe this type in detail
     color TEXT,                 -- optional: store a default color code like '#FF0000'
-    is_system BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

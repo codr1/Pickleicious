@@ -105,17 +105,17 @@ WHERE rp.reservation_id = @reservation_id
 ORDER BY u.last_name, u.first_name;
 
 -- name: GetReservationType :one
-SELECT id, name, description, color, is_system, created_at, updated_at
+SELECT id, name, description, color, created_at, updated_at
 FROM reservation_types
 WHERE id = @id;
 
 -- name: GetReservationTypeByName :one
-SELECT id, name, description, color, is_system, created_at, updated_at
+SELECT id, name, description, color, created_at, updated_at
 FROM reservation_types
 WHERE LOWER(name) = LOWER(@name);
 
 -- name: ListReservationTypes :many
-SELECT id, name, description, color, is_system, created_at, updated_at
+SELECT id, name, description, color, created_at, updated_at
 FROM reservation_types
 ORDER BY name;
 
