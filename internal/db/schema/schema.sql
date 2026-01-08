@@ -21,6 +21,7 @@ CREATE TABLE facilities (
     active_theme_id INTEGER,
     max_advance_booking_days INTEGER NOT NULL DEFAULT 7,
     max_member_reservations INTEGER NOT NULL DEFAULT 30,
+    lesson_min_notice_hours INTEGER NOT NULL DEFAULT 24,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id),
@@ -132,6 +133,22 @@ CREATE TABLE staff (
     FOREIGN KEY (home_facility_id) REFERENCES facilities(id)
 );
 
+CREATE TABLE pro_unavailability (
+    id INTEGER PRIMARY KEY,
+    pro_id INTEGER NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    reason TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (start_time < end_time),
+    FOREIGN KEY (pro_id) REFERENCES staff(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_pro_unavailability_pro_id ON pro_unavailability(pro_id);
+CREATE INDEX idx_pro_unavailability_start_time ON pro_unavailability(start_time);
+CREATE INDEX idx_pro_unavailability_end_time ON pro_unavailability(end_time);
+
 
 --------- Courts ----------
 CREATE TABLE courts (
@@ -207,6 +224,7 @@ CREATE TABLE open_play_sessions (
     cancellation_reason TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (start_time < end_time),
     CHECK (status IN ('scheduled', 'cancelled', 'completed')),
     CHECK (current_court_count >= 0),
     FOREIGN KEY (facility_id) REFERENCES facilities(id),
@@ -300,6 +318,7 @@ CREATE TABLE reservations (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    CHECK (start_time < end_time),
     FOREIGN KEY (facility_id)         REFERENCES facilities(id),
     FOREIGN KEY (reservation_type_id) REFERENCES reservation_types(id),
     FOREIGN KEY (recurrence_rule_id)  REFERENCES recurrence_rules(id),

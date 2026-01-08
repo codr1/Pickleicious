@@ -64,6 +64,8 @@ type ReservationSummary struct {
 	FacilityName        string
 	CourtName           string
 	ReservationTypeName string
+	ProFirstName        string
+	ProLastName         string
 	StartTime           time.Time
 	EndTime             time.Time
 	IsOpenEvent         bool
@@ -92,6 +94,18 @@ type ReservationWidgetData struct {
 type MemberBookingSlot struct {
 	StartTime time.Time
 	EndTime   time.Time
+	Label     string
+}
+
+type LessonProCard struct {
+	ID       int64
+	Name     string
+	Initials string
+}
+
+type LessonSlotOption struct {
+	StartTime string
+	EndTime   string
 	Label     string
 }
 
@@ -138,12 +152,28 @@ type MemberBookingFormData struct {
 	MaxAdvanceBookingDays int64
 }
 
+type LessonBookingFormData struct {
+	Pros                  []LessonProCard
+	Slots                 []LessonSlotOption
+	DatePicker            DatePickerData
+	SelectedProID         int64
+	MaxAdvanceBookingDays int64
+}
+
 func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []ReservationSummary {
 	summaries := make([]ReservationSummary, len(rows))
 	for i, row := range rows {
 		var reservationTypeName string
 		if row.ReservationTypeName.Valid {
 			reservationTypeName = row.ReservationTypeName.String
+		}
+		var proFirstName string
+		if row.ProFirstName.Valid {
+			proFirstName = row.ProFirstName.String
+		}
+		var proLastName string
+		if row.ProLastName.Valid {
+			proLastName = row.ProLastName.String
 		}
 		courtName := row.CourtName
 		summaries[i] = ReservationSummary{
@@ -152,6 +182,8 @@ func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []Reserva
 			FacilityName:        row.FacilityName,
 			CourtName:           courtName,
 			ReservationTypeName: reservationTypeName,
+			ProFirstName:        proFirstName,
+			ProLastName:         proLastName,
 			StartTime:           row.StartTime,
 			EndTime:             row.EndTime,
 			IsOpenEvent:         row.IsOpenEvent,
@@ -196,4 +228,23 @@ func (r ReservationSummary) OtherParticipantsLabel() string {
 		return "No other participants"
 	}
 	return strings.Join(r.OtherParticipants, ", ")
+}
+
+func (r ReservationSummary) IsProSession() bool {
+	return strings.EqualFold(r.ReservationTypeName, "PRO_SESSION")
+}
+
+func (r ReservationSummary) ProName() string {
+	name := strings.TrimSpace(strings.TrimSpace(r.ProFirstName) + " " + strings.TrimSpace(r.ProLastName))
+	if name == "" {
+		return "TBD"
+	}
+	return name
+}
+
+func defaultLessonEndTimeValue(slots []LessonSlotOption) string {
+	if len(slots) == 0 {
+		return ""
+	}
+	return slots[0].EndTime
 }

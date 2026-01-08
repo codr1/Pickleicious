@@ -522,6 +522,7 @@ These calendar interactions are designed but not yet implemented:
 
 > **GitHub Issue #21 [TH3.0]:** Light/Dark Theme Variant System
 
+<!-- BEGIN WIP: STORY-0028 -->
 **Transformation Rules:**
 ```typescript
 // HSL-based transformation
@@ -543,11 +544,13 @@ function transformColor(color: string, mode: 'light' | 'dark'): string {
 - [ ] Handle backgrounds, text, borders, shadows
 - [ ] Support @prefers-color-scheme media query
 - [ ] Manual override capability
+<!-- END WIP -->
 
 ### 7.5 Theme Preference Management
 
 > **GitHub Issue #22 [TH3.3]:** Theme Preference Management System
 
+<!-- BEGIN WIP: STORY-0028 -->
 **Preference Hierarchy:**
 1. User explicit settings (highest priority)
 2. System preferences (`prefers-color-scheme`)
@@ -562,6 +565,7 @@ function transformColor(color: string, mode: 'light' | 'dark'): string {
 - [ ] System preference detection
 - [ ] Fallback chain
 - [ ] Initial load management
+<!-- END WIP -->
 
 ### 7.6 Theme Transitions
 
@@ -1773,7 +1777,9 @@ Video technology and digital scoreboards create a premium, professional experien
 
 - **Menu Toggle:** Opens slide-out navigation
 - **Global Search:** Debounced search (500ms) - ✅ Fixed (#31)
+<!-- BEGIN WIP: STORY-0028 -->
 - **Theme Toggle:** Light/dark mode switch
+<!-- END WIP -->
 
 ### 9.3 Slide-Out Menu
 

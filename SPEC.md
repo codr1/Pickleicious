@@ -138,7 +138,7 @@ Each facility operates in its own timezone and sets its own hours. A facility mi
 - Name, slug, timezone
 - Active theme selection
 - Operating hours per day of week
-- Booking configuration (max_advance_booking_days, max_member_reservations)
+- Booking configuration (max_advance_booking_days, max_member_reservations, lesson_min_notice_hours)
 
 ### Courts
 
@@ -213,7 +213,7 @@ Staff operate the facility. Roles include:
 | Admin | Full system access, manage other staff, configure facility settings |
 | Manager | Day-to-day operations, manage members and reservations, run reports |
 | Desk | Check members in, handle walk-ins, process payments |
-| Pro | Teaching professional, assigned to lessons and clinics |
+| Pro | Teaching professional, assigned to lessons and clinics, manage own unavailability |
 
 Staff can belong to a specific facility (the front desk person at Downtown) or operate at the organization level (the owner who oversees all locations).
 
@@ -270,6 +270,7 @@ Organization (corporate entity)
 | reservation_participants | Multi-member junction |
 | reservation_cancellations | Cancellation log: reservation_id, cancelled_by_user_id, cancelled_at, refund_percentage_applied, fee_waived, hours_before_start |
 | cancellation_policy_tiers | Per-facility refund tiers: facility_id, min_hours_before, refund_percentage |
+| pro_unavailability | Time blocks when pros are unavailable for lessons |
 
 ### Check-in System
 
@@ -453,6 +454,35 @@ Staff deactivation performs a soft delete by setting user status to 'inactive'. 
 3. A confirmation hash prevents race conditions if sessions change between modal display and confirmation
 
 Sessions are validated again at confirmation time. If the session count changes, the operation aborts and forces a fresh decision.
+
+### Pro Unavailability
+
+Teaching pros (staff with role='pro') can mark themselves as unavailable for specific time blocks. These blocks prevent members from booking lessons during those times.
+
+#### Unavailability Management
+
+Pros access unavailability management at `/staff/unavailability`. The interface allows:
+
+- **View blocks**: List of all future unavailability blocks for the logged-in pro
+- **Create block**: Add new unavailability with start time, end time, and optional reason
+- **Delete block**: Remove an unavailability block (only own blocks)
+
+#### Unavailability Rules
+
+| Rule | Description |
+|------|-------------|
+| Pro-scoped | Pros can only manage their own unavailability |
+| Future only | Start time must be in the future when creating |
+| Valid range | End time must be after start time |
+| No overlap validation | System allows overlapping blocks (they combine to block time) |
+
+#### Effect on Lesson Availability
+
+When members view available lesson slots:
+1. System calculates slots from facility operating hours
+2. Subtracts pro's existing reservations (where pro_id = selected pro)
+3. Subtracts pro's unavailability blocks
+4. Remaining slots are shown as available
 
 ---
 
@@ -880,8 +910,9 @@ The operating hours page includes a booking configuration section for facility-w
 |---------|---------|-------------|
 | max_advance_booking_days | 7 | How far in advance members can book courts |
 | max_member_reservations | 30 | Maximum active future reservations per member |
+| lesson_min_notice_hours | 24 | Minimum hours in advance lessons must be booked |
 
-Settings save via POST to `/api/v1/facility-settings`. Both values must be positive integers.
+Settings save via POST to `/api/v1/facility-settings`. All values must be positive integers.
 
 ---
 
@@ -1066,6 +1097,11 @@ Authorization failures are logged with facility_id and user_id.
 | DELETE | `/member/reservations/{id}` | Cancel member reservation |
 | GET | `/member/booking/new` | Booking form modal |
 | GET | `/member/booking/slots` | Reload available slots for selected date |
+| GET | `/member/lessons/new` | Lesson booking form |
+| GET | `/member/lessons/slots` | Reload lesson slots for selected pro/date |
+| GET | `/member/lessons/pros` | List pros available for lessons |
+| GET | `/member/lessons/pros/{id}/slots` | Get available lesson slots for a pro |
+| POST | `/member/lessons` | Create lesson booking |
 | GET | `/api/v1/member/reservations/widget` | Reservations widget data |
 
 ### Courts and Calendar
@@ -1156,6 +1192,9 @@ Authorization failures are logged with facility_id and user_id.
 | POST | `/api/v1/staff` | Create staff |
 | PUT | `/api/v1/staff/{id}` | Update staff |
 | POST | `/api/v1/staff/{id}/deactivate` | Deactivate staff (soft delete via user status) |
+| GET | `/staff/unavailability` | Pro unavailability page (pros only) |
+| POST | `/staff/unavailability` | Create unavailability block |
+| DELETE | `/staff/unavailability/{id}` | Delete unavailability block |
 
 ### Notifications
 
@@ -1326,6 +1365,10 @@ The project uses Taskfile for build orchestration.
 | `css` | Build Tailwind CSS | - |
 | `db:migrate` | Run database migrations (creates db dir if needed) | - |
 | `db:reset` | Delete database and re-run migrations | - |
+| `db:seed` | Reset database and populate with test data | db:reset |
+| `db:snapshot` | Save database snapshot (usage: `task db:snapshot -- name`) | - |
+| `db:restore` | Restore database from snapshot (usage: `task db:restore -- name`) | - |
+| `db:snapshots` | List available database snapshots | - |
 
 ### Test Tasks
 
@@ -1541,7 +1584,8 @@ Members with verified accounts (membership_level >= 1) can access a self-service
 |---------|-------------|
 | Reservations List | View upcoming and past reservations at home facility |
 | Court Booking | Book available courts at home facility |
-| Reservation Cancellation | Cancel own upcoming reservations |
+| Lesson Booking | Book lessons with teaching pros at home facility |
+| Reservation Cancellation | Cancel own upcoming reservations (courts and lessons) |
 
 ### Member Booking
 
@@ -1563,7 +1607,7 @@ The booking form includes an inline date picker with three dropdowns:
 
 Changing any dropdown triggers an HTMX request to `/member/booking/slots` to reload available time slots for the selected date. The date picker pre-selects today's date on initial load.
 
-### Booking Constraints
+### Booking Constraints (Courts)
 
 | Constraint | Rule |
 |------------|------|
@@ -1575,11 +1619,49 @@ Changing any dropdown triggers an HTMX request to `/member/booking/slots` to rel
 | Reservation Limit | Member cannot exceed max_member_reservations active future bookings |
 | Single Court | Members book one court at a time |
 
+### Lesson Booking
+
+Members can book lessons with teaching pros through a dedicated booking interface:
+
+- **Pro Selection**: View list of pros available at home facility (staff with role='pro')
+- **Pro Display**: Each pro shows name and initials placeholder (photo if available)
+- **Date Selection**: Same three-dropdown date picker as court booking
+- **Slot Selection**: Available 1-hour time slots based on pro availability
+- **Availability Calculation**: Facility operating hours minus pro's existing reservations and unavailability blocks
+
+#### Lesson Booking Flow
+
+1. Member selects "Book a Lesson" from portal
+2. Pro list displays teaching pros at member's home facility
+3. Selecting a pro loads available time slots for the selected date
+4. Member picks a slot and confirms booking
+5. System creates PRO_SESSION reservation with pro_id set
+
+#### Lesson Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Facility | Must be member's home facility |
+| Duration | Fixed at 1 hour |
+| Advance Notice | Must be at least lesson_min_notice_hours (default: 24) in advance |
+| Advance Booking | Date must be within facility's max_advance_booking_days |
+| Reservation Limit | Counts toward max_member_reservations (same as GAME reservations) |
+| Pro Availability | Slot must not conflict with pro's reservations or unavailability blocks |
+
+#### Lesson Reservation Details
+
+When a lesson is booked:
+- `reservation_type_id` = PRO_SESSION
+- `pro_id` = selected pro's staff ID
+- `primary_user_id` = booking member's user ID
+- Member is added to `reservation_participants`
+- Displays on staff court calendar with PRO_SESSION styling
+
 ### Reservation Limits
 
 The system enforces a per-member limit on active future reservations:
 
-- Counts only GAME-type reservations where member is `primary_user_id`
+- Counts GAME and PRO_SESSION type reservations where member is `primary_user_id`
 - Excludes LEAGUE and TOURNAMENT types from the count
 - Staff-created reservations (where creator differs from primary_user) do not count against member limit
 - When limit is reached, returns HTTP 409 with JSON: `{"error": "You have reached the maximum of X active reservations", "current_count": N, "limit": X}`
@@ -1750,7 +1832,8 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Operating Hours | Complete | Admin UI, per-day CRUD, default hours, HTMX updates |
 | Staff Management | Complete | CRUD, facility-scoped authorization, deactivation with session handling |
 | Staff Notifications | Complete | Bell icon, dropdown panel, unread badge, mark-as-read, facility scoping |
-| Member Portal | Complete | Self-service portal, court booking, reservation cancellation |
+| Member Portal | Complete | Self-service portal, court booking, lesson booking, reservation cancellation |
+| Pro Unavailability | Complete | Pros can block time, affects lesson availability |
 | Check-in Flow | Complete | Search, check-in, activity selection, arrivals list, visit history |
 | Cancellation Policies | Complete | Per-facility refund tiers, policy application, staff fee waiver, cancellation logging |
 

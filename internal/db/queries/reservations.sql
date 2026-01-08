@@ -155,10 +155,13 @@ SELECT
     r.updated_at,
     f.name AS facility_name,
     rt.name AS reservation_type_name,
+    s.first_name AS pro_first_name,
+    s.last_name AS pro_last_name,
     group_concat(DISTINCT COALESCE(NULLIF(c.name, ''), 'Court ' || c.court_number)) AS court_name
 FROM reservations r
 JOIN facilities f ON f.id = r.facility_id
 LEFT JOIN reservation_types rt ON rt.id = r.reservation_type_id
+LEFT JOIN staff s ON s.id = r.pro_id
 LEFT JOIN reservation_courts rc ON rc.reservation_id = r.id
 LEFT JOIN courts c ON c.id = rc.court_id
 WHERE (
@@ -190,7 +193,9 @@ GROUP BY r.id,
     r.created_at,
     r.updated_at,
     f.name,
-    rt.name
+    rt.name,
+    s.first_name,
+    s.last_name
 ORDER BY r.start_time DESC;
 
 -- name: CountActiveMemberReservations :one
@@ -200,7 +205,7 @@ JOIN reservation_types rt ON rt.id = r.reservation_type_id
 WHERE r.facility_id = @facility_id
   AND r.primary_user_id = @primary_user_id
   AND r.start_time > CURRENT_TIMESTAMP
-  AND rt.name = 'GAME'
+  AND rt.name IN ('GAME', 'PRO_SESSION')
   AND NOT EXISTS (
       SELECT 1
       FROM reservation_cancellations rcc
