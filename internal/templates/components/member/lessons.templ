@@ -136,11 +136,14 @@ templ LessonBookingForm(data LessonBookingFormData) {
 			updateLessonSubmitState();
 		}
 
-		document.body.addEventListener("htmx:afterSwap", function (event) {
+		window._handleLessonSlotSwap = window._handleLessonSlotSwap || function (event) {
 			if (event.target && event.target.id === "lesson-slot-picker") {
 				setLessonReservationEndTime(document.getElementById("lesson_time_slot"));
 			}
-		});
+		};
+
+		document.body.removeEventListener("htmx:afterSwap", window._handleLessonSlotSwap);
+		document.body.addEventListener("htmx:afterSwap", window._handleLessonSlotSwap);
 
 		initializeLessonProSelection();
 	</script>
