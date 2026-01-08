@@ -73,3 +73,44 @@ WHERE facility_id = @facility_id
   AND min_hours_before <= @hours_until_reservation
 ORDER BY min_hours_before DESC
 LIMIT 1;
+
+-- name: LogCancellation :one
+INSERT INTO reservation_cancellations (
+    reservation_id,
+    cancelled_by_user_id,
+    cancelled_at,
+    refund_percentage_applied,
+    fee_waived,
+    hours_before_start
+) VALUES (
+    @reservation_id,
+    @cancelled_by_user_id,
+    @cancelled_at,
+    @refund_percentage_applied,
+    @fee_waived,
+    @hours_before_start
+)
+RETURNING
+    id,
+    reservation_id,
+    cancelled_by_user_id,
+    cancelled_at,
+    refund_percentage_applied,
+    fee_waived,
+    hours_before_start,
+    created_at;
+
+-- name: GetLatestCancellationByReservationID :one
+SELECT
+    id,
+    reservation_id,
+    cancelled_by_user_id,
+    cancelled_at,
+    refund_percentage_applied,
+    fee_waived,
+    hours_before_start,
+    created_at
+FROM reservation_cancellations
+WHERE reservation_id = @reservation_id
+ORDER BY cancelled_at DESC
+LIMIT 1;
