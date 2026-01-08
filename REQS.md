@@ -898,6 +898,31 @@ Consider adding a similar confirmation flow for members, or at minimum returning
 
 ### 9.7 Lesson & Program Management
 
+> **Implemented:** STORY-0026 (Member Portal Lesson Booking MVP) - in progress
+
+**Current Implementation (MVP):**
+- Members can book 1-hour lessons with teaching pros at their home facility
+- Pro unavailability management (pros can block their own time)
+- `lesson_min_notice_hours` facility setting (default: 24 hours) - booking must be at least this far in advance
+- Lessons count toward max_member_reservations limit
+
+**Enhancement Needed: Lesson Cancellation Policy**
+
+The current implementation does not enforce cancellation notice requirements for lessons. While `lesson_min_notice_hours` controls how far in advance a lesson must be booked, there is no equivalent enforcement preventing last-minute cancellations.
+
+| Gap | Description |
+|-----|-------------|
+| Cancellation window | No minimum notice required to cancel a lesson |
+| Policy enforcement | Lessons use same cancellation policy as GAME reservations |
+| Pro protection | Pros have no protection from last-minute member cancellations |
+
+**Suggested Implementation:**
+| Option | Description |
+|--------|-------------|
+| Dedicated lesson cancellation policy | Separate policy tier for PRO_SESSION reservations |
+| lesson_cancellation_notice_hours | Facility setting mirroring lesson_min_notice_hours for cancellations |
+| Pro notification | Notify pro when their lesson is cancelled |
+
 **Lesson Scheduling:**
 | Feature | Description |
 |---------|-------------|
