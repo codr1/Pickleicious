@@ -51,6 +51,11 @@ FROM reservations
 WHERE facility_id = @facility_id
   AND start_time < @end_time
   AND end_time > @start_time
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reservation_cancellations rcc
+      WHERE rcc.reservation_id = reservations.id
+  )
 ORDER BY start_time;
 
 -- name: ListReservationCourtsByDateRange :many
@@ -61,6 +66,11 @@ JOIN courts c ON c.id = rc.court_id
 WHERE r.facility_id = @facility_id
   AND r.start_time < @end_time
   AND r.end_time > @start_time
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reservation_cancellations rcc
+      WHERE rcc.reservation_id = r.id
+  )
 ORDER BY rc.reservation_id, c.court_number;
 
 -- name: UpdateReservation :one
@@ -151,13 +161,20 @@ JOIN facilities f ON f.id = r.facility_id
 LEFT JOIN reservation_types rt ON rt.id = r.reservation_type_id
 LEFT JOIN reservation_courts rc ON rc.reservation_id = r.id
 LEFT JOIN courts c ON c.id = rc.court_id
-WHERE r.primary_user_id = @user_id
-   OR EXISTS (
-       SELECT 1
-       FROM reservation_participants rp
-       WHERE rp.reservation_id = r.id
-         AND rp.user_id = @user_id
-   )
+WHERE (
+        r.primary_user_id = @user_id
+     OR EXISTS (
+         SELECT 1
+         FROM reservation_participants rp
+         WHERE rp.reservation_id = r.id
+           AND rp.user_id = @user_id
+     )
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reservation_cancellations rcc
+      WHERE rcc.reservation_id = r.id
+  )
 GROUP BY r.id,
     r.facility_id,
     r.reservation_type_id,
@@ -183,4 +200,9 @@ JOIN reservation_types rt ON rt.id = r.reservation_type_id
 WHERE r.facility_id = @facility_id
   AND r.primary_user_id = @primary_user_id
   AND r.start_time > CURRENT_TIMESTAMP
-  AND rt.name = 'GAME';
+  AND rt.name = 'GAME'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reservation_cancellations rcc
+      WHERE rcc.reservation_id = r.id
+  );

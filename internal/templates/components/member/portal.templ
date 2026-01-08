@@ -98,11 +98,13 @@ templ MemberReservations(reservations ReservationListData) {
 												Open Play
 											</span>
 										}
+										<span class="text-xs text-gray-500">{fmt.Sprintf("%d%% refund", reservation.RefundPercentage)}</span>
 										<button
 											type="button"
 											class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100"
 											hx-delete={fmt.Sprintf("/member/reservations/%d", reservation.ID)}
-											hx-confirm="Cancel this reservation?">
+											hx-confirm={fmt.Sprintf("Cancel this reservation? %d%% refund will apply.", reservation.RefundPercentage)}
+											hx-swap="none">
 											Cancel
 										</button>
 									</div>
