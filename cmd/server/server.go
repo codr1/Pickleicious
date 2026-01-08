@@ -101,6 +101,11 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 			http.NotFound(w, r)
 			return
 		}
+		// Redirect to login if not authenticated
+		if authz.UserFromContext(r.Context()) == nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
 		var activeTheme *models.Theme
 		if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)

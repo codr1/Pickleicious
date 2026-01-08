@@ -131,6 +131,7 @@ tasks:
     desc: Run the dev server without file watching
     env:
       STATIC_DIR: web/static
+      APP_SECRET_KEY: dev-secret-key-not-for-production
     deps:
       - generate
       - css
@@ -142,6 +143,7 @@ tasks:
     desc: Run the dev server with Air
     env:
       STATIC_DIR: web/static
+      APP_SECRET_KEY: dev-secret-key-not-for-production
     deps:
       - generate
       - css
