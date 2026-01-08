@@ -814,32 +814,6 @@ This section documents features that are standard in competing pickleball/sports
 
 ### 9.4 Cancellation Policies & No-Show Management
 
-<!-- BEGIN WIP: STORY-0025 -->
-**Tiered Cancellation Rules:**
-| Window | Policy | Example |
-|--------|--------|---------|
-| 48+ hours | Full refund/credit | Free cancellation |
-| 24-48 hours | Partial refund (50%) | Late cancellation fee |
-| < 24 hours | No refund | Forfeited payment |
-| No-show | Full charge + penalty | Strike system |
-
-**No-Show Tracking:**
-| Feature | Description |
-|---------|-------------|
-| No-Show Recording | Track members who don't appear |
-| Strike System | Accumulate warnings (e.g., 3 strikes = suspension) |
-| Penalty Fees | Automatic charge for no-shows |
-| Booking Restrictions | Limit future bookings for repeat offenders |
-| Grace Period | Minutes allowed for late arrival |
-
-**Configuration:**
-| Setting | Description |
-|---------|-------------|
-| Cancellation Windows | Define time-based refund tiers |
-| Penalty Amounts | Set fees per violation |
-| Strike Threshold | Number before action taken |
-| Check-in Window | How early/late can check in |
-<!-- END WIP -->
 
 ### 9.5 League & Tournament Management
 
