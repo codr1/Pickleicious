@@ -353,18 +353,37 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	facilityLoc := time.Local
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to validate booking rules", http.StatusInternalServerError)
+		return
+	}
+	if facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr != nil {
+			logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+		} else {
+			facilityLoc = loadedLoc
+		}
+	}
+
 	proID, err := apiutil.ParseRequiredInt64Field(r.FormValue("pro_id"), "pro_id")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	startTime, err := parseMemberBookingTime(r.FormValue("start_time"), "start_time")
+	startTime, err := parseMemberBookingTime(r.FormValue("start_time"), "start_time", facilityLoc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	endTime, err := parseMemberBookingTime(r.FormValue("end_time"), "end_time")
+	endTime, err := parseMemberBookingTime(r.FormValue("end_time"), "end_time", facilityLoc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -378,27 +397,18 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
-	defer cancel()
-
-	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
-		http.Error(w, "Failed to validate booking rules", http.StatusInternalServerError)
-		return
-	}
 	maxMemberReservations := facility.MaxMemberReservations
 
-	if startTime.Before(time.Now()) {
+	if startTime.Before(time.Now().In(facilityLoc)) {
 		http.Error(w, "start_time must be in the future", http.StatusBadRequest)
 		return
 	}
 
 	maxAdvanceDays := normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	now := time.Now().In(facilityLoc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, facilityLoc)
 	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
-	startDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, now.Location())
+	startDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, facilityLoc)
 	if startDay.After(maxDate) {
 		http.Error(w, fmt.Sprintf("start_time must be within %d days", maxAdvanceDays), http.StatusBadRequest)
 		return
