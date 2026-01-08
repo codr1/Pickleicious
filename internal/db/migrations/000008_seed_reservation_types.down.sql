@@ -6,5 +6,8 @@ WHERE name IN (
     'PRO_SESSION',
     'EVENT',
     'MAINTENANCE',
-    'LEAGUE'
+    'LEAGUE',
+    'LESSON',
+    'TOURNAMENT',
+    'CLINIC'
 );

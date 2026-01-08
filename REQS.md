@@ -50,6 +50,7 @@
 #### 0.0.1 Seed System Reservation Types
 **Problem**: The "GAME" reservation type is hard-coded but not guaranteed to exist in the database.
 
+<!-- BEGIN WIP: STORY-0024 -->
 **Required**:
 - Add SEED data for system reservation types (not user-editable):
   - GAME - Casual/pickup play (member self-service)
@@ -62,6 +63,7 @@
   - MAINTENANCE - Court blocked for maintenance
 - Add `is_system` boolean column to reservation_types table
 - Validate system types exist at startup
+<!-- END WIP -->
 
 #### 0.0.2 Simple Date Picker for Member Booking
 
@@ -826,6 +828,7 @@ This section documents features that are standard in competing pickleball/sports
 
 ### 9.4 Cancellation Policies & No-Show Management
 
+<!-- BEGIN WIP: STORY-0025 -->
 **Tiered Cancellation Rules:**
 | Window | Policy | Example |
 |--------|--------|---------|
@@ -850,6 +853,7 @@ This section documents features that are standard in competing pickleball/sports
 | Penalty Amounts | Set fees per violation |
 | Strike Threshold | Number before action taken |
 | Check-in Window | How early/late can check in |
+<!-- END WIP -->
 
 ### 9.5 League & Tournament Management
 

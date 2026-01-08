@@ -109,6 +109,11 @@ SELECT id, name, description, color, created_at, updated_at
 FROM reservation_types
 WHERE id = @id;
 
+-- name: GetReservationTypeByName :one
+SELECT id, name, description, color, created_at, updated_at
+FROM reservation_types
+WHERE LOWER(name) = LOWER(@name);
+
 -- name: ListReservationTypes :many
 SELECT id, name, description, color, created_at, updated_at
 FROM reservation_types

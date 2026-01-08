@@ -680,16 +680,14 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 }
 
 func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
-	resTypes, err := q.ListReservationTypes(ctx)
+	resType, err := q.GetReservationTypeByName(ctx, name)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("reservation type %q not found", name)
+		}
 		return 0, err
 	}
-	for _, resType := range resTypes {
-		if strings.EqualFold(resType.Name, name) {
-			return resType.ID, nil
-		}
-	}
-	return 0, fmt.Errorf("reservation type %q not found", name)
+	return resType.ID, nil
 }
 
 func requestedFacilityID(r *http.Request) *int64 {
