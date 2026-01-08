@@ -110,3 +110,34 @@ FROM reservations
 WHERE pro_id = @pro_id
   AND start_time > @start_time
 ORDER BY start_time;
+
+-- name: CreateProUnavailability :execlastid
+INSERT INTO pro_unavailability (
+    pro_id, start_time, end_time, reason
+) VALUES (
+    @pro_id, @start_time, @end_time, @reason
+);
+
+-- name: GetProUnavailabilityByID :one
+SELECT id, pro_id, start_time, end_time, reason, created_at, updated_at
+FROM pro_unavailability
+WHERE id = @id;
+
+-- name: DeleteProUnavailability :exec
+DELETE FROM pro_unavailability
+WHERE id = @id;
+
+-- name: ListProUnavailabilityByProID :many
+SELECT id, pro_id, start_time, end_time, reason, created_at, updated_at
+FROM pro_unavailability
+WHERE pro_id = @pro_id
+ORDER BY start_time;
+
+-- name: ListProUnavailabilityByFacilityAndDateRange :many
+SELECT pu.id, pu.pro_id, pu.start_time, pu.end_time, pu.reason, pu.created_at, pu.updated_at
+FROM pro_unavailability pu
+JOIN staff s ON s.id = pu.pro_id
+WHERE s.home_facility_id = @facility_id
+  AND pu.start_time < @end_time
+  AND pu.end_time > @start_time
+ORDER BY pu.start_time;

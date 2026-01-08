@@ -132,6 +132,20 @@ CREATE TABLE staff (
     FOREIGN KEY (home_facility_id) REFERENCES facilities(id)
 );
 
+CREATE TABLE pro_unavailability (
+    id INTEGER PRIMARY KEY,
+    pro_id INTEGER NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    reason TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pro_id) REFERENCES staff(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_pro_unavailability_pro_id ON pro_unavailability(pro_id);
+CREATE INDEX idx_pro_unavailability_start_time ON pro_unavailability(start_time);
+
 
 --------- Courts ----------
 CREATE TABLE courts (
