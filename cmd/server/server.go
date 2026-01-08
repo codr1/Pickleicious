@@ -257,6 +257,13 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Staff routes
 	mux.HandleFunc("/staff", staff.HandleStaffPage)
+	mux.HandleFunc("/staff/unavailability", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  staff.HandleListProUnavailability,
+		http.MethodPost: staff.HandleCreateProUnavailability,
+	}))
+	mux.HandleFunc("/staff/unavailability/", methodHandler(map[string]http.HandlerFunc{
+		http.MethodDelete: staff.HandleDeleteProUnavailability,
+	}))
 	mux.HandleFunc("/api/v1/staff", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: staff.HandleStaffList,
 	}))
