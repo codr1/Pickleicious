@@ -55,6 +55,18 @@ func InitHandlers(database *appdb.DB) {
 	store = database
 }
 
+// RequireStaffSession ensures staff-authenticated sessions reach staff routes.
+func RequireStaffSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := authz.UserFromContext(r.Context())
+		if user == nil || !user.IsStaff {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // /staff
 func HandleStaffPage(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
