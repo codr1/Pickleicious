@@ -92,6 +92,41 @@ tasks:
       - rm -f {{.DB_PATH}}
       - task: db:migrate
 
+  db:seed:
+    desc: Reset database and populate with test data
+    cmds:
+      - task: db:reset
+      - sqlite3 {{.DB_PATH}} < internal/db/seed.sql
+      - echo "Seeded database. Login with admin@pickle.test / admin123"
+
+  db:snapshot:
+    desc: "Save database snapshot (usage: task db:snapshot -- name)"
+    cmds:
+      - mkdir -p build/snapshots
+      - cmd: |
+          name="{{.CLI_ARGS}}"
+          if [ -z "$name" ]; then
+            name="snapshot-$(date +%Y%m%d-%H%M%S)"
+          fi
+          cp {{.DB_PATH}} "build/snapshots/${name}.db"
+          echo "Saved: build/snapshots/${name}.db"
+
+  db:restore:
+    desc: "Restore database from snapshot (usage: task db:restore -- name)"
+    preconditions:
+      - sh: test -n "{{.CLI_ARGS}}"
+        msg: "Error: name required. Usage: task db:restore -- <name>"
+      - sh: test -f "build/snapshots/{{.CLI_ARGS}}.db"
+        msg: "Error: snapshot not found. Run 'task db:snapshots' to list."
+    cmds:
+      - cp build/snapshots/{{.CLI_ARGS}}.db {{.DB_PATH}}
+      - echo "Restored from build/snapshots/{{.CLI_ARGS}}.db"
+
+  db:snapshots:
+    desc: List available database snapshots
+    cmds:
+      - ls -lh build/snapshots/*.db 2>/dev/null || echo "No snapshots found"
+
   dev:
     desc: Run the dev server without file watching
     env:
