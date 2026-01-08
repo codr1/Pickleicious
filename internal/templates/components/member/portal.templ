@@ -40,14 +40,7 @@ templ MemberReservations(reservations ReservationListData) {
 		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 			<h2 class="text-xl font-bold text-gray-900">Your reservations</h2>
 			<div class="flex flex-wrap items-center gap-2">
-				<button
-					type="button"
-					class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-					hx-get="/member/booking/new"
-					hx-target="#modal"
-					hx-swap="innerHTML">
-					Book a Court
-				</button>
+				@LessonBookingPanel()
 				if reservations.ShowFacilityFilter {
 					<div class="flex items-center gap-2">
 						<label for="facility-filter" class="text-sm text-gray-500">Facility</label>
@@ -90,6 +83,9 @@ templ MemberReservations(reservations ReservationListData) {
 										<p class="text-sm text-gray-500">{reservation.FacilityName}</p>
 										<p class="text-sm text-gray-500">Court: {reservation.CourtLabel()}</p>
 										<p class="text-sm text-gray-500">Type: {reservation.ReservationTypeLabel()}</p>
+										if reservation.IsProSession() {
+											<p class="text-sm text-gray-500">Pro: {reservation.ProName()}</p>
+										}
 										<p class="text-sm text-gray-500">Participants: {reservation.OtherParticipantsLabel()}</p>
 									</div>
 									<div class="flex items-center gap-2">
@@ -128,6 +124,9 @@ templ MemberReservations(reservations ReservationListData) {
 										<p class="text-sm text-gray-500">{reservation.FacilityName}</p>
 										<p class="text-sm text-gray-500">Court: {reservation.CourtLabel()}</p>
 										<p class="text-sm text-gray-500">Type: {reservation.ReservationTypeLabel()}</p>
+										if reservation.IsProSession() {
+											<p class="text-sm text-gray-500">Pro: {reservation.ProName()}</p>
+										}
 										<p class="text-sm text-gray-500">Participants: {reservation.OtherParticipantsLabel()}</p>
 									</div>
 									if reservation.IsOpenEvent {

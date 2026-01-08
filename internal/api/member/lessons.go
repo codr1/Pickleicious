@@ -16,6 +16,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 )
 
 const lessonReservationTypeName = "PRO_SESSION"
@@ -30,6 +31,135 @@ type lessonPro struct {
 type lessonSlot struct {
 	StartTime string `json:"startTime"`
 	EndTime   string `json:"endTime"`
+}
+
+// HandleLessonBookingFormNew handles GET /member/lessons/new.
+func HandleLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+	} else {
+		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+	}
+
+	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
+
+	proRows, err := q.ListProsByFacility(ctx, sql.NullInt64{Int64: *user.HomeFacilityID, Valid: true})
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load pros")
+		http.Error(w, "Failed to load pros", http.StatusInternalServerError)
+		return
+	}
+
+	pros := buildLessonProCards(proRows)
+	var selectedProID int64
+	if len(proRows) > 0 {
+		selectedProID = proRows[0].ID
+	}
+
+	slots, err := buildLessonSlotOptions(ctx, q, *user.HomeFacilityID, selectedProID, bookingDate)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load lesson availability")
+		http.Error(w, "Failed to load availability", http.StatusInternalServerError)
+		return
+	}
+
+	component := membertempl.LessonBookingForm(membertempl.LessonBookingFormData{
+		Pros:                  pros,
+		Slots:                 slots,
+		DatePicker:            membertempl.DatePickerData{Year: bookingDate.Year(), Month: int(bookingDate.Month()), Day: bookingDate.Day()},
+		SelectedProID:         selectedProID,
+		MaxAdvanceBookingDays: maxAdvanceDays,
+	})
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render lesson booking form", "Failed to render lesson booking form") {
+		return
+	}
+}
+
+// HandleLessonBookingSlots handles GET /member/lessons/slots.
+func HandleLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/member/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+	} else {
+		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+	}
+
+	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
+
+	proID, err := parseOptionalProID(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	slots, err := buildLessonSlotOptions(ctx, q, *user.HomeFacilityID, proID, bookingDate)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load lesson availability")
+		http.Error(w, "Failed to load availability", http.StatusInternalServerError)
+		return
+	}
+
+	component := membertempl.ProSlotPicker(slots)
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render lesson slots", "Failed to render lesson slots") {
+		return
+	}
 }
 
 // HandleListPros handles GET /member/lessons/pros.
@@ -461,6 +591,87 @@ func parseLessonSlotString(raw string, loc *time.Location) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("invalid slot time")
+}
+
+func parseOptionalProID(r *http.Request) (int64, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get("pro_id"))
+	if raw == "" {
+		return 0, nil
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid pro_id")
+	}
+	return id, nil
+}
+
+func buildLessonProCards(rows []dbgen.ListProsByFacilityRow) []membertempl.LessonProCard {
+	cards := make([]membertempl.LessonProCard, 0, len(rows))
+	for _, row := range rows {
+		first := strings.TrimSpace(row.FirstName)
+		last := strings.TrimSpace(row.LastName)
+		name := strings.TrimSpace(first + " " + last)
+		if name == "" {
+			name = "TBD"
+		}
+		initials := ""
+		if first != "" {
+			initials += strings.ToUpper(first[:1])
+		}
+		if last != "" {
+			initials += strings.ToUpper(last[:1])
+		}
+		if initials == "" {
+			initials = "?"
+		}
+		cards = append(cards, membertempl.LessonProCard{
+			ID:       row.ID,
+			Name:     name,
+			Initials: initials,
+		})
+	}
+	return cards
+}
+
+func buildLessonSlotOptions(
+	ctx context.Context,
+	q *dbgen.Queries,
+	facilityID int64,
+	proID int64,
+	bookingDate time.Time,
+) ([]membertempl.LessonSlotOption, error) {
+	if proID <= 0 {
+		return nil, nil
+	}
+
+	slotMinutes := fmt.Sprintf("%d", int64(memberBookingMinDuration.Minutes()))
+	rows, err := q.GetProLessonSlots(ctx, dbgen.GetProLessonSlotsParams{
+		TargetDate:  bookingDate.Format("2006-01-02"),
+		FacilityID:  facilityID,
+		SlotMinutes: sql.NullString{String: slotMinutes, Valid: true},
+		ProID:       sql.NullInt64{Int64: proID, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	slots := make([]membertempl.LessonSlotOption, 0, len(rows))
+	for _, row := range rows {
+		startTime, err := parseLessonSlotTime(row.StartTime, time.Local)
+		if err != nil {
+			return nil, err
+		}
+		endTime, err := parseLessonSlotTime(row.EndTime, time.Local)
+		if err != nil {
+			return nil, err
+		}
+		slots = append(slots, membertempl.LessonSlotOption{
+			StartTime: startTime.Format(memberBookingTimeLayout),
+			EndTime:   endTime.Format(memberBookingTimeLayout),
+			Label:     fmt.Sprintf("%s - %s", startTime.Format("3:04 PM"), endTime.Format("3:04 PM")),
+		})
+	}
+	return slots, nil
 }
 
 func loadUserPhotoMap(ctx context.Context, database *appdb.DB, userIDs []int64) (map[int64]bool, error) {
