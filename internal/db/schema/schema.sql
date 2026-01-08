@@ -21,6 +21,7 @@ CREATE TABLE facilities (
     active_theme_id INTEGER,
     max_advance_booking_days INTEGER NOT NULL DEFAULT 7,
     max_member_reservations INTEGER NOT NULL DEFAULT 30,
+    lesson_min_notice_hours INTEGER NOT NULL DEFAULT 24,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id),
