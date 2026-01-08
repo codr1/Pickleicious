@@ -604,7 +604,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	var deleted int64
+	var refundPercentage int64
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -618,10 +618,26 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if !reservation.PrimaryUserID.Valid || reservation.PrimaryUserID.Int64 != user.ID {
 			return apiutil.HandlerError{Status: http.StatusForbidden, Message: "Forbidden"}
 		}
-		if !reservation.StartTime.After(time.Now()) {
+		now := time.Now()
+		if !reservation.StartTime.After(now) {
 			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Reservation must be in the future"}
 		}
 		facilityID := reservation.FacilityID
+		hoursUntilReservation := hoursUntilReservationStart(reservation.StartTime, now)
+		refundPercentage, err = applicableRefundPercentage(ctx, qtx, facilityID, hoursUntilReservation)
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
+		}
+		if _, err := qtx.LogCancellation(ctx, dbgen.LogCancellationParams{
+			ReservationID:           reservationID,
+			CancelledByUserID:       user.ID,
+			CancelledAt:             now,
+			RefundPercentageApplied: refundPercentage,
+			FeeWaived:               false,
+			HoursBeforeStart:        hoursUntilReservation,
+		}); err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log cancellation", Err: err}
+		}
 
 		courts, err := qtx.ListReservationCourts(ctx, reservationID)
 		if err != nil {
@@ -649,16 +665,6 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		deleted, err = qtx.DeleteReservation(ctx, dbgen.DeleteReservationParams{
-			ID:         reservationID,
-			FacilityID: facilityID,
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to delete reservation", Err: err}
-		}
-		if deleted == 0 {
-			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: sql.ErrNoRows}
-		}
 		return nil
 	})
 	if err != nil {
@@ -670,13 +676,18 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, herr.Message, herr.Status)
 			return
 		}
-		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to delete reservation")
-		http.Error(w, "Failed to delete reservation", http.StatusInternalServerError)
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to cancel reservation")
+		http.Error(w, "Failed to cancel reservation", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
-	w.WriteHeader(http.StatusNoContent)
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"refund_percentage": refundPercentage,
+	}); err != nil {
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation response")
+		return
+	}
 }
 
 func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
@@ -688,6 +699,28 @@ func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string)
 		return 0, err
 	}
 	return resType.ID, nil
+}
+
+func hoursUntilReservationStart(start time.Time, now time.Time) int64 {
+	hours := int64(start.Sub(now).Hours())
+	if hours < 0 {
+		return 0
+	}
+	return hours
+}
+
+func applicableRefundPercentage(ctx context.Context, q *dbgen.Queries, facilityID int64, hoursUntilReservation int64) (int64, error) {
+	tier, err := q.GetApplicableCancellationTier(ctx, dbgen.GetApplicableCancellationTierParams{
+		FacilityID:            facilityID,
+		HoursUntilReservation: hoursUntilReservation,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 100, nil
+		}
+		return 0, err
+	}
+	return tier.RefundPercentage, nil
 }
 
 func requestedFacilityID(r *http.Request) *int64 {
@@ -779,11 +812,18 @@ func buildReservationListData(
 	now := time.Now()
 	var upcoming []membertempl.ReservationSummary
 	var past []membertempl.ReservationSummary
-	for _, summary := range summaries {
-		if summary.StartTime.After(now) {
-			upcoming = append(upcoming, summary)
+	for i := range summaries {
+		if summaries[i].StartTime.After(now) {
+			hoursUntilReservation := hoursUntilReservationStart(summaries[i].StartTime, now)
+			refundPercentage, err := applicableRefundPercentage(ctx, q, summaries[i].FacilityID, hoursUntilReservation)
+			if err != nil {
+				logger.Error().Err(err).Int64("facility_id", summaries[i].FacilityID).Msg("Failed to load cancellation policy refund percentage")
+				refundPercentage = 100
+			}
+			summaries[i].RefundPercentage = refundPercentage
+			upcoming = append(upcoming, summaries[i])
 		} else {
-			past = append(past, summary)
+			past = append(past, summaries[i])
 		}
 	}
 

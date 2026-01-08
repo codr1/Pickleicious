@@ -68,6 +68,7 @@ type ReservationSummary struct {
 	EndTime             time.Time
 	IsOpenEvent         bool
 	OtherParticipants   []string
+	RefundPercentage    int64
 }
 
 type ReservationFacility struct {

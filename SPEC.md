@@ -268,6 +268,8 @@ Organization (corporate entity)
 | reservations | Booking records |
 | reservation_courts | Multi-court junction |
 | reservation_participants | Multi-member junction |
+| reservation_cancellations | Cancellation log: reservation_id, cancelled_by_user_id, cancelled_at, refund_percentage_applied, fee_waived, hours_before_start |
+| cancellation_policy_tiers | Per-facility refund tiers: facility_id, min_hours_before, refund_percentage |
 
 ### Check-in System
 
@@ -546,6 +548,73 @@ Note: Recurrence rules are defined in schema but not yet implemented in handlers
 - Court must be available (no overlapping reservations)
 - Facility must exist and user must have access
 - Conflict errors shown inline with red border styling (409 response)
+
+### Staff Cancellation with Fee Waiver
+
+When staff cancel a reservation that falls within a penalty window (refund < 100%):
+
+1. System returns HTTP 409 with cancellation penalty details
+2. Staff prompted: "This cancellation incurs a fee. Waive cancellation fee?" with Yes/No options
+3. If staff selects "Waive fee", reservation cancelled with 100% refund regardless of policy
+4. If staff selects "No", reservation cancelled with policy-determined refund
+5. Cancellation logged with fee_waived flag and applied refund percentage
+
+Only staff can waive fees; members always receive the policy-determined refund.
+
+---
+
+## Cancellation Policies
+
+Facilities can configure time-based cancellation policies that determine refund percentages based on how early a reservation is cancelled.
+
+### Policy Tiers
+
+Each tier specifies:
+
+| Field | Description |
+|-------|-------------|
+| min_hours_before | Minimum hours before reservation start for this tier to apply |
+| refund_percentage | Refund percentage (0-100) when this tier matches |
+
+Tiers are ordered by `min_hours_before` descending. The first matching tier (where hours until reservation >= min_hours_before) determines the refund.
+
+### Example Configuration
+
+| Min Hours Before | Refund % | Meaning |
+|------------------|----------|---------|
+| 48 | 100 | Cancel 48+ hours ahead: full refund |
+| 24 | 50 | Cancel 24-47 hours ahead: 50% refund |
+| 0 | 0 | Cancel <24 hours ahead: no refund |
+
+### Default Behavior
+
+If no policy tiers are configured for a facility, 100% refund applies at any time (preserves pre-policy behavior).
+
+### Admin Interface
+
+Staff access the cancellation policy page at `/admin/cancellation-policy?facility_id=X`. The interface displays:
+
+- Form to add new tiers (min hours, refund percentage)
+- List of existing tiers with inline editing
+- Auto-save on field changes with 300ms debounce
+- Delete confirmation for each tier
+
+### Validation Rules
+
+| Field | Rule |
+|-------|------|
+| min_hours_before | Must be >= 0, unique per facility |
+| refund_percentage | Must be 0-100 |
+
+### Cancellation Logging
+
+All cancellations are logged to `reservation_cancellations` with:
+
+- Timestamp of cancellation
+- Who cancelled (user ID)
+- Refund percentage applied
+- Whether fee was waived (staff only)
+- Hours before reservation start at time of cancellation
 
 ---
 
@@ -1057,6 +1126,15 @@ Authorization failures are logged with facility_id and user_id.
 | PUT | `/api/v1/operating-hours/{day_of_week}` | Update hours for a day (0=Sunday through 6=Saturday) |
 | POST | `/api/v1/facility-settings` | Update facility booking configuration |
 
+### Cancellation Policy
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/cancellation-policy` | Cancellation policy admin page |
+| POST | `/api/v1/cancellation-policy/tiers` | Create policy tier |
+| PUT | `/api/v1/cancellation-policy/tiers/{id}` | Update policy tier |
+| DELETE | `/api/v1/cancellation-policy/tiers/{id}` | Delete policy tier |
+
 ### Check-in
 
 | Method | Path | Description |
@@ -1357,6 +1435,7 @@ pickleicious/
 │   │   ├── apiutil/         # Shared handler utilities
 │   │   ├── auth/            # Authentication (handlers, password, session)
 │   │   ├── authz/           # Authorization helpers
+│   │   ├── cancellationpolicy/ # Cancellation policy management
 │   │   ├── checkin/         # Front desk check-in
 │   │   ├── courts/          # Court/calendar
 │   │   ├── htmx/            # HTMX helpers
@@ -1379,6 +1458,7 @@ pickleicious/
 │   ├── request/             # Request parsing utilities
 │   ├── templates/           # Templ components
 │   │   └── components/
+│   │       ├── cancellationpolicy/ # Cancellation policy UI
 │   │       ├── checkin/         # Check-in page and cards
 │   │       ├── courts/          # Calendar components
 │   │       ├── member/          # Member portal and booking UI
@@ -1510,8 +1590,12 @@ Members can cancel their own reservations with these restrictions:
 
 - Must be the `primary_user_id` on the reservation
 - Reservation must be in the future
-- Confirmation prompt before deletion
+- Confirmation prompt shows applicable refund percentage before deletion
+- Refund percentage determined by facility's cancellation policy tiers
 - Courts and participants removed in transaction
+- Cancellation logged with refund percentage applied and hours before start
+
+If no cancellation policy is configured for the facility, 100% refund applies (current behavior preserved).
 
 ### HTMX Integration
 
@@ -1668,6 +1752,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Staff Notifications | Complete | Bell icon, dropdown panel, unread badge, mark-as-read, facility scoping |
 | Member Portal | Complete | Self-service portal, court booking, reservation cancellation |
 | Check-in Flow | Complete | Search, check-in, activity selection, arrivals list, visit history |
+| Cancellation Policies | Complete | Per-facility refund tiers, policy application, staff fee waiver, cancellation logging |
 
 ### Partial Implementation
 

@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/request"
@@ -661,6 +662,12 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), reservationQueryTimeout)
 	defer cancel()
 
+	deleteReq, err := decodeReservationDeleteRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	reservation, err := q.GetReservationByID(ctx, reservationID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -677,7 +684,56 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var deleted int64
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	now := time.Now()
+	hoursUntilReservation := hoursUntilReservationStart(reservation.StartTime, now)
+	policyRefundPercentage, err := applicableRefundPercentage(ctx, q, facilityID, hoursUntilReservation)
+	if err != nil {
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load cancellation policy")
+		http.Error(w, "Failed to load cancellation policy", http.StatusInternalServerError)
+		return
+	}
+
+	if deleteReq.WaiveFee != nil && *deleteReq.WaiveFee && !user.IsStaff {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	if user.IsStaff && policyRefundPercentage < 100 && deleteReq.WaiveFee == nil {
+		penalty := cancellationPenaltyResponse{
+			ReservationID:     reservationID,
+			RefundPercentage:  policyRefundPercentage,
+			FeePercentage:     100 - policyRefundPercentage,
+			HoursBeforeStart:  hoursUntilReservation,
+			FacilityID:        facilityID,
+			ReservationStarts: reservation.StartTime,
+		}
+		if apiutil.IsJSONRequest(r) {
+			if err := apiutil.WriteJSON(w, http.StatusConflict, penalty); err != nil {
+				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation penalty response")
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusConflict)
+		if _, err := w.Write([]byte(renderCancellationPenaltyPrompt(penalty))); err != nil {
+			logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation penalty prompt")
+		}
+		return
+	}
+
+	refundPercentage := policyRefundPercentage
+	feeWaived := false
+	if deleteReq.WaiveFee != nil && *deleteReq.WaiveFee {
+		refundPercentage = 100
+		feeWaived = true
+	}
+
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -690,6 +746,17 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: err}
 			}
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch reservation", Err: err}
+		}
+
+		if _, err := qtx.LogCancellation(ctx, dbgen.LogCancellationParams{
+			ReservationID:           reservationID,
+			CancelledByUserID:       user.ID,
+			CancelledAt:             now,
+			RefundPercentageApplied: refundPercentage,
+			FeeWaived:               feeWaived,
+			HoursBeforeStart:        hoursUntilReservation,
+		}); err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log cancellation", Err: err}
 		}
 
 		courts, err := qtx.ListReservationCourts(ctx, reservationID)
@@ -717,17 +784,6 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove reservation participant", Err: err}
 			}
 		}
-
-		deleted, err = qtx.DeleteReservation(ctx, dbgen.DeleteReservationParams{
-			ID:         reservationID,
-			FacilityID: facilityID,
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to delete reservation", Err: err}
-		}
-		if deleted == 0 {
-			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: sql.ErrNoRows}
-		}
 		return nil
 	})
 	if err != nil {
@@ -746,6 +802,71 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type reservationDeleteRequest struct {
+	WaiveFee *bool `json:"waive_fee"`
+}
+
+type cancellationPenaltyResponse struct {
+	ReservationID     int64     `json:"reservation_id"`
+	RefundPercentage  int64     `json:"refund_percentage"`
+	FeePercentage     int64     `json:"fee_percentage"`
+	HoursBeforeStart  int64     `json:"hours_before_start"`
+	FacilityID        int64     `json:"facility_id"`
+	ReservationStarts time.Time `json:"reservation_start_time"`
+}
+
+func decodeReservationDeleteRequest(r *http.Request) (reservationDeleteRequest, error) {
+	if apiutil.IsJSONRequest(r) {
+		if r.Body == nil {
+			return reservationDeleteRequest{}, nil
+		}
+		defer r.Body.Close()
+
+		var req reservationDeleteRequest
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			if errors.Is(err, io.EOF) {
+				return reservationDeleteRequest{}, nil
+			}
+			return reservationDeleteRequest{}, err
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return reservationDeleteRequest{}, fmt.Errorf("invalid JSON body")
+		}
+		return req, nil
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return reservationDeleteRequest{}, fmt.Errorf("invalid form data")
+	}
+
+	rawWaiveFee := strings.TrimSpace(apiutil.FirstNonEmpty(r.FormValue("waive_fee"), r.FormValue("waiveFee")))
+	if rawWaiveFee == "" {
+		return reservationDeleteRequest{}, nil
+	}
+	value := apiutil.ParseBool(rawWaiveFee)
+	return reservationDeleteRequest{WaiveFee: &value}, nil
+}
+
+func renderCancellationPenaltyPrompt(penalty cancellationPenaltyResponse) string {
+	return fmt.Sprintf(`
+<div class="space-y-3">
+  <p class="text-sm text-amber-900">This cancellation applies a %d%% fee (%d%% refund). Choose whether to waive the fee.</p>
+  <div class="flex flex-wrap gap-2">
+    <form hx-delete="/api/v1/reservations/%d" hx-swap="none" hx-on::response-error="document.getElementById('reservation-cancel-feedback').innerHTML = event.detail.xhr.responseText; document.getElementById('reservation-cancel-feedback').classList.remove('hidden');" hx-on::after-request="if(event.detail.xhr.status === 204){document.getElementById('modal').innerHTML='';}">
+      <input type="hidden" name="waive_fee" value="false"/>
+      <button type="submit" class="px-3 py-2 text-xs font-medium text-amber-900 bg-amber-100 border border-amber-200 rounded-md hover:bg-amber-200">Apply fee</button>
+    </form>
+    <form hx-delete="/api/v1/reservations/%d" hx-swap="none" hx-on::response-error="document.getElementById('reservation-cancel-feedback').innerHTML = event.detail.xhr.responseText; document.getElementById('reservation-cancel-feedback').classList.remove('hidden');" hx-on::after-request="if(event.detail.xhr.status === 204){document.getElementById('modal').innerHTML='';}">
+      <input type="hidden" name="waive_fee" value="true"/>
+      <button type="submit" class="px-3 py-2 text-xs font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700">Waive fee</button>
+    </form>
+  </div>
+</div>
+`, penalty.FeePercentage, penalty.RefundPercentage, penalty.ReservationID, penalty.ReservationID)
 }
 
 type reservationRequest struct {
@@ -1054,6 +1175,28 @@ func parseOptionalPointer(value, name string) (*int64, error) {
 		return nil, apiutil.FieldError{Field: name, Reason: "must be a number"}
 	}
 	return &parsed, nil
+}
+
+func hoursUntilReservationStart(start time.Time, now time.Time) int64 {
+	hours := int64(start.Sub(now).Hours())
+	if hours < 0 {
+		return 0
+	}
+	return hours
+}
+
+func applicableRefundPercentage(ctx context.Context, q *dbgen.Queries, facilityID int64, hoursUntilReservation int64) (int64, error) {
+	tier, err := q.GetApplicableCancellationTier(ctx, dbgen.GetApplicableCancellationTierParams{
+		FacilityID:            facilityID,
+		HoursUntilReservation: hoursUntilReservation,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 100, nil
+		}
+		return 0, err
+	}
+	return tier.RefundPercentage, nil
 }
 
 func facilityIDFromRequest(r *http.Request) (int64, error) {
