@@ -93,7 +93,8 @@ func HandleCreateProUnavailability(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if startTime.Before(time.Now()) {
+	now := time.Now()
+	if startTime.Before(now) {
 		http.Error(w, "Start time must be in the future", http.StatusBadRequest)
 		return
 	}
