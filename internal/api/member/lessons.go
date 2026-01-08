@@ -63,11 +63,22 @@ func HandleLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facilityLoc := time.Local
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to load booking options", http.StatusInternalServerError)
+		return
 	} else {
 		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		if facility.Timezone != "" {
+			loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+			if loadErr != nil {
+				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+			} else {
+				facilityLoc = loadedLoc
+			}
+		}
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -85,7 +96,7 @@ func HandleLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		selectedProID = proRows[0].ID
 	}
 
-	slots, err := buildLessonSlotOptions(ctx, q, *user.HomeFacilityID, selectedProID, bookingDate)
+	slots, err := buildLessonSlotOptions(ctx, q, *user.HomeFacilityID, selectedProID, bookingDate, facilityLoc)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load lesson availability")
 		http.Error(w, "Failed to load availability", http.StatusInternalServerError)
@@ -134,11 +145,22 @@ func HandleLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	facilityLoc := time.Local
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to load booking options", http.StatusInternalServerError)
+		return
 	} else {
 		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		if facility.Timezone != "" {
+			loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+			if loadErr != nil {
+				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+			} else {
+				facilityLoc = loadedLoc
+			}
+		}
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -149,7 +171,7 @@ func HandleLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slots, err := buildLessonSlotOptions(ctx, q, *user.HomeFacilityID, proID, bookingDate)
+	slots, err := buildLessonSlotOptions(ctx, q, *user.HomeFacilityID, proID, bookingDate, facilityLoc)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load lesson availability")
 		http.Error(w, "Failed to load availability", http.StatusInternalServerError)
@@ -261,6 +283,22 @@ func HandleProAvailability(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
+	facilityLoc := time.Local
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to load availability", http.StatusInternalServerError)
+		return
+	}
+	if facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr != nil {
+			logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+		} else {
+			facilityLoc = loadedLoc
+		}
+	}
+
 	staffRow, err := q.GetStaffByID(ctx, proID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -297,13 +335,13 @@ func HandleProAvailability(w http.ResponseWriter, r *http.Request) {
 
 	slots := make([]lessonSlot, 0, len(rows))
 	for _, row := range rows {
-		startTime, err := parseLessonSlotTime(row.StartTime, time.Local)
+		startTime, err := parseLessonSlotTime(row.StartTime, facilityLoc)
 		if err != nil {
 			logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to parse lesson slot start time")
 			http.Error(w, "Failed to load availability", http.StatusInternalServerError)
 			return
 		}
-		endTime, err := parseLessonSlotTime(row.EndTime, time.Local)
+		endTime, err := parseLessonSlotTime(row.EndTime, facilityLoc)
 		if err != nil {
 			logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to parse lesson slot end time")
 			http.Error(w, "Failed to load availability", http.StatusInternalServerError)
@@ -475,11 +513,11 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 
 		available := false
 		for _, slot := range slots {
-			slotStart, err := parseLessonSlotTime(slot.StartTime, time.Local)
+			slotStart, err := parseLessonSlotTime(slot.StartTime, facilityLoc)
 			if err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
 			}
-			slotEnd, err := parseLessonSlotTime(slot.EndTime, time.Local)
+			slotEnd, err := parseLessonSlotTime(slot.EndTime, facilityLoc)
 			if err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
 			}
@@ -649,6 +687,7 @@ func buildLessonSlotOptions(
 	facilityID int64,
 	proID int64,
 	bookingDate time.Time,
+	facilityLoc *time.Location,
 ) ([]membertempl.LessonSlotOption, error) {
 	if proID <= 0 {
 		return nil, nil
@@ -667,11 +706,11 @@ func buildLessonSlotOptions(
 
 	slots := make([]membertempl.LessonSlotOption, 0, len(rows))
 	for _, row := range rows {
-		startTime, err := parseLessonSlotTime(row.StartTime, time.Local)
+		startTime, err := parseLessonSlotTime(row.StartTime, facilityLoc)
 		if err != nil {
 			return nil, err
 		}
-		endTime, err := parseLessonSlotTime(row.EndTime, time.Local)
+		endTime, err := parseLessonSlotTime(row.EndTime, facilityLoc)
 		if err != nil {
 			return nil, err
 		}
