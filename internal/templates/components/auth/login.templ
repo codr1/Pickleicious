@@ -1,5 +1,39 @@
 package auth
 
+// AuthPageWrapper provides the HTML shell for auth pages (login, member login)
+// Includes HTMX and CSS but no navigation (user isn't logged in yet)
+// TODO: HTMX version and config duplicated from layouts/base.templ - consider extracting shared constants
+templ AuthPageWrapper(title string) {
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>{ title } - Pickleicious</title>
+        <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+        <link href="/static/css/main.css" rel="stylesheet"/>
+        <script>
+            htmx.config.responseHandling = [
+                { code: "204", swap: false },
+                { code: "2xx", swap: true },
+                { code: "3xx", swap: true },
+                { code: "4xx", swap: true, error: true },
+                { code: "5xx", swap: true, error: true },
+            ];
+        </script>
+    </head>
+    <body class="min-h-screen bg-gray-50">
+        { children... }
+    </body>
+    </html>
+}
+
+templ LoginPage(organizationID string) {
+    @AuthPageWrapper("Login") {
+        @LoginLayout(organizationID)
+    }
+}
+
 templ LoginLayout(organizationID string) {
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
         <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">

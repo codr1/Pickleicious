@@ -16,8 +16,9 @@
 --   metro@pickle.test    / metro123     (admin, Metro Courts)
 --
 -- TEST CREDENTIALS (Members):
---   All members use password: member123
---   Example: alice.j@email.test / member123
+--   Member login uses OTP bypass in dev mode.
+--   Enter any member email, then use code: 123456
+--   Example: alice.j@email.test / code: 123456
 --
 -- IMPORTANT NOTES:
 --   - This script is DESTRUCTIVE. Run only via `task db:seed` which resets first.

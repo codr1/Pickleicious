@@ -1,5 +1,11 @@
 package auth
 
+templ MemberLoginPage(organizationID string) {
+    @AuthPageWrapper("Member Login") {
+        @MemberLoginLayout(organizationID)
+    }
+}
+
 templ MemberLoginLayout(organizationID string) {
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
         <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">

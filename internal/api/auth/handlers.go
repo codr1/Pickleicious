@@ -48,6 +48,13 @@ type CognitoAuthClient interface {
 // Used to mask timing differences when a user record does not exist.
 const dummyPasswordHash = "$2a$10$6bhr8BjYp8rXJejsIExR7uOrcalHplR0RnnoSJk5mZXv5fNru2udi"
 
+// Dev mode bypass constants - only active when environment == "development"
+const (
+	devBypassCode    = "123456"      // OTP code that bypasses Cognito in dev mode
+	devBypassSession = "dev-session" // Fake session token for dev mode
+	devEnvironment   = "development"
+)
+
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(q *dbgen.Queries, cfg *config.Config) {
 	if q == nil || cfg == nil {
@@ -74,9 +81,8 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	organizationID := r.FormValue("organization_id")
-	component := authtempl.LoginLayout(organizationID)
-	err := component.Render(r.Context(), w)
-	if err != nil {
+	component := authtempl.LoginPage(organizationID)
+	if err := component.Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render login page")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
 		return
@@ -98,9 +104,8 @@ func HandleMemberLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	organizationID := r.FormValue("organization_id")
-	component := authtempl.MemberLoginLayout(organizationID)
-	err := component.Render(r.Context(), w)
-	if err != nil {
+	component := authtempl.MemberLoginPage(organizationID)
+	if err := component.Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render member login page")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
 		return
@@ -353,6 +358,40 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// isDevMode returns true if running in development environment
+func isDevMode() bool {
+	return appConfig != nil && appConfig.App.Environment == devEnvironment
+}
+
+// setMemberSession creates auth session for a member and sends redirect response.
+// On error, writes error response directly.
+func setMemberSession(w http.ResponseWriter, r *http.Request, user dbgen.User) {
+	logger := log.Ctx(r.Context())
+
+	var homeFacilityID *int64
+	if user.HomeFacilityID.Valid {
+		id := user.HomeFacilityID.Int64
+		homeFacilityID = &id
+	}
+
+	authUser := &authz.AuthUser{
+		ID:              user.ID,
+		IsStaff:         false,
+		SessionType:     SessionTypeMember,
+		HomeFacilityID:  homeFacilityID,
+		MembershipLevel: user.MembershipLevel,
+	}
+
+	if err := SetAuthCookie(w, r, authUser); err != nil {
+		logger.Error().Err(err).Msg("Failed to set member auth session")
+		http.Error(w, "Failed to start session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/member")
+	w.WriteHeader(http.StatusOK)
+}
+
 func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 	if r.Method != http.MethodPost {
@@ -398,6 +437,17 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 
 	if !user.IsMember {
 		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// Dev mode bypass - skip Cognito, return fake session for code entry
+	if isDevMode() {
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito send-code")
+		component := authtempl.MemberCodeVerification(identifier, organizationIDStr, devBypassSession)
+		if err := component.Render(r.Context(), w); err != nil {
+			logger.Error().Err(err).Msg("Failed to render code verification form")
+			http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -496,6 +546,13 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Dev mode bypass - accept devBypassCode as valid
+	if isDevMode() && code == devBypassCode {
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: bypassing Cognito verify-code")
+		setMemberSession(w, r, user)
+		return
+	}
+
 	// Get Cognito config for this organization
 	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
 	if err != nil {
@@ -538,28 +595,7 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var homeFacilityID *int64
-	if user.HomeFacilityID.Valid {
-		id := user.HomeFacilityID.Int64
-		homeFacilityID = &id
-	}
-
-	authUser := &authz.AuthUser{
-		ID:              user.ID,
-		IsStaff:         false,
-		SessionType:     SessionTypeMember,
-		HomeFacilityID:  homeFacilityID,
-		MembershipLevel: user.MembershipLevel,
-	}
-
-	if err := SetAuthCookie(w, r, authUser); err != nil {
-		logger.Error().Err(err).Msg("Failed to set auth session")
-		http.Error(w, "Failed to start session", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("HX-Redirect", "/member")
-	w.WriteHeader(http.StatusOK)
+	setMemberSession(w, r, user)
 }
 
 func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
