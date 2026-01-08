@@ -108,6 +108,7 @@ templ LessonBookingForm(data LessonBookingFormData) {
 				selectLessonPro(first);
 			}
 			updateLessonSubmitState();
+			setLessonReservationEndTime(document.getElementById("lesson_time_slot"));
 		}
 
 		function updateLessonSubmitState() {
@@ -121,6 +122,25 @@ templ LessonBookingForm(data LessonBookingFormData) {
 			const hasSlot = timeSelect && !timeSelect.disabled && timeSelect.value;
 			submit.disabled = !(hasPro && hasSlot);
 		}
+
+		function setLessonReservationEndTime(select) {
+			if (!select) {
+				return;
+			}
+			const option = select.options[select.selectedIndex];
+			const endTime = option ? option.getAttribute("data-end-time") : "";
+			const endInput = document.getElementById("lesson_end_time");
+			if (endInput) {
+				endInput.value = endTime || "";
+			}
+			updateLessonSubmitState();
+		}
+
+		document.body.addEventListener("htmx:afterSwap", function (event) {
+			if (event.target && event.target.id === "lesson-slot-picker") {
+				setLessonReservationEndTime(document.getElementById("lesson_time_slot"));
+			}
+		});
 
 		initializeLessonProSelection();
 	</script>
@@ -222,30 +242,4 @@ templ ProSlotPicker(slots []LessonSlotOption) {
 			<p class="mt-1 text-xs text-gray-500">Select a time for your lesson.</p>
 		</div>
 	</div>
-
-	<script>
-		function setLessonReservationEndTime(select) {
-			if (!select) {
-				return;
-			}
-			const option = select.options[select.selectedIndex];
-			const endTime = option ? option.getAttribute("data-end-time") : "";
-			const endInput = document.getElementById("lesson_end_time");
-			if (endInput) {
-				endInput.value = endTime || "";
-			}
-			updateLessonSubmitState();
-		}
-
-		document.addEventListener("DOMContentLoaded", function () {
-			setLessonReservationEndTime(document.getElementById("lesson_time_slot"));
-		});
-
-		document.body.addEventListener("htmx:afterSwap", function (event) {
-			if (event.target && event.target.id === "lesson-slot-picker") {
-				setLessonReservationEndTime(document.getElementById("lesson_time_slot"));
-				updateLessonSubmitState();
-			}
-		});
-	</script>
 }
