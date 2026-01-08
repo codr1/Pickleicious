@@ -176,6 +176,15 @@ func IsSQLiteForeignKeyViolation(err error) bool {
 	return sqliteErr.ExtendedCode == sqlite3.ErrConstraintForeignKey
 }
 
+func IsSQLiteUniqueViolation(err error) bool {
+	var sqliteErr sqlite3.Error
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+	return sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique ||
+		sqliteErr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey
+}
+
 func RenderHTMLComponent(ctx context.Context, w http.ResponseWriter, component templ.Component, headers map[string]string, logMsg string, errMsg string) bool {
 	logger := log.Ctx(ctx)
 	var buf bytes.Buffer

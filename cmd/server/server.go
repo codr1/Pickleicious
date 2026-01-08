@@ -14,6 +14,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api"
 	"github.com/codr1/Pickleicious/internal/api/auth"
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/api/cancellationpolicy"
 	"github.com/codr1/Pickleicious/internal/api/checkin"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/member"
@@ -56,6 +57,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	member.InitHandlers(database)
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
+	cancellationpolicy.InitHandlers(database.Queries)
 
 	staff.InitHandlers(database)
 
@@ -357,6 +359,18 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/facility-settings", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: operatinghours.HandleFacilitySettingsUpdate,
+	}))
+
+	// Cancellation policy admin page
+	mux.HandleFunc("/admin/cancellation-policy", cancellationpolicy.HandleCancellationPolicyPage)
+
+	// Cancellation policy API
+	mux.HandleFunc("/api/v1/cancellation-policy/tiers", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: cancellationpolicy.HandleCancellationPolicyTierCreate,
+	}))
+	mux.HandleFunc("/api/v1/cancellation-policy/tiers/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut:    cancellationpolicy.HandleCancellationPolicyTierUpdate,
+		http.MethodDelete: cancellationpolicy.HandleCancellationPolicyTierDelete,
 	}))
 
 	// Static file handling with logging and environment awareness
