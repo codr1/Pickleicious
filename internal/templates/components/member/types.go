@@ -92,16 +92,16 @@ type ReservationWidgetData struct {
 }
 
 type CancellationPenaltyData struct {
-	ReservationID    int64
-	FeePercentage    int64
-	RefundPercentage int64
-	HoursBeforeStart int64
-	StartTime        time.Time
-	EndTime          time.Time
-	CourtName        string
-	FacilityName     string
-	ExpiresAt        time.Time
-	CalculatedAt     time.Time
+	ReservationID    int64     `json:"reservation_id"`
+	FeePercentage    int64     `json:"fee_percentage"`
+	RefundPercentage int64     `json:"refund_percentage"`
+	HoursBeforeStart int64     `json:"hours_before_start"`
+	StartTime        time.Time `json:"start_time"`
+	EndTime          time.Time `json:"end_time"`
+	CourtName        string    `json:"court_name"`
+	FacilityName     string    `json:"facility_name"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	CalculatedAt     time.Time `json:"penalty_calculated_at"`
 }
 
 type MemberBookingSlot struct {

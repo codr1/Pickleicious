@@ -381,31 +381,6 @@ func (e reservationLimitError) Error() string {
 	return fmt.Sprintf("reservation limit reached (%d/%d)", e.currentCount, e.limit)
 }
 
-type reservationDetails struct {
-	Court     string    `json:"court"`
-	Facility  string    `json:"facility"`
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-}
-
-type cancellationPenalty struct {
-	ReservationID      int64              `json:"reservation_id"`
-	RefundPercentage   int64              `json:"refund_percentage"`
-	FeePercentage      int64              `json:"fee_percentage"`
-	HoursBeforeStart   int64              `json:"hours_before_start"`
-	ReservationDetails reservationDetails `json:"reservation_details"`
-	ExpiresAt          time.Time          `json:"expires_at"`
-	CalculatedAt       time.Time          `json:"penalty_calculated_at"`
-}
-
-type cancellationPenaltyError struct {
-	Penalty cancellationPenalty
-}
-
-func (e cancellationPenaltyError) Error() string {
-	return "cancellation confirmation required"
-}
-
 // HandleMemberBookingCreate handles POST /member/reservations for member booking.
 func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -665,28 +640,26 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
 		}
-		buildPenalty := func(calculatedAt time.Time, refundPercentage int64, hoursBeforeStart int64) (cancellationPenalty, error) {
+		buildPenalty := func(calculatedAt time.Time, refundPercentage int64, hoursBeforeStart int64) (membertempl.CancellationPenaltyData, error) {
 			courts, err := qtx.ListReservationCourts(ctx, reservationID)
 			if err != nil {
-				return cancellationPenalty{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
+				return membertempl.CancellationPenaltyData{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
 			}
 			facility, err := qtx.GetFacilityByID(ctx, facilityID)
 			if err != nil {
-				return cancellationPenalty{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
+				return membertempl.CancellationPenaltyData{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
 			}
-			return cancellationPenalty{
+			return membertempl.CancellationPenaltyData{
 				ReservationID:    reservationID,
 				RefundPercentage: refundPercentage,
 				FeePercentage:    100 - refundPercentage,
 				HoursBeforeStart: hoursBeforeStart,
+				StartTime:        reservation.StartTime,
+				EndTime:          reservation.EndTime,
+				CourtName:        reservationCourtLabel(courts),
+				FacilityName:     facility.Name,
 				ExpiresAt:        calculatedAt.Add(cancellationPenaltyWindow),
 				CalculatedAt:     calculatedAt,
-				ReservationDetails: reservationDetails{
-					Court:     reservationCourtLabel(courts),
-					Facility:  facility.Name,
-					StartTime: reservation.StartTime,
-					EndTime:   reservation.EndTime,
-				},
 			}, nil
 		}
 
@@ -775,18 +748,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-			component := membertempl.CancellationConfirmModal(membertempl.CancellationPenaltyData{
-				ReservationID:    penaltyErr.Penalty.ReservationID,
-				FeePercentage:    penaltyErr.Penalty.FeePercentage,
-				RefundPercentage: penaltyErr.Penalty.RefundPercentage,
-				HoursBeforeStart: penaltyErr.Penalty.HoursBeforeStart,
-				StartTime:        penaltyErr.Penalty.ReservationDetails.StartTime,
-				EndTime:          penaltyErr.Penalty.ReservationDetails.EndTime,
-				CourtName:        penaltyErr.Penalty.ReservationDetails.Court,
-				FacilityName:     penaltyErr.Penalty.ReservationDetails.Facility,
-				ExpiresAt:        penaltyErr.Penalty.ExpiresAt,
-				CalculatedAt:     penaltyErr.Penalty.CalculatedAt,
-			})
+			component := membertempl.CancellationConfirmModal(penaltyErr.Penalty)
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().Set("HX-Retarget", "#modal")
 			w.Header().Set("HX-Reswap", "innerHTML")

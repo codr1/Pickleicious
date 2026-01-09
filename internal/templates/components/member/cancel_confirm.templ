@@ -45,26 +45,36 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 				</p>
 			</div>
 			<form
-				class="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4"
+				class="border-t border-gray-200 px-6 py-4"
 				hx-delete={fmt.Sprintf("/member/reservations/%d?confirm=true", data.ReservationID)}
 				hx-swap="none"
 				hx-on::response-error="handleMemberCancellationError(event)"
-				hx-on::after-request="if(event.detail.xhr.status===200){document.getElementById('modal').innerHTML='';}">
+				hx-on::after-request="if(event.detail.xhr.status===200){document.getElementById('modal').innerHTML='';htmx.trigger(document.body,'refreshMemberReservations');}">
 				<input type="hidden" name="hours_before_start" value={fmt.Sprintf("%d", data.HoursBeforeStart)}/>
 				<input type="hidden" name="penalty_calculated_at" value={data.CalculatedAt.Format(time.RFC3339Nano)}/>
-				<button
-					type="button"
-					class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-					onclick="document.getElementById('modal').innerHTML=''">
-					Back
-				</button>
-				<button
-					id="cancel-confirm-submit"
-					type="submit"
-					class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
-					Confirm cancellation
-				</button>
+				<div class="flex items-center justify-end gap-3">
+					<button
+						type="button"
+						class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+						onclick="document.getElementById('modal').innerHTML=''">
+						Back
+					</button>
+					<button
+						id="cancel-confirm-submit"
+						type="submit"
+						class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+						Confirm cancellation
+					</button>
+				</div>
+				<p id="cancel-confirm-disable-reason" class="mt-2 hidden text-right text-xs text-red-600">
+					Not enough time remaining
+				</p>
 			</form>
+			<div
+				id="cancel-confirm-expired-toast"
+				class="mx-6 hidden rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+				role="status">
+			</div>
 		</div>
 	</div>
 
@@ -76,6 +86,8 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 			}
 			countdown.dataset.active = "true";
 			const confirmButton = document.getElementById("cancel-confirm-submit");
+			const disableReason = document.getElementById("cancel-confirm-disable-reason");
+			const expiredToast = document.getElementById("cancel-confirm-expired-toast");
 			const expiresAt = Number(countdown.getAttribute("data-expires-at"));
 			if (!Number.isFinite(expiresAt)) {
 				return;
@@ -109,13 +121,23 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 					confirmButton.disabled = disableConfirm;
 					confirmButton.classList.toggle("opacity-50", disableConfirm);
 					confirmButton.classList.toggle("cursor-not-allowed", disableConfirm);
+					confirmButton.title = disableConfirm ? "Time expired - please try again" : "";
+					if (disableReason) {
+						disableReason.classList.toggle("hidden", !disableConfirm);
+					}
 				}
 				if (remainingMs <= 0) {
 					clearInterval(timerId);
-					const modal = document.getElementById("modal");
-					if (modal) {
-						modal.innerHTML = "";
+					if (expiredToast) {
+						expiredToast.textContent = "Penalty window expired - cancellation cancelled";
+						expiredToast.classList.remove("hidden");
 					}
+					window.setTimeout(() => {
+						const modal = document.getElementById("modal");
+						if (modal) {
+							modal.innerHTML = "";
+						}
+					}, 2000);
 				}
 			}
 
