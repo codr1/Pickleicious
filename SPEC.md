@@ -257,7 +257,7 @@ Organization (corporate entity)
 | member_photos | Photo BLOB storage |
 | staff | Employee records |
 | courts | Court definitions |
-| cognito_config | Per-org auth settings |
+| cognito_config | Legacy (unused - auth via env vars) |
 
 ### Reservation System
 
@@ -925,7 +925,7 @@ Two cookie-based session mechanisms operate in parallel:
 | Cookie | Purpose | Used By |
 |--------|---------|---------|
 | `pickleicious_session` | In-memory token-based session | Staff local login |
-| `pickleicious_auth` | HMAC-signed JSON payload | Dev mode bypass, future Cognito |
+| `pickleicious_auth` | HMAC-signed JSON payload | Member login (dev bypass or Cognito) |
 
 Session characteristics:
 - 8-hour TTL for both session types
@@ -961,25 +961,41 @@ When `config.App.Environment == "development"`:
 
 ### Member Authentication
 
-Members can authenticate in multiple ways:
+Members authenticate via AWS Cognito EMAIL_OTP:
 
 | Method | Flow |
 |--------|------|
-| Email code | System sends 6-digit code, member enters it |
-| SMS code | Code sent to phone number |
-| Cognito SSO | Redirects to AWS Cognito hosted UI |
+| Email OTP | Cognito sends 6-digit code to member's email |
+| Dev bypass | Code `123456` with session `dev-session` in development mode |
 
 Authentication is optional for walk-in check-ins. Staff can check someone in without the member having an account - useful for first-time guests or those who forgot their phone.
 
-Note: Cognito integration handlers exist but SDK integration is not yet complete (marked TODO in code).
+**Flow:**
+1. Member enters email on `/member/login`
+2. System calls Cognito `InitiateAuth` with `USER_AUTH` flow and `PREFERRED_CHALLENGE=EMAIL_OTP`
+3. Cognito sends 6-digit code to member's email
+4. Member enters code, system calls `RespondToAuthChallenge` with `EMAIL_OTP` challenge
+5. On success, `pickleicious_auth` cookie is set with member info
 
-### Cognito Organization Integration
+### Cognito Configuration
 
-Organizations can integrate their AWS Cognito user pool for SSO:
+Single shared AWS Cognito User Pool configured via environment variables:
 
-- Pool ID and client credentials stored per organization (cognito_config table)
-- Callback URLs for OAuth flow
-- Members authenticate once, access all organization systems
+| Variable | Description |
+|----------|-------------|
+| `COGNITO_POOL_ID` | User Pool ID (e.g., `us-east-2_XXXXXXXXX`) |
+| `COGNITO_CLIENT_ID` | App Client ID (public, no secret) |
+
+Configuration loaded from `.env` file (gitignored). See `.env.example` for template.
+
+**User Pool Setup:**
+- Username attribute: email
+- Auto-verified attribute: email
+- Allowed first auth factors: EMAIL_OTP, PASSWORD
+- App client: No secret (public client), explicit auth flows: USER_AUTH, REFRESH_TOKEN
+
+**Member Sync:**
+When a new member is created via the admin UI, a corresponding Cognito user is automatically created with `email_verified=true` and no welcome email sent.
 
 ### Auth Middleware
 
@@ -1841,7 +1857,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Cognito Auth | Framework only | Handlers exist, SDK integration TODO |
+| Cognito Auth | Complete | EMAIL_OTP flow via single shared User Pool |
 | Open Play Enforcement | Scheduled | gocron job configured, evaluation logic partial |
 | Password Reset | Not implemented | Returns 501 |
 | Recurrence Rules | Schema only | Tables exist, not used in handlers |

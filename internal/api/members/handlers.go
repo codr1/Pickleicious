@@ -17,6 +17,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
+	"github.com/codr1/Pickleicious/internal/cognito"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/models"
 	"github.com/codr1/Pickleicious/internal/request"
@@ -25,6 +26,7 @@ import (
 )
 
 var queries *dbgen.Queries
+var cognitoClient *cognito.CognitoClient
 
 var (
 	limiter      *rate.Limiter
@@ -34,8 +36,9 @@ var (
 
 const membersQueryTimeout = 5 * time.Second
 
-func InitHandlers(q *dbgen.Queries) {
+func InitHandlers(q *dbgen.Queries, cc *cognito.CognitoClient) {
 	queries = q
+	cognitoClient = cc
 	limiter = rate.NewLimiter(rate.Limit(10000), 1000)
 }
 
@@ -574,6 +577,16 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Msg("Failed to create member")
 		http.Error(w, "Failed to create member", http.StatusInternalServerError)
 		return
+	}
+
+	// Create user in Cognito for OTP authentication
+	if cognitoClient != nil {
+		if err := cognitoClient.CreateUser(r.Context(), email); err != nil {
+			// Log but don't fail - member was created, Cognito can be synced later
+			logger.Warn().Err(err).Str("email", email).Msg("Failed to create Cognito user - member can use dev bypass or sync later")
+		} else {
+			logger.Info().Str("email", email).Msg("Created Cognito user for member")
+		}
 	}
 
 	// Fetch the complete member record

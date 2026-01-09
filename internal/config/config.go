@@ -19,6 +19,11 @@ type DatabaseConfig struct {
 	AuthToken string `yaml:"-"` // Loaded from environment
 }
 
+type AWSConfig struct {
+	CognitoPoolID   string `yaml:"-"` // Loaded from environment
+	CognitoClientID string `yaml:"-"` // Loaded from environment
+}
+
 type Config struct {
 	App struct {
 		Name        string `yaml:"name"`
@@ -29,6 +34,8 @@ type Config struct {
 	} `yaml:"app"`
 
 	Database DatabaseConfig `yaml:"database"`
+
+	AWS AWSConfig `yaml:"aws"`
 
 	OpenPlay struct {
 		EnforcementInterval string `yaml:"enforcement_interval"`
@@ -63,6 +70,8 @@ func Load(configPath string) (*Config, error) {
 	// Load sensitive values from environment
 	cfg.App.SecretKey = os.Getenv("APP_SECRET_KEY")
 	cfg.Database.AuthToken = os.Getenv("DATABASE_AUTH_TOKEN")
+	cfg.AWS.CognitoPoolID = os.Getenv("COGNITO_POOL_ID")
+	cfg.AWS.CognitoClientID = os.Getenv("COGNITO_CLIENT_ID")
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {

@@ -23,26 +23,18 @@ import (
 	authtempl "github.com/codr1/Pickleicious/internal/templates/components/auth"
 )
 
-type CognitoConfig struct {
-	PoolID       string
-	ClientID     string
-	ClientSecret string
-	Domain       string
-	CallbackURL  string
-}
-
 var queries *dbgen.Queries
 var limiter *rate.Limiter
 var appConfig *config.Config
-var newCognitoClient = func(cfg dbgen.CognitoConfig) (CognitoAuthClient, error) {
-	return cognito.NewClient(cfg)
-}
+var cognitoClient *cognito.CognitoClient
 
+// CognitoAuthClient interface for testing
 type CognitoAuthClient interface {
-	InitiateCustomAuth(ctx context.Context, username string, authMethod string) (*cognitoidentityprovider.InitiateAuthOutput, error)
-	RespondToAuthChallenge(ctx context.Context, session string, username string, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error)
-	ForgotPassword(ctx context.Context, username string, authMethod string) (*cognitoidentityprovider.ForgotPasswordOutput, error)
-	ConfirmForgotPassword(ctx context.Context, username string, code string, newPassword string) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error)
+	InitiateEmailOTP(ctx context.Context, email string) (*cognitoidentityprovider.InitiateAuthOutput, error)
+	VerifyEmailOTP(ctx context.Context, session, email, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error)
+	CreateUser(ctx context.Context, email string) error
+	ForgotPassword(ctx context.Context, username string) (*cognitoidentityprovider.ForgotPasswordOutput, error)
+	ConfirmForgotPassword(ctx context.Context, username, code, newPassword string) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error)
 }
 
 // Used to mask timing differences when a user record does not exist.
@@ -64,6 +56,19 @@ func InitHandlers(q *dbgen.Queries, cfg *config.Config) {
 	queries = q
 	appConfig = cfg
 	limiter = rate.NewLimiter(rate.Limit(100), 10) // More restrictive for auth
+
+	// Initialize global Cognito client if configured
+	if cfg.AWS.CognitoPoolID != "" && cfg.AWS.CognitoClientID != "" {
+		client, err := cognito.NewClient(cfg.AWS.CognitoPoolID, cfg.AWS.CognitoClientID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to initialize Cognito client")
+		} else {
+			cognitoClient = client
+			log.Info().Msg("Cognito client initialized")
+		}
+	} else {
+		log.Warn().Msg("Cognito not configured - OTP auth will only work in dev mode")
+	}
 }
 
 func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
@@ -169,12 +174,6 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
-	}
-
 	if queries == nil {
 		logger.Error().Msg("Database queries not initialized")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -197,28 +196,14 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get Cognito config for this organization
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "OTP authentication not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Initialize Cognito client with organization-specific config
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	authMethod := ""
-	if user.PreferredAuthMethod.Valid {
-		authMethod = user.PreferredAuthMethod.String
-	}
-
-	authResponse, err := client.InitiateCustomAuth(r.Context(), identifier, authMethod)
+	authResponse, err := cognitoClient.InitiateEmailOTP(r.Context(), identifier)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
 			return
@@ -264,7 +249,7 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -292,28 +277,19 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get Cognito config for this organization
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "OTP authentication not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Verify code with Cognito
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	authResponse, err := client.RespondToAuthChallenge(r.Context(), session, identifier, code)
+	authResponse, err := cognitoClient.VerifyEmailOTP(r.Context(), session, identifier, code)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
 			return
 		}
-		logger.Error().Err(err).Msg("Failed to respond to Cognito challenge")
+		logger.Error().Err(err).Msg("Failed to verify Cognito OTP")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -412,7 +388,7 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -451,28 +427,14 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get Cognito config for this organization
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "OTP authentication not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Initialize Cognito client with organization-specific config
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	authMethod := ""
-	if user.PreferredAuthMethod.Valid {
-		authMethod = user.PreferredAuthMethod.String
-	}
-
-	authResponse, err := client.InitiateCustomAuth(r.Context(), identifier, authMethod)
+	authResponse, err := cognitoClient.InitiateEmailOTP(r.Context(), identifier)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
 			return
@@ -518,7 +480,7 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -553,28 +515,19 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get Cognito config for this organization
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "OTP authentication not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Verify code with Cognito
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	authResponse, err := client.RespondToAuthChallenge(r.Context(), session, identifier, code)
+	authResponse, err := cognitoClient.VerifyEmailOTP(r.Context(), session, identifier, code)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
 			return
 		}
-		logger.Error().Err(err).Msg("Failed to respond to Cognito challenge")
+		logger.Error().Err(err).Msg("Failed to verify Cognito OTP")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -704,7 +657,7 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -716,32 +669,14 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "Password reset not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	authMethod := ""
-	user, err := getUserByIdentifier(r.Context(), identifier)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		logger.Error().Err(err).Msg("Failed to load user for password reset")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-	if err == nil && user.PreferredAuthMethod.Valid {
-		authMethod = user.PreferredAuthMethod.String
-	}
-
-	_, err = client.ForgotPassword(r.Context(), identifier, authMethod)
+	_, err = cognitoClient.ForgotPassword(r.Context(), identifier)
 	if err != nil {
 		var userNotFound *types.UserNotFoundException
 		if errors.As(err, &userNotFound) {
@@ -781,33 +716,20 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
 	}
 
-	if queries == nil {
-		logger.Error().Msg("Database queries not initialized")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "Password reset not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = client.ConfirmForgotPassword(r.Context(), identifier, code, newPassword)
+	_, err = cognitoClient.ConfirmForgotPassword(r.Context(), identifier, code, newPassword)
 	if err != nil {
 		var userNotFound *types.UserNotFoundException
 		if errors.As(err, &userNotFound) {
@@ -841,7 +763,7 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID, err := strconv.ParseInt(organizationIDStr, 10, 64)
+	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -853,7 +775,7 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := getUserByIdentifier(r.Context(), identifier)
+	_, err = getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
@@ -864,26 +786,14 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cognitoConfig, err := queries.GetCognitoConfig(r.Context(), organizationID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get Cognito config")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	// Check if Cognito is configured
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "OTP authentication not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	client, err := newCognitoClient(cognitoConfig)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize Cognito client")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	authMethod := ""
-	if user.PreferredAuthMethod.Valid {
-		authMethod = user.PreferredAuthMethod.String
-	}
-
-	authResponse, err := client.InitiateCustomAuth(r.Context(), identifier, authMethod)
+	authResponse, err := cognitoClient.InitiateEmailOTP(r.Context(), identifier)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
 			return

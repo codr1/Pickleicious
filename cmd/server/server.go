@@ -26,6 +26,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/staff"
 	"github.com/codr1/Pickleicious/internal/api/themes"
+	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
 	"github.com/codr1/Pickleicious/internal/models"
@@ -48,7 +49,20 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		api.WithContentType,
 	)
 
+	// Create Cognito client if configured
+	var cognitoClient *cognito.CognitoClient
+	if config.AWS.CognitoPoolID != "" && config.AWS.CognitoClientID != "" {
+		client, err := cognito.NewClient(config.AWS.CognitoPoolID, config.AWS.CognitoClientID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to init Cognito client")
+		} else {
+			cognitoClient = client
+			log.Info().Msg("Cognito client initialized")
+		}
+	}
+
 	auth.InitHandlers(database.Queries, config)
+	members.InitHandlers(database.Queries, cognitoClient)
 	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)

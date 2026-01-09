@@ -33,7 +33,7 @@
 | CI/CD | #29 | ❌ | ❌ Not started | GitHub Actions planned |
 | Member Management | ❌ | ❌ | ✅ Implemented | Not in issues, but complete |
 | Court/Calendar | ❌ | ❌ | ✅ Basic UI | Not in issues |
-| Authentication | ❌ | ❌ | Partial (TODOs) | Cognito integration pending |
+| Authentication | ❌ | ❌ | ✅ Cognito EMAIL_OTP | Logout/reset pending |
 | Open Play Rules | #32 | ❌ | ❌ | New feature request |
 | Search | #31 | ❌ | ✅ Fixed | Bug fixed (merged 2025-12-24) |
 | Deleted User Handling | #30 | ❌ | ✅ Implemented | Closed |
@@ -227,17 +227,7 @@ Separate billing table for payment data:
 ### 4.1 Authentication Architecture
 
 
-### 4.2 Cognito Configuration (Per-Organization)
-
-| Field | Description |
-|-------|-------------|
-| `pool_id` | Cognito User Pool ID |
-| `client_id` | App client ID |
-| `client_secret` | App client secret |
-| `domain` | Custom domain (e.g., org.pickleadmin.com) |
-| `callback_url` | OAuth callback URL |
-
-### 4.3 Login UI Flow (HTMX-Powered)
+### 4.2 Login UI Flow (HTMX-Powered)
 
 **Step 1: Identifier Entry**
 - On blur, checks if identifier belongs to staff with local auth
@@ -248,12 +238,14 @@ Separate billing table for payment data:
 - Replaces form with code entry UI
 
 
-### 4.4 Implementation Status
+### 4.3 Implementation Status
 
 | Feature | Status |
 |---------|--------|
 | Login page UI | ✅ Complete |
 | Staff check endpoint | ✅ Complete |
+| Cognito EMAIL_OTP | ✅ Complete |
+| Member Cognito sync | ✅ Complete |
 <!-- BEGIN WIP: STORY-0029 -->
 | Logout endpoint/button | ❌ TODO |
 <!-- END WIP -->

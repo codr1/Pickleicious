@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
 	"github.com/codr1/Pickleicious/internal/scheduler"
@@ -77,10 +76,6 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to ping database")
 	}
 	log.Info().Msg("Database connection successful")
-
-	// Initialize handlers with database queries
-	members.InitHandlers(database.Queries)
-	log.Info().Msg("Member handlers initialized with database queries")
 
 	// Verify users table exists
 	var count int
