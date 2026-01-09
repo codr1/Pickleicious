@@ -56,7 +56,7 @@ templ LoginLayout(organizationID string) {
                             name="identifier"
                             class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                             placeholder="Enter your email or phone"
-                            hx-post="/api/v1/auth/check-staff"
+                            hx-get="/api/v1/auth/check-staff"
                             hx-trigger="blur"
                             hx-target="#staff-auth-section"
                         />

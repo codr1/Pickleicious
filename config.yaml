@@ -15,3 +15,7 @@ features:
   enable_metrics: false
   enable_tracing: false
   enable_debug: true
+
+rate_limit:
+  enabled: true
+  trust_proxy: false
