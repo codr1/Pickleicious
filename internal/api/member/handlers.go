@@ -393,6 +393,7 @@ type cancellationPenalty struct {
 	FeePercentage      int64              `json:"fee_percentage"`
 	HoursBeforeStart   int64              `json:"hours_before_start"`
 	ReservationDetails reservationDetails `json:"reservation_details"`
+	ExpiresAt          time.Time          `json:"expires_at"`
 }
 
 type cancellationPenaltyError struct {
@@ -671,11 +672,13 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
 			}
+			expiresAt := time.Now().Add(10 * time.Minute)
 			penalty := cancellationPenalty{
 				ReservationID:    reservationID,
 				RefundPercentage: refundPercentage,
 				FeePercentage:    100 - refundPercentage,
 				HoursBeforeStart: hoursUntilReservation,
+				ExpiresAt:        expiresAt,
 				ReservationDetails: reservationDetails{
 					Court:     reservationCourtLabel(courts),
 					Facility:  facility.Name,
@@ -727,6 +730,12 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var penaltyErr cancellationPenaltyError
 		if errors.As(err, &penaltyErr) {
+			if apiutil.IsJSONRequest(r) {
+				if err := apiutil.WriteJSON(w, http.StatusConflict, penaltyErr.Penalty); err != nil {
+					logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation penalty response")
+				}
+				return
+			}
 			component := membertempl.CancellationConfirmModal(membertempl.CancellationPenaltyData{
 				ReservationID:    penaltyErr.Penalty.ReservationID,
 				FeePercentage:    penaltyErr.Penalty.FeePercentage,
@@ -735,11 +744,12 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				EndTime:          penaltyErr.Penalty.ReservationDetails.EndTime,
 				CourtName:        penaltyErr.Penalty.ReservationDetails.Court,
 				FacilityName:     penaltyErr.Penalty.ReservationDetails.Facility,
-				ExpiresAt:        time.Now().Add(10 * time.Minute),
+				ExpiresAt:        penaltyErr.Penalty.ExpiresAt,
 			})
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().Set("HX-Retarget", "#modal")
 			w.Header().Set("HX-Reswap", "innerHTML")
+			w.WriteHeader(http.StatusConflict)
 			if err := component.Render(r.Context(), w); err != nil {
 				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to render cancellation confirmation modal")
 				http.Error(w, "Failed to render modal", http.StatusInternalServerError)
