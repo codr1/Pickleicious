@@ -15,7 +15,7 @@ templ CheckinLayout(facilityID int64, members []CheckinMember, arrivals []Facili
 						name="q"
 						placeholder="Search by name, email, or phone"
 						autocomplete="off"
-						class="w-full text-lg px-4 py-3 border border-border rounded-xl shadow-sm"
+						class="w-full text-lg px-4 py-3 border border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground shadow-sm"
 						hx-get={fmt.Sprintf("/api/v1/checkin/search?facility_id=%d", facilityID)}
 						hx-trigger="keyup changed delay:300ms"
 						hx-target="#checkin-members"

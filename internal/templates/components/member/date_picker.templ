@@ -8,7 +8,7 @@ templ DatePicker(data DatePickerData) {
 		<select
 			name="booking_year"
 			aria-label="Booking year"
-			class="block w-24 rounded-md border border-border px-3 py-2 text-sm">
+			class="block w-24 rounded-md border border-border bg-background px-3 py-2 text-foreground text-sm">
 			for _, year := range data.YearOptions() {
 				<option value={fmt.Sprintf("%d", year)} selected?={year == data.Year}>{year}</option>
 			}
@@ -16,7 +16,7 @@ templ DatePicker(data DatePickerData) {
 		<select
 			name="booking_month"
 			aria-label="Booking month"
-			class="block w-20 rounded-md border border-border px-3 py-2 text-sm">
+			class="block w-20 rounded-md border border-border bg-background px-3 py-2 text-foreground text-sm">
 			for _, month := range data.MonthOptions() {
 				<option value={fmt.Sprintf("%d", month)} selected?={month == data.Month}>{month}</option>
 			}
@@ -24,7 +24,7 @@ templ DatePicker(data DatePickerData) {
 		<select
 			name="booking_day"
 			aria-label="Booking day"
-			class="block w-20 rounded-md border border-border px-3 py-2 text-sm">
+			class="block w-20 rounded-md border border-border bg-background px-3 py-2 text-foreground text-sm">
 			for _, day := range data.DayOptions() {
 				<option value={fmt.Sprintf("%d", day)} selected?={day == data.Day}>{day}</option>
 			}
