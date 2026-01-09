@@ -1,6 +1,7 @@
 package member
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -748,14 +749,19 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
+			var buf bytes.Buffer
 			component := membertempl.CancellationConfirmModal(penaltyErr.Penalty)
+			if err := component.Render(r.Context(), &buf); err != nil {
+				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to render cancellation confirmation modal")
+				http.Error(w, "Failed to render modal", http.StatusInternalServerError)
+				return
+			}
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().Set("HX-Retarget", "#modal")
 			w.Header().Set("HX-Reswap", "innerHTML")
 			w.WriteHeader(http.StatusConflict)
-			if err := component.Render(r.Context(), w); err != nil {
-				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to render cancellation confirmation modal")
-				http.Error(w, "Failed to render modal", http.StatusInternalServerError)
+			if _, err := w.Write(buf.Bytes()); err != nil {
+				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation confirmation modal")
 			}
 			return
 		}
