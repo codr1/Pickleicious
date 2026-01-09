@@ -788,6 +788,7 @@ The current implementation does not enforce cancellation notice requirements for
 | Pro notification | Notify pro when their lesson is cancelled |
 <!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0033 -->
 **Lesson Scheduling:**
 | Feature | Description |
 |---------|-------------|
@@ -796,6 +797,7 @@ The current implementation does not enforce cancellation notice requirements for
 | Duration Options | 30, 60, 90 minute lessons |
 | Court Auto-Assignment | Book court with lesson |
 | Pro Profiles | Bios, specialties, certifications |
+<!-- END WIP -->
 
 **Lesson Packages:**
 | Feature | Description |
@@ -826,12 +828,14 @@ The current implementation does not enforce cancellation notice requirements for
 
 A self-service marketplace where members discover and book coaches directly, reducing front-desk overhead while increasing lesson bookings.
 
+<!-- BEGIN WIP: STORY-0033 -->
 | Feature | Description |
 |---------|-------------|
 | Coach Profiles | Rich profiles with photo, bio, playing history, teaching philosophy |
 | Specialties & Certifications | PPR/IPTPA certified, specialty areas (serves, dinking, strategy) |
 | Skill Level Focus | Coaches indicate which levels they prefer teaching (beginner, intermediate, advanced) |
 | Availability Calendar | Coaches set their own available hours; real-time visibility |
+<!-- END WIP -->
 | Instant Booking | Members book directly without staff intervention |
 | Rating & Reviews | 5-star ratings with written reviews from past students |
 | Response Time Badge | Shows coach's typical response time to booking requests |
