@@ -108,7 +108,8 @@ templ MemberReservations(reservations ReservationListData) {
 											type="button"
 											class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100"
 											hx-delete={fmt.Sprintf("/member/reservations/%d", reservation.ID)}
-											hx-confirm={fmt.Sprintf("Cancel this reservation? %d%% refund will apply.", reservation.RefundPercentage)}
+											if reservation.RefundPercentage == 100 { hx-confirm="Cancel this reservation?" }
+											hx-on::response-error="handleMemberCancellationError(event)"
 											hx-swap="none">
 											Cancel
 										</button>
@@ -150,5 +151,31 @@ templ MemberReservations(reservations ReservationListData) {
 				</div>
 			</div>
 		}
+		<script>
+			(function () {
+				if (window.handleMemberCancellationError) {
+					return;
+				}
+
+				window.handleMemberCancellationError = function (event) {
+					if (!event || !event.detail || !event.detail.xhr) {
+						return;
+					}
+					if (event.detail.xhr.status !== 409) {
+						return;
+					}
+					const modal = document.getElementById("modal");
+					if (!modal) {
+						return;
+					}
+					const responseText = event.detail.xhr.responseText || "";
+					if (window.htmx && window.htmx.swap) {
+						window.htmx.swap(modal, responseText, { swapStyle: "innerHTML" });
+						return;
+					}
+					modal.innerHTML = responseText;
+				};
+			})();
+		</script>
 	</div>
 }
