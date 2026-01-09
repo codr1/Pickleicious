@@ -6,15 +6,15 @@ import (
 )
 
 templ MemberBookingForm(data MemberBookingFormData) {
-	<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+	<div class="bg-background rounded-lg shadow-sm border border-border p-6">
 		<div class="flex items-center justify-between">
-			<h2 class="text-xl font-semibold text-gray-900">Book a court</h2>
+			<h2 class="text-xl font-semibold text-foreground">Book a court</h2>
 		</div>
 
 		<div id="member-booking-indicator" class="htmx-indicator mt-4">
 			<div class="flex items-center justify-center">
 				<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-				<span class="ml-2 text-sm text-gray-600">Submitting...</span>
+				<span class="ml-2 text-sm text-muted-foreground">Submitting...</span>
 			</div>
 		</div>
 
@@ -42,13 +42,13 @@ templ MemberBookingForm(data MemberBookingFormData) {
 			@MemberBookingDateTime(data)
 
 			<div>
-				<label for="member_court_id" class="block text-sm font-medium text-gray-700">Court</label>
+				<label for="member_court_id" class="block text-sm font-medium text-foreground">Court</label>
 				<select
 					id="member_court_id"
 					name="court_ids"
 					required
 					disabled?={len(data.Courts) == 0}
-					class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+					class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground">
 					if len(data.Courts) == 0 {
 						<option value="">No courts available</option>
 					} else {
@@ -106,9 +106,9 @@ templ MemberBookingDateTime(data MemberBookingFormData) {
 		hx-indicator="#member-booking-indicator"
 		class="space-y-4">
 		<div>
-			<label class="block text-sm font-medium text-gray-700">Date</label>
+			<label class="block text-sm font-medium text-foreground">Date</label>
 			@DatePicker(data.DatePicker)
-			<p class="mt-1 text-xs text-gray-500">
+			<p class="mt-1 text-xs text-muted-foreground">
 				{fmt.Sprintf("Bookings open up to %d days in advance.", data.MaxAdvanceBookingDays)}
 			</p>
 		</div>
@@ -119,14 +119,14 @@ templ MemberBookingDateTime(data MemberBookingFormData) {
 
 templ MemberBookingSlotSelect(slots []MemberBookingSlot) {
 	<div id="member-booking-slot-select">
-		<label for="member_time_slot" class="block text-sm font-medium text-gray-700">Time slot</label>
+		<label for="member_time_slot" class="block text-sm font-medium text-foreground">Time slot</label>
 		<select
 			id="member_time_slot"
 			name="start_time"
 			required
 			disabled?={len(slots) == 0}
 			onchange="setMemberReservationEndTime(this)"
-			class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+			class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground">
 			if len(slots) == 0 {
 				<option value="">No slots available</option>
 			} else {
@@ -148,7 +148,7 @@ templ MemberBookingSlotSelect(slots []MemberBookingSlot) {
 			id="member_end_time"
 			name="end_time"
 			value={defaultEndTimeValue(slots)}/>
-		<p class="mt-1 text-xs text-gray-500">Select a time slot for your reservation.</p>
+		<p class="mt-1 text-xs text-muted-foreground">Select a time slot for your reservation.</p>
 	</div>
 }
 

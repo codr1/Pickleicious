@@ -4,15 +4,15 @@ package checkin
 import "fmt"
 
 templ CheckinMemberCard(member CheckinMember, facilityID int64) {
-	<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm checkin-member-card">
+	<div class="bg-background border border-border rounded-xl p-4 shadow-sm checkin-member-card">
 		<div class="flex items-center gap-4">
 			@CheckinMemberAvatar(member, "w-12 h-12")
 			<div class="flex-1 min-w-0">
-				<p class="text-base font-semibold text-gray-900 truncate">{member.DisplayName()}</p>
+				<p class="text-base font-semibold text-foreground truncate">{member.DisplayName()}</p>
 				if member.EmailStr() != "" {
-					<p class="text-sm text-gray-500 truncate">{member.EmailStr()}</p>
+					<p class="text-sm text-muted-foreground truncate">{member.EmailStr()}</p>
 				} else {
-					<p class="text-sm text-gray-400">No email on file</p>
+					<p class="text-sm text-muted-foreground">No email on file</p>
 				}
 				<div class="mt-2 flex flex-wrap gap-2">
 					<span class={templ.Classes(
@@ -53,7 +53,7 @@ templ CheckinMemberCard(member CheckinMember, facilityID int64) {
 
 templ CheckinMemberAvatar(member CheckinMember, size string) {
 	if member.PhotoURL() != "" {
-		<div class={size + " rounded-full overflow-hidden flex-shrink-0 bg-gray-100"}>
+		<div class={size + " rounded-full overflow-hidden flex-shrink-0 bg-muted"}>
 			<img
 				src={member.PhotoURL()}
 				alt={member.DisplayName()}
@@ -61,14 +61,14 @@ templ CheckinMemberAvatar(member CheckinMember, size string) {
 			/>
 		</div>
 	} else if member.Initials() != "" {
-		<div class={size + " rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"}>
-			<span class="text-gray-600 text-lg font-semibold">
+		<div class={size + " rounded-full bg-muted flex items-center justify-center flex-shrink-0"}>
+			<span class="text-muted-foreground text-lg font-semibold">
 				{member.Initials()}
 			</span>
 		</div>
 	} else {
-		<div class={size + " rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"}>
-			<span class="text-gray-400 text-lg">
+		<div class={size + " rounded-full bg-muted flex items-center justify-center flex-shrink-0"}>
+			<span class="text-muted-foreground text-lg">
 				?
 			</span>
 		</div>

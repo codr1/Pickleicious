@@ -6,7 +6,7 @@ import (
 )
 
 templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
-	<div class="bg-white p-6 rounded-lg shadow">
+	<div class="bg-background p-6 rounded-lg shadow">
 		<div id="submit-indicator" class="htmx-indicator">
 			<div class="flex items-center justify-center">
 				<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -15,7 +15,7 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 		</div>
 
 		<div class="flex items-center justify-between mb-6">
-			<h2 class="text-xl font-semibold text-gray-900">
+			<h2 class="text-xl font-semibold text-foreground">
 				if rule.ID == 0 {
 					Create Open Play Rule
 				} else {
@@ -23,7 +23,7 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 				}
 			</h2>
 			if rule.ID != 0 {
-				<p class="text-sm text-gray-500">Rule ID {fmt.Sprintf("%d", rule.ID)}</p>
+				<p class="text-sm text-muted-foreground">Rule ID {fmt.Sprintf("%d", rule.ID)}</p>
 			}
 		</div>
 
@@ -40,20 +40,20 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 			<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)}/>
 
 			<div>
-				<label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+				<label for="name" class="block text-sm font-medium text-foreground">Name</label>
 				<input
 					type="text"
 					id="name"
 					name="name"
 					required
 					value={rule.Name}
-					class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+					class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:ring-blue-500"
 				/>
 			</div>
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label for="min_participants" class="block text-sm font-medium text-gray-700">Minimum participants</label>
+					<label for="min_participants" class="block text-sm font-medium text-foreground">Minimum participants</label>
 					<input
 						type="number"
 						id="min_participants"
@@ -61,11 +61,11 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 						required
 						min="1"
 						value={fmt.Sprintf("%d", rule.MinParticipantsValue())}
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+						class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:ring-blue-500"
 					/>
 				</div>
 				<div>
-					<label for="max_participants_per_court" class="block text-sm font-medium text-gray-700">Max participants per court</label>
+					<label for="max_participants_per_court" class="block text-sm font-medium text-foreground">Max participants per court</label>
 					<input
 						type="number"
 						id="max_participants_per_court"
@@ -73,14 +73,14 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 						required
 						min="1"
 						value={fmt.Sprintf("%d", rule.MaxParticipantsPerCourtValue())}
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+						class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:ring-blue-500"
 					/>
 				</div>
 			</div>
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label for="cancellation_cutoff_minutes" class="block text-sm font-medium text-gray-700">Cancellation cutoff (minutes)</label>
+					<label for="cancellation_cutoff_minutes" class="block text-sm font-medium text-foreground">Cancellation cutoff (minutes)</label>
 					<input
 						type="number"
 						id="cancellation_cutoff_minutes"
@@ -88,11 +88,11 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 						required
 						min="0"
 						value={fmt.Sprintf("%d", rule.CancellationCutoffMinutesValue())}
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+						class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:ring-blue-500"
 					/>
 				</div>
 				<div>
-					<label for="max_courts" class="block text-sm font-medium text-gray-700">Max courts</label>
+					<label for="max_courts" class="block text-sm font-medium text-foreground">Max courts</label>
 					<input
 						type="number"
 						id="max_courts"
@@ -100,14 +100,14 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 						required
 						min="1"
 						value={fmt.Sprintf("%d", rule.MaxCourtsValue())}
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+						class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:ring-blue-500"
 					/>
 				</div>
 			</div>
 
 			<div class="grid grid-cols-2 gap-4">
 				<div>
-					<label for="min_courts" class="block text-sm font-medium text-gray-700">Min courts</label>
+					<label for="min_courts" class="block text-sm font-medium text-foreground">Min courts</label>
 					<input
 						type="number"
 						id="min_courts"
@@ -115,16 +115,16 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 						required
 						min="1"
 						value={fmt.Sprintf("%d", rule.MinCourtsValue())}
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+						class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:ring-blue-500"
 					/>
 				</div>
 				<div class="flex items-end">
-					<label class="flex items-center space-x-2 text-sm font-medium text-gray-700">
+					<label class="flex items-center space-x-2 text-sm font-medium text-foreground">
 						<input
 							type="checkbox"
 							name="auto_scale_enabled"
 							checked?={rule.AutoScaleEnabled}
-							class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+							class="h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
 						/>
 						<span>Enable auto scale</span>
 					</label>
@@ -135,7 +135,7 @@ templ OpenPlayRuleForm(rule OpenPlayRule, facilityID int64) {
 				if rule.ID != 0 {
 					<button
 						type="button"
-						class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+						class="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-md shadow-sm hover:bg-muted"
 						hx-get={fmt.Sprintf("/api/v1/open-play-rules/%d?facility_id=%d", rule.ID, facilityID)}
 						hx-target="#open-play-rule-detail">
 						Cancel

@@ -7,9 +7,9 @@ import (
 templ BillingInfo(billing dbgen.GetMemberBillingRow) {
 	if billing.CardType.Valid {
 		<div class="mb-8">
-			<h3 class="text-lg font-bold text-gray-900 mb-4">Payment Information</h3>
-			<div class="bg-gray-50 p-4 rounded-lg">
-				<p class="text-gray-600">
+			<h3 class="text-lg font-bold text-foreground mb-4">Payment Information</h3>
+			<div class="bg-muted p-4 rounded-lg">
+				<p class="text-muted-foreground">
 					{billing.CardType.String} ending in {billing.CardLastFour.String}
 				</p>
 			</div>

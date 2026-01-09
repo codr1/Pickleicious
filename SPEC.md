@@ -852,6 +852,35 @@ Colors must meet WCAG AA contrast standards:
 - Uses relative luminance formula per WCAG 2.0 specification
 - Rejects themes that would produce unreadable text
 
+### Dark Mode
+
+The UI supports light and dark color schemes, toggled via the sun/moon icon in the top navigation.
+
+**Behavior:**
+- Click the toggle: page switches between light and dark themes
+- Preference persists across page refreshes via localStorage
+- Initial load respects system preference (`prefers-color-scheme`) when no explicit preference is set
+- Toggle icon shows moon in light mode, sun in dark mode
+
+**Implementation:**
+- Tailwind configured for class-based dark mode (`darkMode: 'class'`)
+- JavaScript adds/removes `dark` class on `<html>` element
+- CSS custom properties transform automatically via `themes.css`:
+  - Light: `--background`, `--foreground`, `--muted`, `--muted-foreground`, `--border`
+  - Dark: inverted values applied when `.dark` class present
+- Templates use semantic token classes (`bg-background`, `text-foreground`, `border-border`, `bg-muted`, `text-muted-foreground`) instead of hardcoded Tailwind colors
+- No `dark:` variant additions required in templates - theme colors invert via CSS custom properties
+
+**Semantic Tokens:**
+
+| Token | Light Value | Dark Value | Usage |
+|-------|-------------|------------|-------|
+| `background` | white | gray-900 | Page and card backgrounds |
+| `foreground` | gray-900 | gray-50 | Primary text |
+| `muted` | gray-50 | gray-800 | Subtle backgrounds |
+| `muted-foreground` | gray-500 | gray-400 | Secondary text |
+| `border` | gray-200 | gray-700 | Borders and dividers |
+
 ### Theme Operations
 
 **Create**: Define colors for a facility. Name must be unique within that facility's scope. Name validation: alphanumeric, spaces, hyphens, parentheses.
@@ -1326,7 +1355,7 @@ Every response includes `X-Request-ID` for tracing issues through logs.
 
 ### Layout
 
-- Fixed top navigation with menu toggle, search, theme toggle, notifications
+- Fixed top navigation with menu toggle, search, dark mode toggle (sun/moon icon), notifications
 - Slide-out menu with Dashboard, Courts, Members, Settings
 - User section with avatar, name, email
 

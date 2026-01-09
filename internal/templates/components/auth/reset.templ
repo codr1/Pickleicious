@@ -5,12 +5,12 @@ templ ResetPasswordForm(identifier string, organizationID string) {
         <input type="hidden" name="organization_id" value={organizationID}/>
         <div id="auth-error"></div>
         <div class="text-center">
-            <h3 class="text-lg font-medium text-gray-900">Reset your password</h3>
-            <p class="mt-2 text-sm text-gray-600">We'll send a reset code to your preferred method</p>
+            <h3 class="text-lg font-medium text-foreground">Reset your password</h3>
+            <p class="mt-2 text-sm text-muted-foreground">We'll send a reset code to your preferred method</p>
         </div>
 
         <div>
-            <label for="identifier" class="block text-sm font-medium text-gray-700">
+            <label for="identifier" class="block text-sm font-medium text-foreground">
                 Email or Phone
             </label>
             <input
@@ -18,7 +18,7 @@ templ ResetPasswordForm(identifier string, organizationID string) {
                 id="identifier"
                 name="identifier"
                 value={identifier}
-                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter your email or phone"
             />
         </div>
@@ -26,7 +26,7 @@ templ ResetPasswordForm(identifier string, organizationID string) {
         <div class="flex items-center justify-between">
             <button
                 type="button"
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-get="/api/v1/auth/staff-login"
                 hx-include="#login-form [name=organization_id]"
                 hx-target="#login-form">
@@ -52,32 +52,32 @@ templ ResetPasswordConfirmation(identifier string, organizationID string) {
         <input type="hidden" name="organization_id" value={organizationID}/>
         <div id="auth-error"></div>
         <div class="text-center">
-            <h3 class="text-lg font-medium text-gray-900">Enter your reset code</h3>
-            <p class="mt-2 text-sm text-gray-600">Check your email or phone for the code</p>
+            <h3 class="text-lg font-medium text-foreground">Enter your reset code</h3>
+            <p class="mt-2 text-sm text-muted-foreground">Check your email or phone for the code</p>
         </div>
 
         <div>
-            <label for="code" class="block text-sm font-medium text-gray-700">
+            <label for="code" class="block text-sm font-medium text-foreground">
                 Reset Code
             </label>
             <input
                 type="text"
                 id="code"
                 name="code"
-                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter reset code"
             />
         </div>
 
         <div>
-            <label for="new_password" class="block text-sm font-medium text-gray-700">
+            <label for="new_password" class="block text-sm font-medium text-foreground">
                 New Password
             </label>
             <input
                 type="password"
                 id="new_password"
                 name="new_password"
-                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter new password"
             />
         </div>
@@ -85,7 +85,7 @@ templ ResetPasswordConfirmation(identifier string, organizationID string) {
         <div class="flex items-center justify-between">
             <button
                 type="button"
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-post="/api/v1/auth/reset-password"
                 hx-include="#login-form [name=identifier], #login-form [name=organization_id]"
                 hx-target="#login-form">
@@ -93,7 +93,7 @@ templ ResetPasswordConfirmation(identifier string, organizationID string) {
             </button>
             <button
                 type="button"
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-get="/api/v1/auth/staff-login"
                 hx-include="#login-form [name=organization_id]"
                 hx-target="#login-form">

@@ -19,11 +19,11 @@ templ DayRow(facilityID int64, day DayHours) {
 		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)}/>
 
 		<div class="flex items-center justify-between md:block">
-			<span class="text-sm font-semibold text-gray-900">{dayLabel(day.DayOfWeek)}</span>
-			<span class="text-xs text-gray-500 md:hidden">Hours</span>
+			<span class="text-sm font-semibold text-foreground">{dayLabel(day.DayOfWeek)}</span>
+			<span class="text-xs text-muted-foreground md:hidden">Hours</span>
 		</div>
 
-		<label class="flex items-center gap-2 text-sm text-gray-600">
+		<label class="flex items-center gap-2 text-sm text-muted-foreground">
 			<input type="hidden" name="is_closed" value="false"/>
 			<input
 				type="checkbox"
@@ -31,7 +31,7 @@ templ DayRow(facilityID int64, day DayHours) {
 				value="true"
 				checked?={day.IsClosed}
 				onchange="const row=this.closest('form'); if(!row){return;} const disabled=this.checked; row.querySelectorAll('input[name=opens_at],input[name=closes_at]').forEach((input)=>{input.disabled=disabled;});"
-				class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+				class="h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
 			/>
 			<span>Closed</span>
 		</label>
@@ -44,9 +44,9 @@ templ DayRow(facilityID int64, day DayHours) {
 				placeholder="8:00 AM"
 				value={formatTimeDisplay(day.OpensAt)}
 				disabled?={day.IsClosed}
-				class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+				class="w-28 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
 			/>
-			<span class="text-sm text-gray-400">to</span>
+			<span class="text-sm text-muted-foreground">to</span>
 			<input
 				type="text"
 				name="closes_at"
@@ -54,7 +54,7 @@ templ DayRow(facilityID int64, day DayHours) {
 				placeholder="9:00 PM"
 				value={formatTimeDisplay(day.ClosesAt)}
 				disabled?={day.IsClosed}
-				class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+				class="w-28 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
 			/>
 			<span class="text-xs text-emerald-600 opacity-0 transition-opacity duration-300" data-save-indicator>Saved</span>
 		</div>

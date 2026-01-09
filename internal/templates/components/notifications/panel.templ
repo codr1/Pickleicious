@@ -6,14 +6,14 @@ import (
 )
 
 templ NotificationsPanel(notifications []Notification) {
-	<div class="w-full rounded-lg border border-gray-200 bg-white shadow-sm">
-		<div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-			<h3 class="text-sm font-semibold text-gray-900">Notifications</h3>
+	<div class="w-full rounded-lg border border-border bg-background shadow-sm">
+		<div class="flex items-center justify-between border-b border-border px-4 py-3">
+			<h3 class="text-sm font-semibold text-foreground">Notifications</h3>
 			<div class="flex items-center gap-2">
-				<span class="text-xs text-gray-500">{fmt.Sprintf("%d", len(notifications))} total</span>
+				<span class="text-xs text-muted-foreground">{fmt.Sprintf("%d", len(notifications))} total</span>
 				<button
 					type="button"
-					class="rounded-md text-gray-400 hover:text-gray-500"
+					class="rounded-md text-muted-foreground hover:text-foreground"
 					hx-get="/api/v1/notifications/close"
 					hx-target="#notifications-panel"
 					hx-swap="innerHTML"
@@ -26,9 +26,9 @@ templ NotificationsPanel(notifications []Notification) {
 			</div>
 		</div>
 		if len(notifications) == 0 {
-			<div class="px-4 py-6 text-sm text-gray-500">No notifications yet.</div>
+			<div class="px-4 py-6 text-sm text-muted-foreground">No notifications yet.</div>
 		} else {
-			<ul class="divide-y divide-gray-100">
+			<ul class="divide-y divide-border">
 				for _, notification := range notifications {
 					@NotificationListItem(notification)
 				}
@@ -42,7 +42,7 @@ templ NotificationListItem(notification Notification) {
 		<button
 			type="button"
 			class={templ.Classes(
-				"flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-gray-50",
+				"flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-muted",
 				templ.KV("opacity-70", notification.Read),
 			)}
 			hx-put={fmt.Sprintf("/api/v1/notifications/%d/read?facility_id=%d", notification.ID, notification.FacilityID)}
@@ -50,12 +50,12 @@ templ NotificationListItem(notification Notification) {
 			hx-swap="innerHTML"
 		>
 			<div>
-				<p class="text-sm font-medium text-gray-900">{notification.Message}</p>
-				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+				<p class="text-sm font-medium text-foreground">{notification.Message}</p>
+				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 					<span class={"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold " + notification.BadgeClass()}>{notification.TypeLabel()}</span>
 					<span>{notification.Timestamp()}</span>
 					if notification.Read {
-						<span class="text-gray-400">Read</span>
+						<span class="text-muted-foreground">Read</span>
 					} else {
 						<span class="text-emerald-600">New</span>
 					}

@@ -38,21 +38,21 @@ type CalendarReservation struct {
 }
 
 templ Calendar(data CalendarData) {
-	<div class="bg-white shadow-sm border border-gray-200 rounded-lg">
+	<div class="bg-background shadow-sm border border-border rounded-lg">
 		<!-- Calendar Header -->
-		<div class="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+		<div class="p-3 border-b border-border bg-muted flex items-center justify-between">
 			<div class="flex items-center space-x-3">
 				<button
-					class="p-1.5 hover:bg-white rounded text-gray-600 hover:text-gray-800 border border-transparent hover:border-gray-300"
+					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
 					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, -1))) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
 					</svg>
 				</button>
-				<h2 class="text-lg font-semibold text-gray-900">{ formatDate(data.DisplayDate) }</h2>
+				<h2 class="text-lg font-semibold text-foreground">{ formatDate(data.DisplayDate) }</h2>
 				<button
-					class="p-1.5 hover:bg-white rounded text-gray-600 hover:text-gray-800 border border-transparent hover:border-gray-300"
+					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
 					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, 1))) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -61,10 +61,10 @@ templ Calendar(data CalendarData) {
 				</button>
 			</div>
 			<div class="flex space-x-2">
-				<button class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
+				<button class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground">
 					Today
 				</button>
-				<select class="text-sm border border-gray-300 rounded bg-white px-2 py-1.5 text-gray-700">
+				<select class="text-sm border border-border rounded bg-background px-2 py-1.5 text-foreground">
 					<option>Work Week</option>
 					<option>Week</option>
 					<option>Month</option>
@@ -75,7 +75,7 @@ templ Calendar(data CalendarData) {
 		<div id="calendar-content" class="overflow-x-auto" hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) } hx-trigger="load, refreshCourtsCalendar from:body">
 			<div class="flex min-w-full">
 				<!-- Time slots column -->
-				<div class="w-16 flex-none bg-gray-50 border-r border-gray-200">
+				<div class="w-16 flex-none bg-muted border-r border-border">
 					<div class="h-12"></div> <!-- Header spacer -->
 					@timeSlots()
 				</div>
@@ -83,14 +83,14 @@ templ Calendar(data CalendarData) {
 				<!-- Courts grid -->
 				<div class="flex-1">
 					if len(data.Courts) == 0 {
-						<div class="p-6 text-sm text-gray-500">
+						<div class="p-6 text-sm text-muted-foreground">
 							No courts configured for this facility.
 						</div>
 					} else {
 						<div class="grid" style={ fmt.Sprintf("grid-template-columns: repeat(%d, minmax(0, 1fr));", len(data.Courts)) }>
 							<!-- Court headers -->
 							for _, court := range data.Courts {
-								<div class="h-12 flex items-center justify-center border-b border-gray-200 bg-gray-50 font-medium text-sm text-gray-700">
+								<div class="h-12 flex items-center justify-center border-b border-border bg-muted font-medium text-sm text-foreground">
 									{ courtDisplayName(court) }
 								</div>
 							}
@@ -101,9 +101,9 @@ templ Calendar(data CalendarData) {
 								<div class="relative">
 									for hour := calendarStartHour; hour < calendarEndHour; hour++ {
 										<div class="group relative h-12">
-											<div class="absolute inset-0 border-b border-r border-gray-200"></div>
+											<div class="absolute inset-0 border-b border-r border-border"></div>
 											if hour % 2 == 0 {
-												<div class="absolute inset-0 border-t border-gray-100"></div>
+												<div class="absolute inset-0 border-t border-border"></div>
 											}
 											<div
 												class="relative h-12 hover:bg-blue-50 cursor-pointer transition-colors"
@@ -134,7 +134,7 @@ templ Calendar(data CalendarData) {
 templ timeSlots() {
 	for i := calendarStartHour; i < calendarEndHour; i++ {
 		<div class="relative h-12 -mt-2.5">
-			<span class="absolute right-3 text-xs font-medium text-gray-500">
+			<span class="absolute right-3 text-xs font-medium text-muted-foreground">
 				{ fmt.Sprintf("%d:00", i) }
 			</span>
 		</div>
