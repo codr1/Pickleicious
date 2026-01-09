@@ -10,11 +10,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"golang.org/x/time/rate"
 
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/cognito"
@@ -28,18 +26,11 @@ import (
 var queries *dbgen.Queries
 var cognitoClient *cognito.CognitoClient
 
-var (
-	limiter      *rate.Limiter
-	ipLimiters   = make(map[string]*rate.Limiter)
-	ipLimitersMu sync.Mutex
-)
-
 const membersQueryTimeout = 5 * time.Second
 
 func InitHandlers(q *dbgen.Queries, cc *cognito.CognitoClient) {
 	queries = q
 	cognitoClient = cc
-	limiter = rate.NewLimiter(rate.Limit(10000), 1000)
 }
 
 // /members
@@ -579,14 +570,20 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user in Cognito for OTP authentication
+	// Create user in Cognito for OTP authentication (email and/or SMS)
+	// If Cognito is configured and fails, we must fail the request - otherwise member can't log in
 	if cognitoClient != nil {
-		if err := cognitoClient.CreateUser(r.Context(), email); err != nil {
-			// Log but don't fail - member was created, Cognito can be synced later
-			logger.Warn().Err(err).Str("email", email).Msg("Failed to create Cognito user - member can use dev bypass or sync later")
-		} else {
-			logger.Info().Str("email", email).Msg("Created Cognito user for member")
+		phone := r.FormValue("phone")
+		if err := cognitoClient.CreateUser(r.Context(), email, phone); err != nil {
+			// Delete the member we just created since they can't log in without Cognito
+			if delErr := queries.DeleteMember(r.Context(), memberID); delErr != nil {
+				logger.Error().Err(delErr).Int64("member_id", memberID).Msg("Failed to rollback member after Cognito failure")
+			}
+			logger.Error().Err(err).Str("email", email).Str("phone", phone).Msg("Failed to create Cognito user")
+			http.Error(w, "Failed to set up member authentication", http.StatusInternalServerError)
+			return
 		}
+		logger.Info().Str("email", email).Str("phone", phone).Msg("Created Cognito user for member")
 	}
 
 	// Fetch the complete member record
@@ -713,7 +710,7 @@ func HandleRestoreDecision(w http.ResponseWriter, r *http.Request) {
 		component.Render(r.Context(), w)
 		return
 	} else {
-		// Update old account email and create new one
+		// Rename old account email to avoid conflict, then signal UI to retry creation
 		oldEmail := r.FormValue("old_email")
 		newEmail := fmt.Sprintf("%d___%s", oldID, oldEmail)
 
@@ -727,8 +724,10 @@ func HandleRestoreDecision(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Continue with creating new member...
-		// [Your existing creation code]
+		// Tell UI the conflict is resolved and it can retry creation
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]bool{"proceed": true})
 	}
 }
 

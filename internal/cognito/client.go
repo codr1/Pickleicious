@@ -27,6 +27,9 @@ var ErrCognitoCodeMismatch = errors.New("cognito code mismatch")
 // ErrCognitoUserExists marks errors returned when trying to create an existing user.
 var ErrCognitoUserExists = errors.New("cognito user already exists")
 
+// ErrInvalidPhone is returned when a phone number cannot be normalized to E.164 format.
+var ErrInvalidPhone = errors.New("invalid phone number")
+
 type CognitoClient struct {
 	client   *cognitoidentityprovider.Client
 	poolID   string
@@ -53,15 +56,27 @@ func NewClient(poolID, clientID string) (*CognitoClient, error) {
 	}, nil
 }
 
-// InitiateEmailOTP starts the EMAIL_OTP authentication flow.
-// Returns a session token to use with VerifyEmailOTP.
-func (c *CognitoClient) InitiateEmailOTP(ctx context.Context, email string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
+// InitiateOTP starts EMAIL_OTP or SMS_OTP authentication based on identifier type.
+// Returns a session token to use with VerifyOTP.
+func (c *CognitoClient) InitiateOTP(ctx context.Context, identifier string) (*cognitoidentityprovider.InitiateAuthOutput, error) {
+	challenge := "EMAIL_OTP"
+	username := identifier
+
+	if IsPhoneNumber(identifier) {
+		normalized := NormalizePhone(identifier)
+		if normalized == "" {
+			return nil, ErrInvalidPhone
+		}
+		challenge = "SMS_OTP"
+		username = normalized
+	}
+
 	out, err := c.client.InitiateAuth(ctx, &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: types.AuthFlowTypeUserAuth,
 		ClientId: aws.String(c.clientID),
 		AuthParameters: map[string]string{
-			"USERNAME":            email,
-			"PREFERRED_CHALLENGE": "EMAIL_OTP",
+			"USERNAME":            username,
+			"PREFERRED_CHALLENGE": challenge,
 		},
 	})
 	if err != nil {
@@ -71,15 +86,29 @@ func (c *CognitoClient) InitiateEmailOTP(ctx context.Context, email string) (*co
 	return out, nil
 }
 
-// VerifyEmailOTP verifies the OTP code sent to the user's email.
-func (c *CognitoClient) VerifyEmailOTP(ctx context.Context, session, email, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error) {
+// VerifyOTP verifies the OTP code sent via email or SMS.
+func (c *CognitoClient) VerifyOTP(ctx context.Context, session, identifier, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error) {
+	challengeName := types.ChallengeNameTypeEmailOtp
+	codeKey := "EMAIL_OTP_CODE"
+	username := identifier
+
+	if IsPhoneNumber(identifier) {
+		normalized := NormalizePhone(identifier)
+		if normalized == "" {
+			return nil, ErrInvalidPhone
+		}
+		challengeName = types.ChallengeNameTypeSmsOtp
+		codeKey = "SMS_OTP_CODE"
+		username = normalized
+	}
+
 	out, err := c.client.RespondToAuthChallenge(ctx, &cognitoidentityprovider.RespondToAuthChallengeInput{
-		ChallengeName: types.ChallengeNameTypeEmailOtp,
+		ChallengeName: challengeName,
 		ClientId:      aws.String(c.clientID),
 		Session:       aws.String(session),
 		ChallengeResponses: map[string]string{
-			"USERNAME":       email,
-			"EMAIL_OTP_CODE": code,
+			"USERNAME": username,
+			codeKey:    code,
 		},
 	})
 	if err != nil {
@@ -91,15 +120,30 @@ func (c *CognitoClient) VerifyEmailOTP(ctx context.Context, session, email, code
 
 // CreateUser creates a new user in the Cognito User Pool.
 // The user is created with email_verified=true and no welcome email is sent.
-func (c *CognitoClient) CreateUser(ctx context.Context, email string) error {
+// If phone is provided and valid, it's also added with phone_number_verified=true.
+// Invalid phone numbers are silently ignored (user created with email only).
+func (c *CognitoClient) CreateUser(ctx context.Context, email, phone string) error {
+	attrs := []types.AttributeType{
+		{Name: aws.String("email"), Value: aws.String(email)},
+		{Name: aws.String("email_verified"), Value: aws.String("true")},
+	}
+
+	if phone != "" {
+		normalized := NormalizePhone(phone)
+		if normalized != "" {
+			attrs = append(attrs,
+				types.AttributeType{Name: aws.String("phone_number"), Value: aws.String(normalized)},
+				types.AttributeType{Name: aws.String("phone_number_verified"), Value: aws.String("true")},
+			)
+		}
+		// Invalid phone silently ignored - user can still auth via email
+	}
+
 	_, err := c.client.AdminCreateUser(ctx, &cognitoidentityprovider.AdminCreateUserInput{
-		UserPoolId:    aws.String(c.poolID),
-		Username:      aws.String(email),
-		MessageAction: types.MessageActionTypeSuppress, // Don't send welcome email
-		UserAttributes: []types.AttributeType{
-			{Name: aws.String("email"), Value: aws.String(email)},
-			{Name: aws.String("email_verified"), Value: aws.String("true")},
-		},
+		UserPoolId:     aws.String(c.poolID),
+		Username:       aws.String(email),
+		MessageAction:  types.MessageActionTypeSuppress, // Don't send welcome email
+		UserAttributes: attrs,
 	})
 	if err != nil {
 		return mapCognitoError(err)
@@ -165,4 +209,63 @@ func regionFromPoolID(poolID string) (string, error) {
 		return "", fmt.Errorf("invalid cognito pool id: %q", poolID)
 	}
 	return parts[0], nil
+}
+
+// IsPhoneNumber returns true if the identifier looks like a phone number.
+// It explicitly rejects anything containing @ to avoid misclassifying emails.
+// Only allows digits and valid phone formatting characters (+, -, (, ), spaces, dots).
+func IsPhoneNumber(identifier string) bool {
+	// Emails always contain @, phones never do
+	if strings.Contains(identifier, "@") {
+		return false
+	}
+	// Empty string is not a phone
+	if identifier == "" {
+		return false
+	}
+	// Count digits and check for invalid characters
+	digitCount := 0
+	for _, c := range identifier {
+		if c >= '0' && c <= '9' {
+			digitCount++
+		} else if c != '+' && c != '-' && c != '(' && c != ')' && c != ' ' && c != '.' {
+			// Invalid character for phone number
+			return false
+		}
+	}
+	// Phone numbers have at least 10 digits
+	return digitCount >= 10
+}
+
+// NormalizePhone converts phone to E.164 format.
+// Assumes US (+1) for 10-digit numbers without country code.
+// Returns empty string if the input doesn't look like a valid phone.
+func NormalizePhone(phone string) string {
+	// Extract digits only
+	var digits strings.Builder
+	for _, c := range phone {
+		if c >= '0' && c <= '9' {
+			digits.WriteRune(c)
+		}
+	}
+	d := digits.String()
+
+	// Validate minimum length
+	if len(d) < 10 {
+		return "" // Invalid - too short
+	}
+
+	// 10 digits: assume US, prepend +1
+	if len(d) == 10 {
+		return "+1" + d
+	}
+
+	// 11 digits starting with 1: US with country code
+	if len(d) == 11 && d[0] == '1' {
+		return "+" + d
+	}
+
+	// Other lengths: just prepend + and hope for the best
+	// TODO: Add proper international phone validation if needed
+	return "+" + d
 }

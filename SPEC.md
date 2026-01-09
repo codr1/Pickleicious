@@ -961,21 +961,27 @@ When `config.App.Environment == "development"`:
 
 ### Member Authentication
 
-Members authenticate via AWS Cognito EMAIL_OTP:
+Members authenticate via AWS Cognito OTP (email or SMS):
 
 | Method | Flow |
 |--------|------|
 | Email OTP | Cognito sends 6-digit code to member's email |
+| SMS OTP | Cognito sends 6-digit code to member's phone |
 | Dev bypass | Code `123456` with session `dev-session` in development mode |
 
 Authentication is optional for walk-in check-ins. Staff can check someone in without the member having an account - useful for first-time guests or those who forgot their phone.
 
 **Flow:**
-1. Member enters email on `/member/login`
-2. System calls Cognito `InitiateAuth` with `USER_AUTH` flow and `PREFERRED_CHALLENGE=EMAIL_OTP`
-3. Cognito sends 6-digit code to member's email
-4. Member enters code, system calls `RespondToAuthChallenge` with `EMAIL_OTP` challenge
+1. Member enters email OR phone number on `/member/login`
+2. System detects identifier type and calls Cognito `InitiateAuth` with `USER_AUTH` flow
+3. Cognito sends 6-digit code via email or SMS based on identifier
+4. Member enters code, system calls `RespondToAuthChallenge` with appropriate challenge type
 5. On success, `pickleicious_auth` cookie is set with member info
+
+**Phone Number Format:**
+- Accepted: `(555) 123-4567`, `555-123-4567`, `5551234567`, `+15551234567`
+- Backend normalizes to E.164 format (`+1XXXXXXXXXX`) before sending to Cognito
+- 10-digit numbers assumed to be US (+1)
 
 ### Cognito Configuration
 
@@ -989,13 +995,14 @@ Single shared AWS Cognito User Pool configured via environment variables:
 Configuration loaded from `.env` file (gitignored). See `.env.example` for template.
 
 **User Pool Setup:**
-- Username attribute: email
-- Auto-verified attribute: email
-- Allowed first auth factors: EMAIL_OTP, PASSWORD
+- Alias attributes: email, phone_number (users can sign in with either)
+- Auto-verified attributes: email, phone_number
+- Allowed first auth factors: EMAIL_OTP, SMS_OTP, PASSWORD
+- SMS via SNS with IAM role `CognitoSMSRole`
 - App client: No secret (public client), explicit auth flows: USER_AUTH, REFRESH_TOKEN
 
 **Member Sync:**
-When a new member is created via the admin UI, a corresponding Cognito user is automatically created with `email_verified=true` and no welcome email sent.
+When a new member is created via the admin UI, a corresponding Cognito user is automatically created with email and phone (if provided), both marked as verified. No welcome email/SMS is sent.
 
 ### Auth Middleware
 
@@ -1857,7 +1864,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Cognito Auth | Complete | EMAIL_OTP flow via single shared User Pool |
+| Cognito Auth | Complete | EMAIL_OTP and SMS_OTP via single shared User Pool |
 | Open Play Enforcement | Scheduled | gocron job configured, evaluation logic partial |
 | Password Reset | Not implemented | Returns 501 |
 | Recurrence Rules | Schema only | Tables exist, not used in handlers |

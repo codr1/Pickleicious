@@ -9,33 +9,26 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
-	"golang.org/x/time/rate"
 
-	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/ratelimit"
 	"github.com/codr1/Pickleicious/internal/request"
 	authtempl "github.com/codr1/Pickleicious/internal/templates/components/auth"
 )
 
 var queries *dbgen.Queries
-var limiter *rate.Limiter
 var appConfig *config.Config
 var cognitoClient *cognito.CognitoClient
-
-// CognitoAuthClient interface for testing
-type CognitoAuthClient interface {
-	InitiateEmailOTP(ctx context.Context, email string) (*cognitoidentityprovider.InitiateAuthOutput, error)
-	VerifyEmailOTP(ctx context.Context, session, email, code string) (*cognitoidentityprovider.RespondToAuthChallengeOutput, error)
-	CreateUser(ctx context.Context, email string) error
-	ForgotPassword(ctx context.Context, username string) (*cognitoidentityprovider.ForgotPasswordOutput, error)
-	ConfirmForgotPassword(ctx context.Context, username, code, newPassword string) (*cognitoidentityprovider.ConfirmForgotPasswordOutput, error)
-}
+var otpLimiter *ratelimit.Limiter
+var trustProxy bool
 
 // Used to mask timing differences when a user record does not exist.
 const dummyPasswordHash = "$2a$10$6bhr8BjYp8rXJejsIExR7uOrcalHplR0RnnoSJk5mZXv5fNru2udi"
@@ -55,7 +48,25 @@ func InitHandlers(q *dbgen.Queries, cfg *config.Config) {
 	}
 	queries = q
 	appConfig = cfg
-	limiter = rate.NewLimiter(rate.Limit(100), 10) // More restrictive for auth
+
+	// Initialize OTP rate limiter
+	if cfg.RateLimit.Enabled {
+		rlCfg := cfg.RateLimit.WithDefaults()
+		trustProxy = rlCfg.TrustProxy
+		otpLimiter = ratelimit.New(&ratelimit.Config{
+			SendCooldown:       time.Duration(rlCfg.OTPSend.CooldownSeconds) * time.Second,
+			SendMaxPerHour:     rlCfg.OTPSend.MaxPerHour,
+			SendMaxIPPerHour:   rlCfg.OTPSend.MaxPerIPPerHour,
+			VerifyMaxAttempts:  rlCfg.OTPVerify.MaxAttempts,
+			VerifyLockout:      time.Duration(rlCfg.OTPVerify.LockoutSeconds) * time.Second,
+			VerifyMaxIPPerHour: rlCfg.OTPVerify.MaxPerIPPerHour,
+		})
+		log.Info().
+			Bool("trust_proxy", trustProxy).
+			Msg("OTP rate limiter initialized")
+	} else {
+		log.Warn().Msg("OTP rate limiting is DISABLED - endpoints are unprotected from abuse")
+	}
 
 	// Initialize global Cognito client if configured
 	if cfg.AWS.CognitoPoolID != "" && cfg.AWS.CognitoClientID != "" {
@@ -68,6 +79,15 @@ func InitHandlers(q *dbgen.Queries, cfg *config.Config) {
 		}
 	} else {
 		log.Warn().Msg("Cognito not configured - OTP auth will only work in dev mode")
+	}
+}
+
+// CloseHandlers releases resources. Call on server shutdown.
+func CloseHandlers() {
+	if otpLimiter != nil {
+		otpLimiter.Close()
+		otpLimiter = nil
+		log.Info().Msg("OTP rate limiter closed")
 	}
 }
 
@@ -119,6 +139,11 @@ func HandleMemberLoginPage(w http.ResponseWriter, r *http.Request) {
 
 func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	identifier := r.FormValue("identifier")
 
 	if identifier == "" {
@@ -126,18 +151,20 @@ func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if email or phone - auth info is on User, not Staff
-	isEmail := strings.Contains(identifier, "@")
-	var user dbgen.User
-	var err error
-
-	if isEmail {
-		user, err = queries.GetUserByEmail(r.Context(), sql.NullString{String: identifier, Valid: true})
-	} else {
-		user, err = queries.GetUserByPhone(r.Context(), sql.NullString{String: identifier, Valid: true})
+	// Rate limit by IP to prevent user enumeration
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		result := otpLimiter.CheckOTPSend(identifier, clientIP)
+		if !result.Allowed {
+			// Silent failure - don't reveal rate limiting to attacker
+			_, _ = w.Write([]byte(""))
+			return
+		}
 	}
 
-	if err != nil && err != sql.ErrNoRows {
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		logger.Error().Err(err).Msg("Database error checking user")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -145,13 +172,19 @@ func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 
 	// If user found and local auth is enabled, show staff section
 	if err == nil && user.LocalAuthEnabled {
+		// Record the check to prevent enumeration attacks
+		if otpLimiter != nil {
+			otpLimiter.RecordOTPSend(identifier, clientIP)
+		}
 		component := authtempl.StaffAuthSection()
-		component.Render(r.Context(), w)
+		if err := component.Render(r.Context(), w); err != nil {
+			logger.Error().Err(err).Msg("Failed to render staff auth section")
+		}
 		return
 	}
 
-	// Otherwise render empty response
-	w.Write([]byte(""))
+	// Otherwise render empty response (don't record - user doesn't exist or no local auth)
+	_, _ = w.Write([]byte(""))
 }
 
 func HandleSendCode(w http.ResponseWriter, r *http.Request) {
@@ -169,8 +202,20 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPSend(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("otp_send", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, false)
+			return
+		}
+	}
+
+	if _, err := strconv.ParseInt(organizationIDStr, 10, 64); err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
 		return
 	}
 
@@ -183,6 +228,7 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Don't consume rate limit quota for non-existent users
 			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
@@ -192,7 +238,24 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsStaff {
+		// Don't consume rate limit quota for non-staff users
 		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// User validated - now record the rate limit (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPSend(identifier, clientIP)
+	}
+
+	// Dev mode bypass - skip Cognito, return fake session for code entry
+	if isDevMode() {
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito send-code for staff")
+		component := authtempl.CodeVerification(identifier, organizationIDStr, devBypassSession)
+		if err := component.Render(r.Context(), w); err != nil {
+			logger.Error().Err(err).Msg("Failed to render code verification form")
+			http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -203,7 +266,7 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResponse, err := cognitoClient.InitiateEmailOTP(r.Context(), identifier)
+	authResponse, err := cognitoClient.InitiateOTP(r.Context(), identifier)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
 			return
@@ -244,9 +307,16 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
-		return
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPVerify(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("otp_verify", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, true)
+			return
+		}
 	}
 
 	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
@@ -264,6 +334,7 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Don't consume rate limit for non-existent users
 			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
@@ -273,7 +344,23 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsStaff {
+		// Don't consume rate limit for non-staff users
 		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// User validated - now record the verify attempt (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPVerify(identifier, clientIP)
+	}
+
+	// Dev mode bypass - accept devBypassCode as valid
+	if isDevMode() && code == devBypassCode {
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: bypassing Cognito verify-code for staff")
+		if otpLimiter != nil {
+			otpLimiter.ResetVerifyAttempts(identifier)
+		}
+		setStaffSession(w, r, user)
 		return
 	}
 
@@ -284,7 +371,7 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResponse, err := cognitoClient.VerifyEmailOTP(r.Context(), session, identifier, code)
+	authResponse, err := cognitoClient.VerifyOTP(r.Context(), session, identifier, code)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
 			return
@@ -310,28 +397,12 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var homeFacilityID *int64
-	if user.HomeFacilityID.Valid {
-		id := user.HomeFacilityID.Int64
-		homeFacilityID = &id
+	// Reset verify attempts on successful verification
+	if otpLimiter != nil {
+		otpLimiter.ResetVerifyAttempts(identifier)
 	}
 
-	authUser := &authz.AuthUser{
-		ID:              user.ID,
-		IsStaff:         user.IsStaff,
-		SessionType:     sessionTypeFromStaff(user.IsStaff),
-		HomeFacilityID:  homeFacilityID,
-		MembershipLevel: user.MembershipLevel,
-	}
-
-	if err := SetAuthCookie(w, r, authUser); err != nil {
-		logger.Error().Err(err).Msg("Failed to set auth session")
-		http.Error(w, "Failed to start session", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("HX-Redirect", "/")
-	w.WriteHeader(http.StatusOK)
+	setStaffSession(w, r, user)
 }
 
 // isDevMode returns true if running in development environment
@@ -368,6 +439,35 @@ func setMemberSession(w http.ResponseWriter, r *http.Request, user dbgen.User) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// setStaffSession creates auth session for a staff user and sends redirect response.
+// On error, writes error response directly.
+func setStaffSession(w http.ResponseWriter, r *http.Request, user dbgen.User) {
+	logger := log.Ctx(r.Context())
+
+	var homeFacilityID *int64
+	if user.HomeFacilityID.Valid {
+		id := user.HomeFacilityID.Int64
+		homeFacilityID = &id
+	}
+
+	authUser := &authz.AuthUser{
+		ID:              user.ID,
+		IsStaff:         true,
+		SessionType:     SessionTypeStaff,
+		HomeFacilityID:  homeFacilityID,
+		MembershipLevel: user.MembershipLevel,
+	}
+
+	if err := SetAuthCookie(w, r, authUser); err != nil {
+		logger.Error().Err(err).Msg("Failed to set staff auth session")
+		http.Error(w, "Failed to start session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
+}
+
 func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 	if r.Method != http.MethodPost {
@@ -383,9 +483,16 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
-		return
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPSend(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("otp_send", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, false)
+			return
+		}
 	}
 
 	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
@@ -403,6 +510,7 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Don't consume rate limit for non-existent users
 			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
@@ -412,8 +520,14 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsMember {
+		// Don't consume rate limit for non-member users
 		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
+	}
+
+	// User validated - now record the rate limit (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPSend(identifier, clientIP)
 	}
 
 	// Dev mode bypass - skip Cognito, return fake session for code entry
@@ -434,7 +548,7 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResponse, err := cognitoClient.InitiateEmailOTP(r.Context(), identifier)
+	authResponse, err := cognitoClient.InitiateOTP(r.Context(), identifier)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
 			return
@@ -475,9 +589,16 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
-		return
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPVerify(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("otp_verify", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, true)
+			return
+		}
 	}
 
 	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
@@ -495,6 +616,7 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Don't consume rate limit for non-existent users
 			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
@@ -504,13 +626,22 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsMember {
+		// Don't consume rate limit for non-member users
 		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
+	}
+
+	// User validated - now record the verify attempt (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPVerify(identifier, clientIP)
 	}
 
 	// Dev mode bypass - accept devBypassCode as valid
 	if isDevMode() && code == devBypassCode {
 		logger.Warn().Str("identifier", identifier).Msg("Dev mode: bypassing Cognito verify-code")
+		if otpLimiter != nil {
+			otpLimiter.ResetVerifyAttempts(identifier)
+		}
 		setMemberSession(w, r, user)
 		return
 	}
@@ -522,7 +653,7 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResponse, err := cognitoClient.VerifyEmailOTP(r.Context(), session, identifier, code)
+	authResponse, err := cognitoClient.VerifyOTP(r.Context(), session, identifier, code)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid verification code", "Verification code expired") {
 			return
@@ -548,7 +679,113 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reset verify attempts on successful verification
+	if otpLimiter != nil {
+		otpLimiter.ResetVerifyAttempts(identifier)
+	}
+
 	setMemberSession(w, r, user)
+}
+
+func HandleMemberResendCode(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	identifier := r.FormValue("identifier")
+	organizationIDStr := r.FormValue("organization_id")
+
+	if identifier == "" || organizationIDStr == "" {
+		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+		return
+	}
+
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPSend(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("otp_resend", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, false)
+			return
+		}
+	}
+
+	if _, err := strconv.ParseInt(organizationIDStr, 10, 64); err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Don't consume rate limit for non-existent users
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to load user for auth")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !user.IsMember {
+		// Don't consume rate limit for non-member users
+		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// User validated - now record the rate limit (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPSend(identifier, clientIP)
+	}
+
+	// Dev mode bypass
+	if isDevMode() {
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito resend-code for member")
+		component := authtempl.MemberCodeVerification(identifier, organizationIDStr, devBypassSession)
+		if err := component.Render(r.Context(), w); err != nil {
+			logger.Error().Err(err).Msg("Failed to render code verification form")
+			http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if cognitoClient == nil {
+		logger.Error().Msg("Cognito not configured")
+		http.Error(w, "OTP authentication not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	authResponse, err := cognitoClient.InitiateOTP(r.Context(), identifier)
+	if err != nil {
+		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to resend Cognito auth code for member")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	session := ""
+	if authResponse != nil && authResponse.Session != nil {
+		session = *authResponse.Session
+	}
+
+	component := authtempl.MemberCodeVerification(identifier, organizationIDStr, session)
+	if err := component.Render(r.Context(), w); err != nil {
+		logger.Error().Err(err).Msg("Failed to render member verification screen")
+		http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		return
+	}
 }
 
 func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
@@ -565,6 +802,11 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	identifier := r.FormValue("identifier")
 	password := r.FormValue("password")
 
@@ -573,9 +815,16 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
-		return
+	// Password auth uses the same OTP rate limiter for brute-force protection
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		result := otpLimiter.CheckOTPVerify(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("password_auth", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, true)
+			return
+		}
 	}
 
 	if devUser, ok := devModeBypass(r, identifier, password); ok {
@@ -595,16 +844,7 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isEmail := strings.Contains(identifier, "@")
-	var user dbgen.User
-	var err error
-
-	if isEmail {
-		user, err = queries.GetUserByEmail(r.Context(), sql.NullString{String: identifier, Valid: true})
-	} else {
-		user, err = queries.GetUserByPhone(r.Context(), sql.NullString{String: identifier, Valid: true})
-	}
-
+	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			_ = VerifyPassword(dummyPasswordHash, password)
@@ -615,9 +855,25 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !user.IsStaff || !user.LocalAuthEnabled || !user.PasswordHash.Valid || !VerifyPassword(user.PasswordHash.String, password) {
+	// Always run bcrypt to prevent timing attacks that reveal staff status
+	hashToCheck := dummyPasswordHash
+	if user.PasswordHash.Valid {
+		hashToCheck = user.PasswordHash.String
+	}
+	passwordValid := VerifyPassword(hashToCheck, password)
+
+	if !user.IsStaff || !user.LocalAuthEnabled || !user.PasswordHash.Valid || !passwordValid {
+		// Record failed attempt after user validation
+		if otpLimiter != nil {
+			otpLimiter.RecordOTPVerify(identifier, clientIP)
+		}
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
+	}
+
+	// Successful login - reset attempts
+	if otpLimiter != nil {
+		otpLimiter.ResetVerifyAttempts(identifier)
 	}
 
 	if err := CreateSession(w, user.ID); err != nil {
@@ -644,8 +900,8 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -655,6 +911,18 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 	if identifier == "" || organizationIDStr == "" {
 		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
 		return
+	}
+
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPSend(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("password_reset", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, false)
+			return
+		}
 	}
 
 	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
@@ -676,19 +944,38 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = cognitoClient.ForgotPassword(r.Context(), identifier)
-	if err != nil {
-		var userNotFound *types.UserNotFoundException
-		if errors.As(err, &userNotFound) {
-			err = nil
-		} else if handleCognitoAuthError(w, r, err, "Unable to send reset code", "Reset request expired") {
-			return
-		} else {
-			logger.Error().Err(err).Msg("Failed to send password reset code")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
+	// Check if user exists in our database before burning quota
+	// This prevents attackers from exhausting quota for non-existent users
+	_, err = getUserByIdentifier(r.Context(), identifier)
+	userExists := err == nil
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logger.Error().Err(err).Msg("Failed to check user for password reset")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Only burn quota and call Cognito if user exists in our system
+	if userExists {
+		if otpLimiter != nil {
+			otpLimiter.RecordOTPSend(identifier, clientIP)
+		}
+
+		_, err = cognitoClient.ForgotPassword(r.Context(), identifier)
+		if err != nil {
+			var userNotFound *types.UserNotFoundException
+			if errors.As(err, &userNotFound) {
+				// User exists in our DB but not in Cognito - that's OK, don't reveal this
+				err = nil
+			} else if handleCognitoAuthError(w, r, err, "Unable to send reset code", "Reset request expired") {
+				return
+			} else {
+				logger.Error().Err(err).Msg("Failed to send password reset code")
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
 		}
 	}
+	// If user doesn't exist, we silently succeed (don't reveal user existence)
 
 	component := authtempl.ResetPasswordConfirmation(identifier, organizationIDStr)
 	err = component.Render(r.Context(), w)
@@ -701,6 +988,11 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 
 func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	code := r.FormValue("code")
 	newPassword := r.FormValue("new_password")
 	identifier := r.FormValue("identifier")
@@ -711,9 +1003,16 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limiter != nil && !limiter.Allow() {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
-		return
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPVerify(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("password_reset_confirm", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, true)
+			return
+		}
 	}
 
 	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
@@ -722,11 +1021,36 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	// Check if Cognito is configured
 	if cognitoClient == nil {
 		logger.Error().Msg("Cognito not configured")
 		http.Error(w, "Password reset not available", http.StatusServiceUnavailable)
 		return
+	}
+
+	// Check if user exists in our database before burning quota
+	// This prevents attackers from exhausting quota for non-existent users
+	_, err = getUserByIdentifier(r.Context(), identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// User doesn't exist - don't burn quota, return generic error
+			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid verification code")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to check user for password reset confirm")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// User validated - now record the verify attempt (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPVerify(identifier, clientIP)
 	}
 
 	_, err = cognitoClient.ConfirmForgotPassword(r.Context(), identifier, code, newPassword)
@@ -749,18 +1073,40 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Successful password reset - clear attempts
+	if otpLimiter != nil {
+		otpLimiter.ResetVerifyAttempts(identifier)
+	}
+
 	w.Header().Set("HX-Redirect", fmt.Sprintf("/login?organization_id=%s", organizationIDStr))
 	w.WriteHeader(http.StatusOK)
 }
 
 func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	identifier := r.FormValue("identifier")
 	organizationIDStr := r.FormValue("organization_id")
 
 	if identifier == "" || organizationIDStr == "" {
 		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
 		return
+	}
+
+	var clientIP string
+	if otpLimiter != nil {
+		clientIP = ratelimit.GetClientIP(r, trustProxy)
+		// Check rate limit (doesn't consume quota yet)
+		result := otpLimiter.CheckOTPSend(identifier, clientIP)
+		if !result.Allowed {
+			ratelimit.LogRateLimitExceeded("otp_resend", identifier, clientIP, result.Reason)
+			writeRateLimitError(w, r, result.RetryAfter, false)
+			return
+		}
 	}
 
 	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
@@ -775,14 +1121,38 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = getUserByIdentifier(r.Context(), identifier)
+	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Don't consume rate limit for non-existent users
 			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
 		logger.Error().Err(err).Msg("Failed to load user for auth")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// This endpoint is for staff resend - verify user is staff
+	if !user.IsStaff {
+		// Don't consume rate limit for non-staff users
+		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// User validated - now record the rate limit (consumes quota)
+	if otpLimiter != nil {
+		otpLimiter.RecordOTPSend(identifier, clientIP)
+	}
+
+	// Dev mode bypass - return fake session for code entry
+	if isDevMode() {
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito resend-code")
+		component := authtempl.CodeVerification(identifier, organizationIDStr, devBypassSession)
+		if err := component.Render(r.Context(), w); err != nil {
+			logger.Error().Err(err).Msg("Failed to render code verification form")
+			http.Error(w, "Failed to render page", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -793,7 +1163,7 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResponse, err := cognitoClient.InitiateEmailOTP(r.Context(), identifier)
+	authResponse, err := cognitoClient.InitiateOTP(r.Context(), identifier)
 	if err != nil {
 		if handleCognitoAuthError(w, r, err, "Invalid credentials", "Verification code expired") {
 			return
@@ -819,6 +1189,10 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 
 func HandleStandardLogin(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
 	organizationID := r.FormValue("organization_id")
 	component := authtempl.LoginLayout(organizationID)
@@ -860,14 +1234,19 @@ func devModeBypass(r *http.Request, identifier, password string) (*authz.AuthUse
 }
 
 func getUserByIdentifier(ctx context.Context, identifier string) (dbgen.User, error) {
-	if strings.Contains(identifier, "@") {
-		return queries.GetUserByEmail(ctx, sql.NullString{String: identifier, Valid: true})
+	// Normalize identifier to match rate limiter behavior and ensure consistent lookups
+	identifier = strings.ToLower(strings.TrimSpace(identifier))
+	if cognito.IsPhoneNumber(identifier) {
+		return queries.GetUserByPhone(ctx, sql.NullString{String: identifier, Valid: true})
 	}
-	return queries.GetUserByPhone(ctx, sql.NullString{String: identifier, Valid: true})
+	return queries.GetUserByEmail(ctx, sql.NullString{String: identifier, Valid: true})
 }
 
 func handleCognitoAuthError(w http.ResponseWriter, r *http.Request, err error, unauthorizedMsg string, expiredMsg string) bool {
 	switch {
+	case errors.Is(err, cognito.ErrInvalidPhone):
+		writeHTMXError(w, r, http.StatusBadRequest, "Invalid phone number format")
+		return true
 	case errors.Is(err, cognito.ErrCognitoThrottled):
 		writeHTMXError(w, r, http.StatusTooManyRequests, "Too many requests. Please try again in a few minutes.")
 		return true
@@ -895,4 +1274,43 @@ func writeHTMXError(w http.ResponseWriter, r *http.Request, status int, message 
 		return
 	}
 	http.Error(w, message, status)
+}
+
+func writeRateLimitError(w http.ResponseWriter, r *http.Request, retryAfter time.Duration, isVerify bool) {
+	w.Header().Set("Retry-After", fmt.Sprintf("%d", int(retryAfter.Seconds())))
+
+	var msg string
+	if isVerify {
+		// Brute-force lockout - show minutes
+		mins := int(retryAfter.Minutes())
+		if mins < 1 {
+			mins = 1
+		}
+		if mins == 1 {
+			msg = "Too many attempts. Please try again in 1 minute."
+		} else {
+			msg = fmt.Sprintf("Too many attempts. Please try again in %d minutes.", mins)
+		}
+	} else {
+		// OTP send cooldown - show seconds for short waits
+		secs := int(retryAfter.Seconds())
+		if secs <= 60 {
+			if secs == 1 {
+				msg = "Please wait 1 second before requesting another code."
+			} else {
+				msg = fmt.Sprintf("Please wait %d seconds before requesting another code.", secs)
+			}
+		} else {
+			mins := int(retryAfter.Minutes())
+			if mins < 1 {
+				mins = 1
+			}
+			if mins == 1 {
+				msg = "Please wait 1 minute before requesting another code."
+			} else {
+				msg = fmt.Sprintf("Please wait %d minutes before requesting another code.", mins)
+			}
+		}
+	}
+	writeHTMXError(w, r, http.StatusTooManyRequests, msg)
 }

@@ -46,6 +46,30 @@ type Config struct {
 		EnableTracing bool `yaml:"enable_tracing"`
 		EnableDebug   bool `yaml:"enable_debug"`
 	} `yaml:"features"`
+
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
+}
+
+// RateLimitConfig holds OTP rate limiting settings.
+type RateLimitConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// TrustProxy: if true, extracts client IP from X-Forwarded-For (rightmost non-private IP).
+	// Set to true only when running behind a trusted reverse proxy (nginx, AWS ALB, etc).
+	// When false (default), ignores X-Forwarded-For to prevent IP spoofing.
+	TrustProxy bool `yaml:"trust_proxy"`
+
+	OTPSend struct {
+		CooldownSeconds int `yaml:"cooldown_seconds"`    // default: 60
+		MaxPerHour      int `yaml:"max_per_hour"`        // default: 5
+		MaxPerIPPerHour int `yaml:"max_per_ip_per_hour"` // default: 20
+	} `yaml:"otp_send"`
+
+	OTPVerify struct {
+		MaxAttempts     int `yaml:"max_attempts"`        // default: 5
+		LockoutSeconds  int `yaml:"lockout_seconds"`     // default: 300 (5 min)
+		MaxPerIPPerHour int `yaml:"max_per_ip_per_hour"` // default: 30
+	} `yaml:"otp_verify"`
 }
 
 // Load loads both .env and yaml configuration
@@ -120,4 +144,28 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// RateLimitDefaults returns the rate limit config with defaults applied.
+func (c *RateLimitConfig) WithDefaults() RateLimitConfig {
+	cfg := *c
+	if cfg.OTPSend.CooldownSeconds == 0 {
+		cfg.OTPSend.CooldownSeconds = 60
+	}
+	if cfg.OTPSend.MaxPerHour == 0 {
+		cfg.OTPSend.MaxPerHour = 5
+	}
+	if cfg.OTPSend.MaxPerIPPerHour == 0 {
+		cfg.OTPSend.MaxPerIPPerHour = 20
+	}
+	if cfg.OTPVerify.MaxAttempts == 0 {
+		cfg.OTPVerify.MaxAttempts = 5
+	}
+	if cfg.OTPVerify.LockoutSeconds == 0 {
+		cfg.OTPVerify.LockoutSeconds = 300
+	}
+	if cfg.OTPVerify.MaxPerIPPerHour == 0 {
+		cfg.OTPVerify.MaxPerIPPerHour = 30
+	}
+	return cfg
 }
