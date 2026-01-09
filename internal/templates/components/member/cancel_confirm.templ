@@ -48,6 +48,7 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 				class="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4"
 				hx-delete={fmt.Sprintf("/member/reservations/%d?confirm=true", data.ReservationID)}
 				hx-swap="none"
+				hx-on::response-error="handleMemberCancellationError(event)"
 				hx-on::after-request="if(event.detail.xhr.status===200){document.getElementById('modal').innerHTML='';}">
 				<input type="hidden" name="hours_before_start" value={fmt.Sprintf("%d", data.HoursBeforeStart)}/>
 				<input type="hidden" name="penalty_calculated_at" value={data.CalculatedAt.Format(time.RFC3339Nano)}/>
@@ -57,7 +58,10 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 					onclick="document.getElementById('modal').innerHTML=''">
 					Back
 				</button>
-				<button type="submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+				<button
+					id="cancel-confirm-submit"
+					type="submit"
+					class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
 					Confirm cancellation
 				</button>
 			</form>
@@ -71,6 +75,7 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 				return;
 			}
 			countdown.dataset.active = "true";
+			const confirmButton = document.getElementById("cancel-confirm-submit");
 			const expiresAt = Number(countdown.getAttribute("data-expires-at"));
 			if (!Number.isFinite(expiresAt)) {
 				return;
@@ -95,6 +100,16 @@ templ CancellationConfirmModal(data CancellationPenaltyData) {
 				}
 				const remainingMs = expiresAt - Date.now();
 				element.textContent = formatCountdown(remainingMs);
+				const showWarning = remainingMs > 0 && remainingMs <= 30000;
+				element.classList.toggle("text-gray-700", !showWarning);
+				element.classList.toggle("text-red-600", showWarning);
+				element.classList.toggle("animate-pulse", showWarning);
+				if (confirmButton) {
+					const disableConfirm = remainingMs <= 5000;
+					confirmButton.disabled = disableConfirm;
+					confirmButton.classList.toggle("opacity-50", disableConfirm);
+					confirmButton.classList.toggle("cursor-not-allowed", disableConfirm);
+				}
 				if (remainingMs <= 0) {
 					clearInterval(timerId);
 					const modal = document.getElementById("modal");
