@@ -1075,12 +1075,14 @@ A self-service marketplace where members discover and book coaches directly, red
 | Guest Limits | Max guests per member per month |
 | Guest Registration | Quick sign-up flow |
 
+<!-- BEGIN WIP: STORY-0031 -->
 **Drop-In Play:**
 | Feature | Description |
 |---------|-------------|
 | Open Play Sessions | Scheduled drop-in times |
 | Skill-Based Sessions | Beginner, intermediate, advanced |
 | Rotation System | Fair play time distribution |
+<!-- END WIP -->
 
 **Guest Conversion:**
 | Feature | Description |
