@@ -934,6 +934,20 @@ Session characteristics:
 - In-memory session store with 15-minute cleanup interval
 - Single active session per user (previous sessions cleared on new login)
 
+### Logout
+
+The logout endpoint (`POST /api/v1/auth/logout`) handles both staff and member sessions:
+
+1. Clears `pickleicious_auth` cookie (member sessions)
+2. Clears `pickleicious_session` cookie and removes in-memory token (staff sessions)
+3. Returns `HX-Redirect` header based on session type:
+   - Member sessions redirect to `/member/login`
+   - Staff sessions redirect to `/login`
+
+Logout buttons appear in:
+- Staff slide-out menu (User Section) for authenticated staff
+- Member portal navigation header for authenticated members
+
 ### Staff Local Password Auth
 
 Staff members with `local_auth_enabled=true` and a valid `password_hash` can authenticate via `/api/v1/auth/staff-login`:
@@ -1084,13 +1098,14 @@ Authorization failures are logged with facility_id and user_id.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/login` | Login page |
-| POST | `/api/v1/auth/check-staff` | Check if identifier belongs to staff |
+| GET | `/api/v1/auth/check-staff` | Check if identifier belongs to staff |
 | POST | `/api/v1/auth/send-code` | Send Cognito OTP code |
 | POST | `/api/v1/auth/verify-code` | Verify Cognito OTP code |
 | POST | `/api/v1/auth/resend-code` | Resend OTP code |
 | POST | `/api/v1/auth/staff-login` | Staff local password login |
 | POST | `/api/v1/auth/reset-password` | Password reset flow |
 | POST | `/api/v1/auth/standard-login` | Standard member login |
+| POST | `/api/v1/auth/logout` | Logout (clears session, redirects to login) |
 
 ### Members
 
