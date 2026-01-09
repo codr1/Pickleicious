@@ -380,6 +380,29 @@ func (e reservationLimitError) Error() string {
 	return fmt.Sprintf("reservation limit reached (%d/%d)", e.currentCount, e.limit)
 }
 
+type reservationDetails struct {
+	Court     string    `json:"court"`
+	Facility  string    `json:"facility"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+}
+
+type cancellationPenalty struct {
+	ReservationID      int64              `json:"reservation_id"`
+	RefundPercentage   int64              `json:"refund_percentage"`
+	FeePercentage      int64              `json:"fee_percentage"`
+	HoursBeforeStart   int64              `json:"hours_before_start"`
+	ReservationDetails reservationDetails `json:"reservation_details"`
+}
+
+type cancellationPenaltyError struct {
+	Penalty cancellationPenalty
+}
+
+func (e cancellationPenaltyError) Error() string {
+	return "cancellation confirmation required"
+}
+
 // HandleMemberBookingCreate handles POST /member/reservations for member booking.
 func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -613,6 +636,8 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
+	confirmCancellation := requestCancellationConfirm(r)
+
 	var refundPercentage int64
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
@@ -636,6 +661,29 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		refundPercentage, err = applicableRefundPercentage(ctx, qtx, facilityID, hoursUntilReservation)
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
+		}
+		if refundPercentage < 100 && !confirmCancellation {
+			courts, err := qtx.ListReservationCourts(ctx, reservationID)
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
+			}
+			facility, err := qtx.GetFacilityByID(ctx, facilityID)
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
+			}
+			penalty := cancellationPenalty{
+				ReservationID:     reservationID,
+				RefundPercentage:  refundPercentage,
+				FeePercentage:     100 - refundPercentage,
+				HoursBeforeStart:  hoursUntilReservation,
+				ReservationDetails: reservationDetails{
+					Court:     reservationCourtLabel(courts),
+					Facility:  facility.Name,
+					StartTime: reservation.StartTime,
+					EndTime:   reservation.EndTime,
+				},
+			}
+			return cancellationPenaltyError{Penalty: penalty}
 		}
 		if _, err := qtx.LogCancellation(ctx, dbgen.LogCancellationParams{
 			ReservationID:           reservationID,
@@ -677,6 +725,13 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
+		var penaltyErr cancellationPenaltyError
+		if errors.As(err, &penaltyErr) {
+			if err := apiutil.WriteJSON(w, http.StatusConflict, penaltyErr.Penalty); err != nil {
+				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation penalty response")
+			}
+			return
+		}
 		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
 			if herr.Status == http.StatusInternalServerError {
@@ -730,6 +785,27 @@ func applicableRefundPercentage(ctx context.Context, q *dbgen.Queries, facilityI
 		return 0, err
 	}
 	return tier.RefundPercentage, nil
+}
+
+func requestCancellationConfirm(r *http.Request) bool {
+	rawConfirm := strings.TrimSpace(r.URL.Query().Get("confirm"))
+	if rawConfirm == "" {
+		if err := r.ParseForm(); err == nil {
+			rawConfirm = strings.TrimSpace(r.FormValue("confirm"))
+		}
+	}
+	return apiutil.ParseBool(rawConfirm)
+}
+
+func reservationCourtLabel(courts []dbgen.ListReservationCourtsRow) string {
+	if len(courts) == 0 {
+		return "TBD"
+	}
+	labels := make([]string, len(courts))
+	for i, court := range courts {
+		labels[i] = fmt.Sprintf("Court %d", court.CourtNumber)
+	}
+	return strings.Join(labels, ", ")
 }
 
 func requestedFacilityID(r *http.Request) *int64 {
