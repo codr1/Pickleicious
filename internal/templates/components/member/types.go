@@ -95,11 +95,13 @@ type CancellationPenaltyData struct {
 	ReservationID    int64
 	FeePercentage    int64
 	RefundPercentage int64
+	HoursBeforeStart int64
 	StartTime        time.Time
 	EndTime          time.Time
 	CourtName        string
 	FacilityName     string
 	ExpiresAt        time.Time
+	CalculatedAt     time.Time
 }
 
 type MemberBookingSlot struct {

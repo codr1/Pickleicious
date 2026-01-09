@@ -202,14 +202,22 @@ templ MemberReservations(reservations ReservationListData) {
 					return minuteLabel + ":" + secondLabel;
 				}
 
+				const penaltyWindowMs = 10 * 60 * 1000;
+
 				function resolveExpiresAtMs(penalty) {
+					if (penalty && penalty.penalty_calculated_at) {
+						const parsed = new Date(penalty.penalty_calculated_at);
+						if (!Number.isNaN(parsed.getTime())) {
+							return parsed.getTime() + penaltyWindowMs;
+						}
+					}
 					if (penalty && penalty.expires_at) {
 						const parsed = new Date(penalty.expires_at);
 						if (!Number.isNaN(parsed.getTime())) {
 							return parsed.getTime();
 						}
 					}
-					return Date.now() + 10 * 60 * 1000;
+					return Date.now() + penaltyWindowMs;
 				}
 
 				window.startMemberCancellationCountdown = function (expiresAtMs) {
@@ -230,6 +238,10 @@ templ MemberReservations(reservations ReservationListData) {
 						element.textContent = formatCountdown(remainingMs);
 						if (remainingMs <= 0) {
 							clearInterval(timerId);
+							const modal = document.getElementById("modal");
+							if (modal) {
+								modal.innerHTML = "";
+							}
 						}
 					}
 
@@ -242,6 +254,8 @@ templ MemberReservations(reservations ReservationListData) {
 					const reservationId = Number(penalty && penalty.reservation_id) || 0;
 					const feePercentage = Number(penalty && penalty.fee_percentage) || 0;
 					const refundPercentage = Number(penalty && penalty.refund_percentage) || 0;
+					const hoursBeforeStart = Number(penalty && penalty.hours_before_start) || 0;
+					const calculatedAt = penalty && penalty.penalty_calculated_at ? String(penalty.penalty_calculated_at) : "";
 					const reservationLabel = formatDateTime(details.start_time) + " - " + formatTime(details.end_time);
 					const courtLabel = escapeHtml(details.court || "TBD");
 					const facilityLabel = escapeHtml(details.facility || "TBD");
@@ -280,6 +294,8 @@ templ MemberReservations(reservations ReservationListData) {
 						'</p>',
 						'</div>',
 						'<form class="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4" hx-delete="/member/reservations/' + reservationId + '?confirm=true" hx-swap="none" hx-on::after-request="if(event.detail.xhr.status===200){document.getElementById(\'modal\').innerHTML=\'\';}">',
+						'<input type="hidden" name="hours_before_start" value="' + hoursBeforeStart + '"/>',
+						'<input type="hidden" name="penalty_calculated_at" value="' + escapeHtml(calculatedAt) + '"/>',
 						'<button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" onclick="document.getElementById(\'modal\').innerHTML=\'\'">Back</button>',
 						'<button type="submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Confirm cancellation</button>',
 						'</form>',

@@ -39,6 +39,7 @@ const memberBookingMinDuration = time.Hour
 const memberBookingDefaultOpensAt = "08:00"
 const memberBookingDefaultClosesAt = "21:00"
 const memberBookingDefaultMaxAdvanceDays int64 = 7
+const cancellationPenaltyWindow = 10 * time.Minute
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
@@ -394,6 +395,7 @@ type cancellationPenalty struct {
 	HoursBeforeStart   int64              `json:"hours_before_start"`
 	ReservationDetails reservationDetails `json:"reservation_details"`
 	ExpiresAt          time.Time          `json:"expires_at"`
+	CalculatedAt       time.Time          `json:"penalty_calculated_at"`
 }
 
 type cancellationPenaltyError struct {
@@ -663,30 +665,67 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
 		}
-		if refundPercentage < 100 && !confirmCancellation {
+		buildPenalty := func(calculatedAt time.Time, refundPercentage int64, hoursBeforeStart int64) (cancellationPenalty, error) {
 			courts, err := qtx.ListReservationCourts(ctx, reservationID)
 			if err != nil {
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
+				return cancellationPenalty{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
 			}
 			facility, err := qtx.GetFacilityByID(ctx, facilityID)
 			if err != nil {
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
+				return cancellationPenalty{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
 			}
-			expiresAt := time.Now().Add(10 * time.Minute)
-			penalty := cancellationPenalty{
+			return cancellationPenalty{
 				ReservationID:    reservationID,
 				RefundPercentage: refundPercentage,
 				FeePercentage:    100 - refundPercentage,
-				HoursBeforeStart: hoursUntilReservation,
-				ExpiresAt:        expiresAt,
+				HoursBeforeStart: hoursBeforeStart,
+				ExpiresAt:        calculatedAt.Add(cancellationPenaltyWindow),
+				CalculatedAt:     calculatedAt,
 				ReservationDetails: reservationDetails{
 					Court:     reservationCourtLabel(courts),
 					Facility:  facility.Name,
 					StartTime: reservation.StartTime,
 					EndTime:   reservation.EndTime,
 				},
+			}, nil
+		}
+
+		if refundPercentage < 100 {
+			if confirmCancellation {
+				previousCalculatedAt, previousHours, ok := requestCancellationPenaltyDetails(r)
+				if !ok {
+					penalty, err := buildPenalty(now, refundPercentage, hoursUntilReservation)
+					if err != nil {
+						return err
+					}
+					return cancellationPenaltyError{Penalty: penalty}
+				}
+				penaltyExpired := now.Sub(previousCalculatedAt) > cancellationPenaltyWindow
+				if penaltyExpired {
+					penalty, err := buildPenalty(now, refundPercentage, hoursUntilReservation)
+					if err != nil {
+						return err
+					}
+					return cancellationPenaltyError{Penalty: penalty}
+				}
+				previousRefundPercentage, err := applicableRefundPercentage(ctx, qtx, facilityID, previousHours)
+				if err != nil {
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
+				}
+				if previousRefundPercentage != refundPercentage {
+					penalty, err := buildPenalty(now, refundPercentage, hoursUntilReservation)
+					if err != nil {
+						return err
+					}
+					return cancellationPenaltyError{Penalty: penalty}
+				}
+			} else {
+				penalty, err := buildPenalty(now, refundPercentage, hoursUntilReservation)
+				if err != nil {
+					return err
+				}
+				return cancellationPenaltyError{Penalty: penalty}
 			}
-			return cancellationPenaltyError{Penalty: penalty}
 		}
 		if _, err := qtx.LogCancellation(ctx, dbgen.LogCancellationParams{
 			ReservationID:           reservationID,
@@ -740,11 +779,13 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				ReservationID:    penaltyErr.Penalty.ReservationID,
 				FeePercentage:    penaltyErr.Penalty.FeePercentage,
 				RefundPercentage: penaltyErr.Penalty.RefundPercentage,
+				HoursBeforeStart: penaltyErr.Penalty.HoursBeforeStart,
 				StartTime:        penaltyErr.Penalty.ReservationDetails.StartTime,
 				EndTime:          penaltyErr.Penalty.ReservationDetails.EndTime,
 				CourtName:        penaltyErr.Penalty.ReservationDetails.Court,
 				FacilityName:     penaltyErr.Penalty.ReservationDetails.Facility,
 				ExpiresAt:        penaltyErr.Penalty.ExpiresAt,
+				CalculatedAt:     penaltyErr.Penalty.CalculatedAt,
 			})
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().Set("HX-Retarget", "#modal")
@@ -819,6 +860,36 @@ func requestCancellationConfirm(r *http.Request) bool {
 		}
 	}
 	return apiutil.ParseBool(rawConfirm)
+}
+
+func requestCancellationPenaltyDetails(r *http.Request) (time.Time, int64, bool) {
+	rawCalculatedAt := strings.TrimSpace(r.URL.Query().Get("penalty_calculated_at"))
+	rawHours := strings.TrimSpace(r.URL.Query().Get("hours_before_start"))
+	if rawCalculatedAt == "" || rawHours == "" {
+		if err := r.ParseForm(); err == nil {
+			if rawCalculatedAt == "" {
+				rawCalculatedAt = strings.TrimSpace(r.FormValue("penalty_calculated_at"))
+			}
+			if rawHours == "" {
+				rawHours = strings.TrimSpace(r.FormValue("hours_before_start"))
+			}
+		}
+	}
+	if rawCalculatedAt == "" || rawHours == "" {
+		return time.Time{}, 0, false
+	}
+	hoursBeforeStart, err := strconv.ParseInt(rawHours, 10, 64)
+	if err != nil {
+		return time.Time{}, 0, false
+	}
+	calculatedAt, err := time.Parse(time.RFC3339Nano, rawCalculatedAt)
+	if err != nil {
+		calculatedAt, err = time.Parse(time.RFC3339, rawCalculatedAt)
+		if err != nil {
+			return time.Time{}, 0, false
+		}
+	}
+	return calculatedAt, hoursBeforeStart, true
 }
 
 func reservationCourtLabel(courts []dbgen.ListReservationCourtsRow) string {
