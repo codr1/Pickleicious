@@ -35,8 +35,6 @@
 | Court/Calendar | ❌ | ❌ | ✅ Basic UI | Not in issues |
 | Authentication | ❌ | ❌ | ✅ Cognito EMAIL_OTP | Logout/reset pending |
 | Open Play Rules | #32 | ❌ | ❌ | New feature request |
-| Search | #31 | ❌ | ✅ Fixed | Bug fixed (merged 2025-12-24) |
-| Deleted User Handling | #30 | ❌ | ✅ Implemented | Closed |
 | **Planned (Section 9)** | ❌ | ❌ | ❌ | 18 feature areas identified |
 
 ---
@@ -58,16 +56,6 @@
 ---
 
 ### 0.1 Comprehensive Test Infrastructure
-
-### 0.2 Build System Modernization
-**Problem**: CMake/Make build system is overly complex for a Go project and causes confusion (e.g., dead `DB_PATH` variables, multiple indirections).
-
-**Required**:
-- Migrate to Go-centric build tool (Mage, Task, or just Makefile with go commands)
-- Single source of truth for configuration
-- Simpler developer experience: `go run`, `go test`, `go build`
-
----
 
 ## 1. EXECUTIVE SUMMARY
 
@@ -173,32 +161,7 @@ Complete member record structure:
 | 2 | Member | Full membership, standard benefits |
 | 3+ | Member+ | Premium tiers with additional benefits |
 
-### 3.4 Member Photo System
-
-Photos are stored as BLOBs directly in the database:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `member_id` | FK→members | Unique (one photo per member) |
-| `data` | BLOB | Raw image bytes |
-| `content_type` | TEXT | MIME type (e.g., 'image/jpeg') |
-| `size` | INTEGER | File size in bytes |
-
-**Photo Capture Workflow:**
-1. Frontend activates webcam via `navigator.mediaDevices.getUserMedia()`
-2. Video stream displays in preview element
-3. User clicks "Take Photo" → canvas captures frame
-4. Frame converted to Base64 data URL
-5. Data URL sent in hidden form field `photo_data`
-6. Backend decodes Base64 → stores as BLOB
-7. Photo served via `/api/v1/members/photo/{member_id}`
-
-**UI States:**
-- No photo → Show initials (e.g., "JD" for John Doe)
-- New member → Show "+" placeholder
-- With photo → Render from `/api/v1/members/photo/{id}`
-
-### 3.5 Member Billing Information
+### 3.4 Member Billing Information
 
 Separate billing table for payment data:
 
@@ -238,14 +201,10 @@ Separate billing table for payment data:
 - Replaces form with code entry UI
 
 
-### 4.3 Implementation Status
+### 4.3 Pending
 
 | Feature | Status |
 |---------|--------|
-| Login page UI | ✅ Complete |
-| Staff check endpoint | ✅ Complete |
-| Cognito EMAIL_OTP | ✅ Complete |
-| Member Cognito sync | ✅ Complete |
 | Password reset | ❌ TODO |
 
 ---
@@ -253,32 +212,8 @@ Separate billing table for payment data:
 ## 5. MEMBER MANAGEMENT OPERATIONS
 
 > **Source:** `internal/api/members/handlers.go`, member templates
-> **GitHub Issues:** #30 (Deleted user re-add - CLOSED), #31 (Search broken - FIXED)
 
-### 5.1 Member List View
-
-**Layout:** Split-panel design
-- Left panel (50%): Searchable, paginated member list
-- Right panel (50%): Selected member detail or form
-
-**Search Functionality:**
-```sql
-WHERE m.status <> 'deleted'
-  AND (@search_term IS NULL
-       OR m.first_name LIKE '%' || @search_term || '%'
-       OR m.last_name LIKE '%' || @search_term || '%'
-       OR m.email LIKE '%' || @search_term || '%')
-ORDER BY m.last_name, m.first_name
-```
-
-> **GitHub Issue #31:** ✅ Search fixed (merged 2025-12-24)
-
-**Pagination:**
-- Default: 25 per page
-- Options: 25, 50, 100
-- HTMX-powered infinite scroll ready
-
-### 5.2 Member CRUD Operations
+### 5.1 Member CRUD Operations
 
 **Create Member:**
 1. Click "Add Member" → New form loads in right panel
@@ -300,12 +235,6 @@ ORDER BY m.last_name, m.first_name
 | Postal Code | 5-10 characters |
 | DOB | Valid date, age 0-100 years |
 
-**Duplicate Email Handling:**
-- 409 Conflict returns `{error: "duplicate_email", member_id: X}`
-- User can restore deleted account or modify old email to create new
-
-> **GitHub Issue #30 (CLOSED):** Deleted user re-add conflict handling - implemented
-
 **Update Member:**
 1. Click "Edit" on detail view
 2. All fields editable except ID
@@ -323,13 +252,7 @@ WHERE id = @id;
 - Sets status to 'deleted' (not physical delete)
 - Excluded from normal queries
 
-**Restore Member:**
-1. Triggered when creating member with deleted account's email
-2. Options:
-   - Restore previous account (reactivate)
-   - Create new account (prefix old email with `{id}___`)
-
-### 5.3 Member Detail View
+### 5.2 Member Detail View
 
 **Information Displayed:**
 - Photo (or initials placeholder)
@@ -1854,21 +1777,7 @@ pickleicious/
 └── config.yaml              # App configuration
 ```
 
-### 11.3 Build System (Taskfile)
-
-**Environments:**
-- `build:prod` (minified binary flags)
-
-**Key Tasks:**
-| Target | Description |
-|--------|-------------|
-| `generate` | Compile .templ files and sqlc queries |
-| `css` | Build CSS from Tailwind |
-| `db:migrate` | Run migrations |
-| `build` | Build server binary |
-| `build:prod` | Build server binary for production |
-
-### 11.4 Configuration
+### 11.3 Configuration
 
 **config.yaml:**
 ```yaml
@@ -1907,30 +1816,6 @@ handler := api.ChainMiddleware(
     api.WithContentType,  // Default Accept header
 )
 ```
-
-### 11.6 API Routes
-
-| Method | Path | Handler |
-|--------|------|---------|
-| GET | `/` | Base layout |
-| GET | `/health` | Health check |
-| GET | `/api/v1/nav/menu` | Load menu HTML |
-| GET | `/api/v1/nav/menu/close` | Clear menu |
-| GET | `/api/v1/nav/search` | Global search (TODO) |
-| GET | `/members` | Members page |
-| GET | `/api/v1/members` | List members |
-| POST | `/api/v1/members` | Create member |
-| GET | `/api/v1/members/search` | Search members |
-| GET | `/api/v1/members/new` | New member form |
-| GET | `/api/v1/members/{id}` | Member detail |
-| GET | `/api/v1/members/{id}/edit` | Edit form |
-| PUT | `/api/v1/members/{id}` | Update member |
-| DELETE | `/api/v1/members/{id}` | Delete member |
-| GET | `/api/v1/members/{id}/billing` | Billing info |
-| GET | `/api/v1/members/photo/{id}` | Member photo |
-| POST | `/api/v1/members/restore` | Restore/create decision |
-| GET | `/courts` | Courts page |
-| GET | `/api/v1/courts/calendar` | Calendar view |
 
 ---
 
@@ -1979,19 +1864,13 @@ handler := api.ChainMiddleware(
 
 | Feature | Status | GitHub Issue |
 |---------|--------|--------------|
-| Member CRUD | ✅ Complete | — |
-| Member search/pagination | ✅ Complete | #31 (fixed) |
-| Member photos | ✅ Complete | — |
 | Member billing info | ✅ Complete | — |
-| Member restoration | ✅ Complete | #30 (closed) |
 | Court calendar UI | ✅ Basic | — |
 | Navigation menu | ✅ Complete | — |
 | Dark mode toggle | ✅ Complete | — |
 | Login page UI | ✅ Complete | — |
 | Database layer | ✅ Complete | #4, #5 |
 | Build system | ✅ Complete | — |
-| GitHub repo setup | ✅ Complete | #1 (closed) |
-| Dev environment docs | ✅ Complete | #2 (closed) |
 
 ### 13.2 In Progress / TODO
 
@@ -2073,15 +1952,6 @@ handler := api.ChainMiddleware(
 | 11 | [IS3] Project Directory Structure | infrastructure, setup | IS |
 | 10 | [IS2] Dev Environment Docs | documentation, setup | IS |
 | 9 | [IS1] GitHub Repo Setup | infrastructure, setup | IS |
-
-### Closed Issues
-
-| # | Title | Labels | Resolution |
-|---|-------|--------|------------|
-| 31 | Search is broken | — | Fixed (2025-12-24) |
-| 30 | Deleted user re-add conflict | — | Implemented |
-| 2 | [IS2] Dev Environment Docs | documentation, setup | Completed |
-| 1 | [IS1] GitHub Repo Setup | infrastructure, setup | Completed |
 
 ### Duplicate Issues (3-8 duplicate 9-16)
 
