@@ -861,6 +861,7 @@ Consider adding a similar confirmation flow for members, or at minimum returning
 - `lesson_min_notice_hours` facility setting (default: 24 hours) - booking must be at least this far in advance
 - Lessons count toward max_member_reservations limit
 
+<!-- BEGIN WIP: STORY-0032 -->
 **Enhancement Needed: Lesson Cancellation Policy**
 
 The current implementation does not enforce cancellation notice requirements for lessons. While `lesson_min_notice_hours` controls how far in advance a lesson must be booked, there is no equivalent enforcement preventing last-minute cancellations.
@@ -877,6 +878,7 @@ The current implementation does not enforce cancellation notice requirements for
 | Dedicated lesson cancellation policy | Separate policy tier for PRO_SESSION reservations |
 | lesson_cancellation_notice_hours | Facility setting mirroring lesson_min_notice_hours for cancellations |
 | Pro notification | Notify pro when their lesson is cancelled |
+<!-- END WIP -->
 
 **Lesson Scheduling:**
 | Feature | Description |
