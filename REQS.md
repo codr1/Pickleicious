@@ -701,21 +701,6 @@ This section documents features that are standard in competing pickleball/sports
 - Staff users see confirmation prompt with fee waiver option (lines 707-728 in handlers.go)
 - Cancellation logs track all cancellations with policy applied
 
-<!-- BEGIN WIP: STORY-0030 -->
-**Enhancement Needed: Member Cancellation Confirmation**
-
-Non-staff users can still cancel with penalties without explicit confirmation.
-
-When a non-staff user cancels a reservation with a partial refund (e.g., 50%), the cancellation proceeds immediately without prompting them about the fee. Staff users get a confirmation prompt (lines 707-728), but regular members do not.
-
-Consider adding a similar confirmation flow for members, or at minimum returning the refund percentage in a preliminary response so the frontend can display a confirmation dialog.
-
-**Suggested Implementation:**
-| Option | Description |
-|--------|-------------|
-| Two-step API | `POST /cancel?preview=true` returns policy details, then `POST /cancel?confirm=true` executes |
-| Frontend confirmation | Return refund percentage in initial response, let frontend show dialog before final submit |
-<!-- END WIP -->
 
 
 ### 9.5 League & Tournament Management
