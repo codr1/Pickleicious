@@ -1739,12 +1739,47 @@ Members can cancel their own reservations with these restrictions:
 
 - Must be the `primary_user_id` on the reservation
 - Reservation must be in the future
-- Confirmation prompt shows applicable refund percentage before deletion
 - Refund percentage determined by facility's cancellation policy tiers
 - Courts and participants removed in transaction
 - Cancellation logged with refund percentage applied and hours before start
 
-If no cancellation policy is configured for the facility, 100% refund applies (current behavior preserved).
+If no cancellation policy is configured for the facility, 100% refund applies.
+
+#### Full Refund Cancellations
+
+When the applicable refund percentage is 100%, cancellation proceeds immediately without confirmation.
+
+#### Partial Refund Cancellations
+
+When refund is less than 100%, the system requires explicit member confirmation:
+
+1. Initial `DELETE /member/reservations/{id}` returns HTTP 409 with penalty details
+2. Frontend displays a styled confirmation modal showing:
+   - Fee percentage and refund percentage
+   - Reservation details (date, time, court)
+   - Facility name
+   - 10-minute countdown timer
+3. Modal includes "Cancel Reservation" and "Keep Reservation" buttons
+4. Member must confirm via second request with `confirm=true` parameter
+
+**Modal Behavior:**
+
+| Action | Result |
+|--------|--------|
+| Click "Cancel Reservation" | Sends `DELETE /member/reservations/{id}?confirm=true&penalty_calculated_at=...&hours_before_start=...` |
+| Click "Keep Reservation" | Modal closes, reservation unchanged |
+| Timer expires (10 minutes) | Modal closes automatically, reservation unchanged |
+| Close modal (X button) | Modal closes, reservation unchanged |
+
+**Penalty Recalculation:**
+
+The modal includes `penalty_calculated_at` and `hours_before_start` parameters to detect tier boundary crossings:
+
+1. If confirmation arrives after 10-minute window expires, backend recalculates penalty
+2. If recalculated tier differs from original (e.g., crossed from 50% to 25% refund), returns new 409 with updated penalty
+3. If tier unchanged, proceeds with cancellation at originally displayed percentage
+
+This prevents members from seeing one penalty, waiting, and receiving a different (better) refund.
 
 ### HTMX Integration
 
