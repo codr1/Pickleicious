@@ -137,6 +137,32 @@ func HandleMemberLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func HandleLogout(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	session, err := parseAuthCookie(r)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to parse auth cookie for logout")
+	}
+
+	// Clear both cookies to cover mixed session states.
+	ClearAuthCookie(w)
+	ClearSession(w, r)
+
+	if session != nil && session.SessionType == SessionTypeMember {
+		w.Header().Set("HX-Redirect", "/member/login")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/login")
+	w.WriteHeader(http.StatusOK)
+}
+
 func HandleCheckStaff(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 	if r.Method != http.MethodGet {

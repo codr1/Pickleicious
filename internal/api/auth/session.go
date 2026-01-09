@@ -121,6 +121,23 @@ func ClearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
+func ClearAuthCookie(w http.ResponseWriter) {
+	if w == nil {
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     authCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(),
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+	})
+}
+
 func SetAuthCookie(w http.ResponseWriter, r *http.Request, user *authz.AuthUser) error {
 	if w == nil || r == nil || user == nil {
 		return errors.New("auth session requires request, response, and user")
