@@ -246,9 +246,6 @@ Separate billing table for payment data:
 | Staff check endpoint | ✅ Complete |
 | Cognito EMAIL_OTP | ✅ Complete |
 | Member Cognito sync | ✅ Complete |
-<!-- BEGIN WIP: STORY-0029 -->
-| Logout endpoint/button | ❌ TODO |
-<!-- END WIP -->
 | Password reset | ❌ TODO |
 
 ---
@@ -1812,12 +1809,6 @@ Video technology and digital scoreboards create a premium, professional experien
 - Settings
 
 **User Section:**
-<!-- BEGIN WIP: STORY-0029 -->
-- Avatar placeholder
-- Name display
-- Email display
-- Settings link
-<!-- END WIP -->
 
 ### 9.4 HTMX Patterns Used
 
