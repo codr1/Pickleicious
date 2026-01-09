@@ -1,5 +1,58 @@
 @import "./themes.css";
 
+/* Dark mode overrides for hardcoded Tailwind classes. */
+.dark .bg-white {
+    background-color: hsl(var(--background));
+}
+
+.dark .bg-gray-50 {
+    background-color: hsl(var(--muted));
+}
+
+.dark .bg-gray-100 {
+    background-color: hsl(var(--muted));
+}
+
+.dark .hover\:bg-gray-50:hover {
+    background-color: hsl(var(--muted));
+}
+
+.dark .hover\:bg-gray-100:hover {
+    background-color: hsl(var(--muted));
+}
+
+.dark .text-gray-900 {
+    color: hsl(var(--foreground));
+}
+
+.dark .text-gray-700 {
+    color: hsl(var(--foreground));
+}
+
+.dark .text-gray-600 {
+    color: hsl(var(--muted-foreground));
+}
+
+.dark .text-gray-500 {
+    color: hsl(var(--muted-foreground));
+}
+
+.dark .text-gray-400 {
+    color: hsl(var(--muted-foreground));
+}
+
+.dark .border-gray-200 {
+    border-color: hsl(var(--border));
+}
+
+.dark .border-gray-300 {
+    border-color: hsl(var(--border));
+}
+
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: hsl(var(--border));
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
