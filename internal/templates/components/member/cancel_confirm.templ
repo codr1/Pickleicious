@@ -1,0 +1,102 @@
+// internal/templates/components/member/cancel_confirm.templ
+package member
+
+import "fmt"
+
+templ CancellationConfirmModal(data CancellationPenaltyData) {
+	<div class="fixed inset-0 z-50 flex items-center justify-center">
+		<div class="absolute inset-0 bg-black bg-opacity-50" onclick="document.getElementById('modal').innerHTML=''"></div>
+		<div class="relative w-full max-w-lg rounded-lg bg-white shadow-lg">
+			<div class="border-b border-gray-200 px-6 py-4">
+				<h3 class="text-lg font-semibold text-gray-900">Confirm cancellation</h3>
+				<p class="mt-1 text-sm text-gray-600">Review the cancellation penalty before you proceed.</p>
+			</div>
+			<div class="space-y-4 px-6 py-4">
+				<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+					<p>{fmt.Sprintf("%d%% fee applies.", data.FeePercentage)}</p>
+					<p>{fmt.Sprintf("%d%% refund will be issued.", data.RefundPercentage)}</p>
+				</div>
+				<dl class="grid grid-cols-1 gap-2 text-sm text-gray-700">
+					<div>
+						<dt class="font-medium text-gray-900">Reservation</dt>
+						<dd>{data.StartTime.Format("Jan 2, 2006 3:04 PM")} - {data.EndTime.Format("3:04 PM")}</dd>
+					</div>
+					<div>
+						<dt class="font-medium text-gray-900">Court</dt>
+						<dd>{data.CourtName}</dd>
+					</div>
+					<div>
+						<dt class="font-medium text-gray-900">Facility</dt>
+						<dd>{data.FacilityName}</dd>
+					</div>
+				</dl>
+				<p class="text-xs text-gray-500">
+					Confirm within
+					<span
+						id="cancel-confirm-countdown"
+						class="font-semibold text-gray-700"
+						data-expires-at={fmt.Sprintf("%d", data.ExpiresAt.UnixMilli())}>
+						10:00
+					</span>
+					to lock in this penalty.
+				</p>
+			</div>
+			<form
+				class="flex items-center justify-end gap-3 border-t border-gray-200 px-6 py-4"
+				hx-delete={fmt.Sprintf("/member/reservations/%d?confirm=true", data.ReservationID)}
+				hx-swap="none"
+				hx-on::after-request="if(event.detail.xhr.status===200){document.getElementById('modal').innerHTML='';}">
+				<button
+					type="button"
+					class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+					onclick="document.getElementById('modal').innerHTML=''">
+					Back
+				</button>
+				<button type="submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+					Confirm cancellation
+				</button>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		(function () {
+			const countdown = document.getElementById("cancel-confirm-countdown");
+			if (!countdown || countdown.dataset.active === "true") {
+				return;
+			}
+			countdown.dataset.active = "true";
+			const expiresAt = Number(countdown.getAttribute("data-expires-at"));
+			if (!Number.isFinite(expiresAt)) {
+				return;
+			}
+
+			function formatCountdown(msRemaining) {
+				const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+				const minutes = Math.floor(totalSeconds / 60);
+				const seconds = totalSeconds % 60;
+				const minuteLabel = minutes < 10 ? "0" + minutes : String(minutes);
+				const secondLabel = seconds < 10 ? "0" + seconds : String(seconds);
+				return minuteLabel + ":" + secondLabel;
+			}
+
+			let timerId = 0;
+
+			function updateCountdown() {
+				const element = document.getElementById("cancel-confirm-countdown");
+				if (!element) {
+					clearInterval(timerId);
+					return;
+				}
+				const remainingMs = expiresAt - Date.now();
+				element.textContent = formatCountdown(remainingMs);
+				if (remainingMs <= 0) {
+					clearInterval(timerId);
+				}
+			}
+
+			updateCountdown();
+			timerId = window.setInterval(updateCountdown, 1000);
+		})();
+	</script>
+}

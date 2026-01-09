@@ -91,6 +91,17 @@ type ReservationWidgetData struct {
 	Count    int
 }
 
+type CancellationPenaltyData struct {
+	ReservationID    int64
+	FeePercentage    int64
+	RefundPercentage int64
+	StartTime        time.Time
+	EndTime          time.Time
+	CourtName        string
+	FacilityName     string
+	ExpiresAt        time.Time
+}
+
 type MemberBookingSlot struct {
 	StartTime time.Time
 	EndTime   time.Time

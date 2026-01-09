@@ -672,10 +672,10 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load facility", Err: err}
 			}
 			penalty := cancellationPenalty{
-				ReservationID:     reservationID,
-				RefundPercentage:  refundPercentage,
-				FeePercentage:     100 - refundPercentage,
-				HoursBeforeStart:  hoursUntilReservation,
+				ReservationID:    reservationID,
+				RefundPercentage: refundPercentage,
+				FeePercentage:    100 - refundPercentage,
+				HoursBeforeStart: hoursUntilReservation,
 				ReservationDetails: reservationDetails{
 					Court:     reservationCourtLabel(courts),
 					Facility:  facility.Name,
@@ -727,8 +727,22 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var penaltyErr cancellationPenaltyError
 		if errors.As(err, &penaltyErr) {
-			if err := apiutil.WriteJSON(w, http.StatusConflict, penaltyErr.Penalty); err != nil {
-				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to write cancellation penalty response")
+			component := membertempl.CancellationConfirmModal(membertempl.CancellationPenaltyData{
+				ReservationID:    penaltyErr.Penalty.ReservationID,
+				FeePercentage:    penaltyErr.Penalty.FeePercentage,
+				RefundPercentage: penaltyErr.Penalty.RefundPercentage,
+				StartTime:        penaltyErr.Penalty.ReservationDetails.StartTime,
+				EndTime:          penaltyErr.Penalty.ReservationDetails.EndTime,
+				CourtName:        penaltyErr.Penalty.ReservationDetails.Court,
+				FacilityName:     penaltyErr.Penalty.ReservationDetails.Facility,
+				ExpiresAt:        time.Now().Add(10 * time.Minute),
+			})
+			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("HX-Retarget", "#modal")
+			w.Header().Set("HX-Reswap", "innerHTML")
+			if err := component.Render(r.Context(), w); err != nil {
+				logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to render cancellation confirmation modal")
+				http.Error(w, "Failed to render modal", http.StatusInternalServerError)
 			}
 			return
 		}
