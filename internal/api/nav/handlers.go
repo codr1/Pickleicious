@@ -58,31 +58,37 @@ func HandleMenuClose(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleSearch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.Ctx(ctx)
 	searchTerm := strings.TrimSpace(r.URL.Query().Get("q"))
-	var err error
+
 	if searchTerm == "" {
 		component := nav.SearchResults("", nil)
-		err = component.Render(r.Context(), w)
-		if err != nil {
-			http.Error(w, "Search failed", http.StatusInternalServerError)
+		if err := component.Render(ctx, w); err != nil {
+			logger.Error().Err(err).Msg("Failed to render empty search results")
 		}
 		return
 	}
 
-	results, err := queries.SearchMembers(r.Context(), dbgen.SearchMembersParams{
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Search failed", http.StatusInternalServerError)
+		return
+	}
+
+	results, err := queries.SearchMembers(ctx, dbgen.SearchMembersParams{
 		SearchTerm: sql.NullString{String: searchTerm, Valid: true},
 		Limit:      10,
 	})
 	if err != nil {
+		logger.Error().Err(err).Str("search_term", searchTerm).Msg("Failed to search members")
 		http.Error(w, "Search failed", http.StatusInternalServerError)
 		return
 	}
 
 	component := nav.SearchResults(searchTerm, results)
-	err = component.Render(r.Context(), w)
-	if err != nil {
-		http.Error(w, "Search failed", http.StatusInternalServerError)
-		return
+	if err := component.Render(ctx, w); err != nil {
+		logger.Error().Err(err).Msg("Failed to render search results")
 	}
 }
 
