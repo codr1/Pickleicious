@@ -4,12 +4,12 @@ package nav
 import "github.com/codr1/Pickleicious/internal/api/auth"
 
 templ TopNav(sessionType string) {
-    <header class="fixed top-0 inset-x-0 h-16 bg-white border-b border-gray-200 z-40">
+    <header class="fixed top-0 inset-x-0 h-16 bg-background border-b border-border z-40">
         <div class="flex items-center justify-between h-full px-4">
             <!-- Menu Toggle -->
             <button 
                 type="button"
-                class="p-2 text-gray-500 hover:text-gray-900"
+                class="p-2 text-muted-foreground hover:text-foreground"
                 hx-get="/api/v1/nav/menu"
                 hx-target="#nav-menu"
                 hx-swap="innerHTML">
@@ -37,7 +37,7 @@ templ TopNav(sessionType string) {
                 <!-- Theme Toggle -->
                 <button 
                     type="button"
-                    class="p-2 text-gray-500 hover:text-gray-900"
+                    class="p-2 text-muted-foreground hover:text-foreground"
                     onclick="toggleTheme()">
                     <svg class="h-6 w-6 dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <!-- Moon icon for light mode -->
@@ -53,7 +53,7 @@ templ TopNav(sessionType string) {
                     <!-- Notifications -->
                     <div class="relative">
                         <button 
-                            class="p-2 text-gray-500 hover:text-gray-900"
+                            class="p-2 text-muted-foreground hover:text-foreground"
                             hx-get="/api/v1/notifications"
                             hx-trigger="click"
                             hx-target="#notifications-panel"

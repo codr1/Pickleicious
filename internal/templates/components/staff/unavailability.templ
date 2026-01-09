@@ -13,13 +13,13 @@ import (
 templ ProUnavailabilityLayout(blocks []dbgen.ProUnavailability) {
 	<div class="max-w-4xl space-y-6">
 		<div>
-			<h2 class="text-2xl font-semibold text-gray-900">Unavailable Times</h2>
-			<p class="mt-1 text-sm text-gray-600">Block off times when you are not available for lessons.</p>
+			<h2 class="text-2xl font-semibold text-foreground">Unavailable Times</h2>
+			<p class="mt-1 text-sm text-muted-foreground">Block off times when you are not available for lessons.</p>
 		</div>
 
-		<section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-			<div class="border-b border-gray-200 px-4 py-3">
-				<h3 class="text-lg font-semibold text-gray-900">Block time</h3>
+		<section class="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+			<div class="border-b border-border px-4 py-3">
+				<h3 class="text-lg font-semibold text-foreground">Block time</h3>
 			</div>
 			<form
 				class="space-y-4 px-4 py-4"
@@ -32,34 +32,34 @@ templ ProUnavailabilityLayout(blocks []dbgen.ProUnavailability) {
 			>
 				<div class="grid gap-4 md:grid-cols-2">
 					<div>
-						<label class="block text-sm font-medium text-gray-700" for="start_time">Start</label>
+						<label class="block text-sm font-medium text-foreground" for="start_time">Start</label>
 						<input
 							id="start_time"
 							name="start_time"
 							required
 							type="datetime-local"
-							class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+							class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
 						/>
 					</div>
 					<div>
-						<label class="block text-sm font-medium text-gray-700" for="end_time">End</label>
+						<label class="block text-sm font-medium text-foreground" for="end_time">End</label>
 						<input
 							id="end_time"
 							name="end_time"
 							required
 							type="datetime-local"
-							class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+							class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
 						/>
 					</div>
 				</div>
 				<div>
-					<label class="block text-sm font-medium text-gray-700" for="reason">Reason</label>
+					<label class="block text-sm font-medium text-foreground" for="reason">Reason</label>
 					<input
 						id="reason"
 						name="reason"
 						placeholder="Optional"
 						type="text"
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
 					/>
 				</div>
 				<div id="block-error" class="text-sm text-red-600"></div>
@@ -69,9 +69,9 @@ templ ProUnavailabilityLayout(blocks []dbgen.ProUnavailability) {
 			</form>
 		</section>
 
-		<section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-			<div class="border-b border-gray-200 px-4 py-3">
-				<h3 class="text-lg font-semibold text-gray-900">Existing blocks</h3>
+		<section class="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+			<div class="border-b border-border px-4 py-3">
+				<h3 class="text-lg font-semibold text-foreground">Existing blocks</h3>
 			</div>
 			@ProUnavailabilityList(blocks)
 		</section>
@@ -81,14 +81,14 @@ templ ProUnavailabilityLayout(blocks []dbgen.ProUnavailability) {
 templ ProUnavailabilityList(blocks []dbgen.ProUnavailability) {
 	<div id="pro-unavailability-list">
 		if len(blocks) == 0 {
-			<div class="px-4 py-6 text-sm text-gray-500">No blocks yet.</div>
+			<div class="px-4 py-6 text-sm text-muted-foreground">No blocks yet.</div>
 		} else {
-			<div class="divide-y divide-gray-200">
+			<div class="divide-y divide-border">
 				for _, block := range blocks {
 					<div class="flex flex-wrap items-start justify-between gap-4 px-4 py-4">
 						<div>
-							<p class="text-sm font-semibold text-gray-900">{formatUnavailabilityRange(block.StartTime, block.EndTime)}</p>
-							<p class="text-sm text-gray-600">{formatUnavailabilityReason(block.Reason)}</p>
+							<p class="text-sm font-semibold text-foreground">{formatUnavailabilityRange(block.StartTime, block.EndTime)}</p>
+							<p class="text-sm text-muted-foreground">{formatUnavailabilityReason(block.Reason)}</p>
 						</div>
 						<button
 							class="rounded-md border border-red-300 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"

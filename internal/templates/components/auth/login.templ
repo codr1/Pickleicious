@@ -22,7 +22,7 @@ templ AuthPageWrapper(title string) {
             ];
         </script>
     </head>
-    <body class="min-h-screen bg-gray-50">
+    <body class="min-h-screen bg-muted">
         { children... }
     </body>
     </html>
@@ -35,11 +35,11 @@ templ LoginPage(organizationID string) {
 }
 
 templ LoginLayout(organizationID string) {
-    <div class="min-h-screen flex items-center justify-center bg-gray-50">
-        <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
+    <div class="min-h-screen flex items-center justify-center bg-muted">
+        <div class="max-w-md w-full space-y-8 p-8 bg-background rounded-lg shadow">
             <div class="text-center">
-                <h2 class="text-3xl font-bold text-gray-900">Welcome</h2>
-                <p class="mt-2 text-sm text-gray-600">Sign in to your account</p>
+                <h2 class="text-3xl font-bold text-foreground">Welcome</h2>
+                <p class="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
             </div>
 
             <div class="mt-8">
@@ -47,14 +47,14 @@ templ LoginLayout(organizationID string) {
                     <input type="hidden" name="organization_id" value={organizationID}/>
                     <div id="auth-error"></div>
                     <div>
-                        <label for="identifier" class="block text-sm font-medium text-gray-700">
+                        <label for="identifier" class="block text-sm font-medium text-foreground">
                             Email or Phone
                         </label>
                         <input
                             type="text"
                             id="identifier"
                             name="identifier"
-                            class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                            class="mt-1 block w-full px-4 py-2 border border-border rounded-lg focus:ring-blue-500 focus:border-blue-500"
                             placeholder="Enter your email or phone"
                             hx-get="/api/v1/auth/check-staff"
                             hx-trigger="blur"
@@ -80,9 +80,9 @@ templ LoginLayout(organizationID string) {
 }
 
 templ StaffAuthSection() {
-    <div class="pt-4 border-t border-gray-200">
+    <div class="pt-4 border-t border-border">
         <button
-            class="text-sm text-gray-600 hover:text-blue-600"
+            class="text-sm text-muted-foreground hover:text-blue-600"
             hx-get="/api/v1/auth/staff-login"
             hx-include="#login-form [name=organization_id]"
             hx-target="#login-form">
@@ -96,39 +96,39 @@ templ StaffLoginForm(organizationID string) {
         <input type="hidden" name="organization_id" value={organizationID}/>
         <div id="auth-error"></div>
         <div>
-            <label for="identifier" class="block text-sm font-medium text-gray-700">
+            <label for="identifier" class="block text-sm font-medium text-foreground">
                 Email or Phone
             </label>
             <input
                 type="text"
                 id="identifier"
                 name="identifier"
-                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg focus:ring-blue-500 focus:border-blue-500"
             />
         </div>
 
         <div>
-            <label for="password" class="block text-sm font-medium text-gray-700">
+            <label for="password" class="block text-sm font-medium text-foreground">
                 Password
             </label>
             <input
                 type="password"
                 id="password"
                 name="password"
-                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg focus:ring-blue-500 focus:border-blue-500"
             />
         </div>
 
         <div class="flex items-center justify-between">
             <button
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-get="/api/v1/auth/reset-password"
                 hx-include="#login-form [name=identifier], #login-form [name=organization_id]"
                 hx-target="#login-form">
                 Forgot password?
             </button>
             <button
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-get="/api/v1/auth/standard-login"
                 hx-target="#login-form">
                 Back to standard login
@@ -154,19 +154,19 @@ templ CodeVerification(identifier string, organizationID string, session string)
         <input type="hidden" name="session" value={session}/>
         <div id="auth-error"></div>
         <div class="text-center">
-            <h3 class="text-lg font-medium text-gray-900">Check your email/phone</h3>
-            <p class="mt-2 text-sm text-gray-600">We've sent you a verification code</p>
+            <h3 class="text-lg font-medium text-foreground">Check your email/phone</h3>
+            <p class="mt-2 text-sm text-muted-foreground">We've sent you a verification code</p>
         </div>
 
         <div>
-            <label for="code" class="block text-sm font-medium text-gray-700">
+            <label for="code" class="block text-sm font-medium text-foreground">
                 Enter Code
             </label>
             <input
                 type="text"
                 id="code"
                 name="code"
-                class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter verification code"
             />
         </div>
@@ -174,14 +174,14 @@ templ CodeVerification(identifier string, organizationID string, session string)
         <div class="flex items-center justify-between">
             <button
                 type="button"
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-post="/api/v1/auth/resend-code"
                 hx-target="#login-form">
                 Resend Code
             </button>
             <button
                 type="button"
-                class="text-sm text-gray-600 hover:text-blue-600"
+                class="text-sm text-muted-foreground hover:text-blue-600"
                 hx-get="/api/v1/auth/standard-login"
                 hx-target="#login-form">
                 Cancel

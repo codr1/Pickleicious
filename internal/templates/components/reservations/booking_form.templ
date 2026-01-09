@@ -7,9 +7,9 @@ import (
 
 templ BookingForm(data BookingFormData) {
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-		<div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-6">
+		<div class="bg-background rounded-lg shadow-lg w-full max-w-lg p-6">
 			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-semibold text-gray-900">
+				<h2 class="text-lg font-semibold text-foreground">
 					if data.IsEdit {
 						Edit Reservation
 					} else {
@@ -18,7 +18,7 @@ templ BookingForm(data BookingFormData) {
 				</h2>
 				<button
 					type="button"
-					class="text-gray-400 hover:text-gray-600"
+					class="text-muted-foreground hover:text-foreground"
 					onclick="document.getElementById('modal').innerHTML=''">
 					<span class="sr-only">Close</span>&times;
 				</button>
@@ -27,7 +27,7 @@ templ BookingForm(data BookingFormData) {
 			<div id="booking-form-indicator" class="htmx-indicator">
 				<div class="flex items-center justify-center">
 					<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-					<span class="ml-2 text-sm text-gray-600">Saving...</span>
+					<span class="ml-2 text-sm text-muted-foreground">Saving...</span>
 				</div>
 			</div>
 
@@ -51,12 +51,12 @@ templ BookingForm(data BookingFormData) {
 				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)}/>
 
 				<div>
-					<label for="reservation_type_id" class="block text-sm font-medium text-gray-700">Reservation type</label>
+					<label for="reservation_type_id" class="block text-sm font-medium text-foreground">Reservation type</label>
 					<select
 						id="reservation_type_id"
 						name="reservation_type_id"
 						required
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2">
 						for _, resType := range data.ReservationTypes {
 							<option value={fmt.Sprintf("%d", resType.ID)} selected?={data.SelectedReservationTypeID != 0 && data.SelectedReservationTypeID == resType.ID}>{resType.Name}</option>
 						}
@@ -64,12 +64,12 @@ templ BookingForm(data BookingFormData) {
 				</div>
 
 				<div>
-					<label for="court_ids" class="block text-sm font-medium text-gray-700">Court</label>
+					<label for="court_ids" class="block text-sm font-medium text-foreground">Court</label>
 					<select
 						id="court_ids"
 						name="court_ids"
 						required
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2">
 						for _, court := range data.Courts {
 							<option value={fmt.Sprintf("%d", court.ID)} selected?={data.SelectedCourtID != 0 && data.SelectedCourtID == court.ID}>{court.Label}</option>
 						}
@@ -78,29 +78,29 @@ templ BookingForm(data BookingFormData) {
 
 				<div class="grid grid-cols-2 gap-4">
 					<div>
-						<label for="start_time" class="block text-sm font-medium text-gray-700">Start time</label>
+						<label for="start_time" class="block text-sm font-medium text-foreground">Start time</label>
 						<input
 							type="datetime-local"
 							id="start_time"
 							name="start_time"
 							required
 							value={data.StartTime.Format("2006-01-02T15:04")}
-							class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+							class="mt-1 block w-full rounded-md border border-border px-3 py-2"/>
 					</div>
 					<div>
-						<label for="end_time" class="block text-sm font-medium text-gray-700">End time</label>
+						<label for="end_time" class="block text-sm font-medium text-foreground">End time</label>
 						<input
 							type="datetime-local"
 							id="end_time"
 							name="end_time"
 							required
 							value={data.EndTime.Format("2006-01-02T15:04")}
-							class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+							class="mt-1 block w-full rounded-md border border-border px-3 py-2"/>
 					</div>
 				</div>
 
 				<div>
-					<label for="primary_user_id" class="block text-sm font-medium text-gray-700">Member (optional)</label>
+					<label for="primary_user_id" class="block text-sm font-medium text-foreground">Member (optional)</label>
 					<input
 						type="number"
 						id="primary_user_id"
@@ -108,53 +108,53 @@ templ BookingForm(data BookingFormData) {
 						list="member-options"
 						placeholder="Search by member ID"
 						value={formatOptionalInt(data.PrimaryUserID)}
-						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2"/>
 					<datalist id="member-options">
 						for _, member := range data.Members {
 							<option value={fmt.Sprintf("%d", member.ID)}>{member.Label}</option>
 						}
 					</datalist>
-					<p class="mt-1 text-xs text-gray-500">Start typing to filter member IDs.</p>
+					<p class="mt-1 text-xs text-muted-foreground">Start typing to filter member IDs.</p>
 				</div>
 
 				<div class="space-y-2">
-					<label class="flex items-center space-x-2 text-sm font-medium text-gray-700">
+					<label class="flex items-center space-x-2 text-sm font-medium text-foreground">
 						<input
 							type="checkbox"
 							name="is_open_event"
 							checked?={data.IsOpenEvent}
-							class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+							class="h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"/>
 						<span>Open play event</span>
 					</label>
 					<div class="grid grid-cols-2 gap-4">
 						<div>
-							<label for="teams_per_court" class="block text-sm font-medium text-gray-700">Teams per court</label>
+							<label for="teams_per_court" class="block text-sm font-medium text-foreground">Teams per court</label>
 							<input
 								type="number"
 								id="teams_per_court"
 								name="teams_per_court"
 								min="1"
 								value={formatOptionalInt(data.TeamsPerCourt)}
-								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+								class="mt-1 block w-full rounded-md border border-border px-3 py-2"/>
 						</div>
 						<div>
-							<label for="people_per_team" class="block text-sm font-medium text-gray-700">People per team</label>
+							<label for="people_per_team" class="block text-sm font-medium text-foreground">People per team</label>
 							<input
 								type="number"
 								id="people_per_team"
 								name="people_per_team"
 								min="1"
 								value={formatOptionalInt(data.PeoplePerTeam)}
-								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"/>
+								class="mt-1 block w-full rounded-md border border-border px-3 py-2"/>
 						</div>
 					</div>
-					<p class="text-xs text-gray-500">Leave team fields blank for standard reservations.</p>
+					<p class="text-xs text-muted-foreground">Leave team fields blank for standard reservations.</p>
 				</div>
 
 				<div class="flex justify-end space-x-3 pt-2">
 					<button
 						type="button"
-						class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+						class="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-md shadow-sm hover:bg-muted"
 						onclick="document.getElementById('modal').innerHTML=''">
 						Cancel
 					</button>
@@ -171,11 +171,11 @@ templ BookingForm(data BookingFormData) {
 			</form>
 
 			if data.IsEdit {
-				<div class="mt-4 border-t border-gray-200 pt-4">
+				<div class="mt-4 border-t border-border pt-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
-							<p class="text-sm font-medium text-gray-900">Cancel reservation</p>
-							<p class="text-xs text-gray-500">Policy fees may apply. You can waive fees when prompted.</p>
+							<p class="text-sm font-medium text-foreground">Cancel reservation</p>
+							<p class="text-xs text-muted-foreground">Policy fees may apply. You can waive fees when prompted.</p>
 						</div>
 						<form
 							hx-delete={fmt.Sprintf("/api/v1/reservations/%d", data.ReservationID)}

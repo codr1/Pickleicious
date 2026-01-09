@@ -7,11 +7,11 @@ templ ThemeAdminLayout(facilityID int64, editor ThemeEditorData) {
 	<div class="space-y-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<div>
-				<h2 class="text-2xl font-semibold text-gray-900">Theme Management</h2>
-				<p class="mt-1 text-sm text-gray-600">Create, clone, and activate facility themes. System themes are read-only.</p>
+				<h2 class="text-2xl font-semibold text-foreground">Theme Management</h2>
+				<p class="mt-1 text-sm text-muted-foreground">Create, clone, and activate facility themes. System themes are read-only.</p>
 			</div>
 			<button
-				class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+				class="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
 				hx-get={fmt.Sprintf("/api/v1/themes/new?facility_id=%d", facilityID)}
 				hx-target="#theme-editor"
 				hx-swap="innerHTML">
@@ -20,10 +20,10 @@ templ ThemeAdminLayout(facilityID int64, editor ThemeEditorData) {
 		</div>
 
 		<div class="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
-			<section class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+			<section class="rounded-lg border border-border bg-background p-4 shadow-sm">
 				<div class="mb-4 flex items-center justify-between">
-					<h3 class="text-lg font-semibold text-gray-900">Themes</h3>
-					<span class="text-xs text-gray-500">Facility ID {fmt.Sprintf("%d", facilityID)}</span>
+					<h3 class="text-lg font-semibold text-foreground">Themes</h3>
+					<span class="text-xs text-muted-foreground">Facility ID {fmt.Sprintf("%d", facilityID)}</span>
 				</div>
 				<div
 					id="themes-list"
@@ -31,7 +31,7 @@ templ ThemeAdminLayout(facilityID int64, editor ThemeEditorData) {
 					hx-get={fmt.Sprintf("/api/v1/themes?facility_id=%d", facilityID)}
 					hx-trigger="load, refreshThemesList from:body"
 					hx-swap="innerHTML">
-					<div class="rounded border border-dashed border-gray-200 p-4 text-sm text-gray-500">
+					<div class="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
 						Loading themes...
 					</div>
 				</div>

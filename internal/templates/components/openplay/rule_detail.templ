@@ -7,16 +7,16 @@ import (
 )
 
 templ OpenPlayRuleDetail(rule OpenPlayRule, facilityID int64) {
-	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
-		<div class="p-6 border-b border-gray-200">
+	<div class="w-full h-full bg-background rounded-lg shadow divide-y divide-border">
+		<div class="p-6 border-b border-border">
 			<div class="flex items-center justify-between">
 				<div>
-					<h2 class="text-xl font-bold text-gray-900">{rule.Name}</h2>
-					<p class="text-sm text-gray-500">Rule ID {fmt.Sprintf("%d", rule.ID)}</p>
+					<h2 class="text-xl font-bold text-foreground">{rule.Name}</h2>
+					<p class="text-sm text-muted-foreground">Rule ID {fmt.Sprintf("%d", rule.ID)}</p>
 				</div>
 				<div class="flex space-x-2">
 					<button
-						class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+						class="px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted"
 						hx-get={fmt.Sprintf("/api/v1/open-play-rules/%d/edit?facility_id=%d", rule.ID, facilityID)}
 						hx-target="#open-play-rule-detail">
 						Edit
@@ -37,22 +37,22 @@ templ OpenPlayRuleDetail(rule OpenPlayRule, facilityID int64) {
 			<div class="grid grid-cols-2 gap-6">
 				<div class="space-y-4">
 					<div>
-						<h4 class="text-sm font-semibold text-gray-900">Min participants</h4>
-						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MinParticipants)}</p>
+						<h4 class="text-sm font-semibold text-foreground">Min participants</h4>
+						<p class="text-muted-foreground">{fmt.Sprintf("%d", rule.MinParticipants)}</p>
 					</div>
 					<div>
-						<h4 class="text-sm font-semibold text-gray-900">Max participants per court</h4>
-						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MaxParticipantsPerCourt)}</p>
+						<h4 class="text-sm font-semibold text-foreground">Max participants per court</h4>
+						<p class="text-muted-foreground">{fmt.Sprintf("%d", rule.MaxParticipantsPerCourt)}</p>
 					</div>
 					<div>
-						<h4 class="text-sm font-semibold text-gray-900">Cancellation cutoff</h4>
-						<p class="text-gray-600">{fmt.Sprintf("%d", rule.CancellationCutoffMinutes)} minutes</p>
+						<h4 class="text-sm font-semibold text-foreground">Cancellation cutoff</h4>
+						<p class="text-muted-foreground">{fmt.Sprintf("%d", rule.CancellationCutoffMinutes)} minutes</p>
 					</div>
 				</div>
 				<div class="space-y-4">
 					<div>
-						<h4 class="text-sm font-semibold text-gray-900">Auto scale</h4>
-						<p class="text-gray-600">
+						<h4 class="text-sm font-semibold text-foreground">Auto scale</h4>
+						<p class="text-muted-foreground">
 							if rule.AutoScaleEnabled {
 								Enabled
 							} else {
@@ -61,17 +61,17 @@ templ OpenPlayRuleDetail(rule OpenPlayRule, facilityID int64) {
 						</p>
 					</div>
 					<div>
-						<h4 class="text-sm font-semibold text-gray-900">Min courts</h4>
-						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MinCourts)}</p>
+						<h4 class="text-sm font-semibold text-foreground">Min courts</h4>
+						<p class="text-muted-foreground">{fmt.Sprintf("%d", rule.MinCourts)}</p>
 					</div>
 					<div>
-						<h4 class="text-sm font-semibold text-gray-900">Max courts</h4>
-						<p class="text-gray-600">{fmt.Sprintf("%d", rule.MaxCourts)}</p>
+						<h4 class="text-sm font-semibold text-foreground">Max courts</h4>
+						<p class="text-muted-foreground">{fmt.Sprintf("%d", rule.MaxCourts)}</p>
 					</div>
 				</div>
 			</div>
 
-			<div class="mt-8 border-t border-gray-200 pt-6 text-sm text-gray-500">
+			<div class="mt-8 border-t border-border pt-6 text-sm text-muted-foreground">
 				<div class="flex flex-wrap gap-6">
 					<p>Facility ID {fmt.Sprintf("%d", rule.FacilityID)}</p>
 					<p>

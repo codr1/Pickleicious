@@ -4,21 +4,21 @@ package themes
 import "fmt"
 
 templ ThemeEditor(data ThemeEditorData) {
-	<div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+	<div class="rounded-lg border border-border bg-background p-6 shadow-sm">
 		<div id="theme-feedback" class="mb-4"></div>
 		<div class="flex flex-wrap items-start justify-between gap-4">
 			<div>
-				<h3 class="text-xl font-semibold text-gray-900">
+				<h3 class="text-xl font-semibold text-foreground">
 					if data.Theme.ID == 0 {
 						Create Theme
 					} else {
 						Edit Theme
 					}
 				</h3>
-				<p class="mt-1 text-sm text-gray-500">Facility ID {fmt.Sprintf("%d", data.FacilityID)}</p>
+				<p class="mt-1 text-sm text-muted-foreground">Facility ID {fmt.Sprintf("%d", data.FacilityID)}</p>
 			</div>
 			if data.Theme.ID != 0 {
-				<span class="text-xs text-gray-500">Theme ID {fmt.Sprintf("%d", data.Theme.ID)}</span>
+				<span class="text-xs text-muted-foreground">Theme ID {fmt.Sprintf("%d", data.Theme.ID)}</span>
 			}
 		</div>
 
@@ -44,7 +44,7 @@ templ ThemeEditor(data ThemeEditorData) {
 			}
 
 			<div>
-				<label for="theme-name" class="block text-sm font-medium text-gray-700">Theme name</label>
+				<label for="theme-name" class="block text-sm font-medium text-foreground">Theme name</label>
 				<input
 					type="text"
 					id="theme-name"
@@ -52,13 +52,13 @@ templ ThemeEditor(data ThemeEditorData) {
 					required
 					value={data.Theme.Name}
 					disabled?={data.ReadOnly}
-					class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+					class="mt-1 w-full rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
 				/>
 			</div>
 
 			<div class="grid gap-4 md:grid-cols-2">
 				<div>
-					<label for="primary_color" class="block text-sm font-medium text-gray-700">Primary</label>
+					<label for="primary_color" class="block text-sm font-medium text-foreground">Primary</label>
 					<div class="mt-1 flex items-center gap-3">
 						<input
 							type="text"
@@ -69,10 +69,10 @@ templ ThemeEditor(data ThemeEditorData) {
 							value={data.Theme.PrimaryColor}
 							data-color-input="primary_color"
 							disabled?={data.ReadOnly}
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
+							class="w-full rounded-md border border-border px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
 						/>
 						<span
-							class="h-8 w-8 rounded-md border border-gray-200"
+							class="h-8 w-8 rounded-md border border-border"
 							data-color-swatch="primary_color"
 							style={fmt.Sprintf("background-color: %s;", data.Theme.PrimaryColor)}>
 						</span>
@@ -80,7 +80,7 @@ templ ThemeEditor(data ThemeEditorData) {
 				</div>
 
 				<div>
-					<label for="secondary_color" class="block text-sm font-medium text-gray-700">Secondary</label>
+					<label for="secondary_color" class="block text-sm font-medium text-foreground">Secondary</label>
 					<div class="mt-1 flex items-center gap-3">
 						<input
 							type="text"
@@ -91,10 +91,10 @@ templ ThemeEditor(data ThemeEditorData) {
 							value={data.Theme.SecondaryColor}
 							data-color-input="secondary_color"
 							disabled?={data.ReadOnly}
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
+							class="w-full rounded-md border border-border px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
 						/>
 						<span
-							class="h-8 w-8 rounded-md border border-gray-200"
+							class="h-8 w-8 rounded-md border border-border"
 							data-color-swatch="secondary_color"
 							style={fmt.Sprintf("background-color: %s;", data.Theme.SecondaryColor)}>
 						</span>
@@ -102,7 +102,7 @@ templ ThemeEditor(data ThemeEditorData) {
 				</div>
 
 				<div>
-					<label for="tertiary_color" class="block text-sm font-medium text-gray-700">Tertiary</label>
+					<label for="tertiary_color" class="block text-sm font-medium text-foreground">Tertiary</label>
 					<div class="mt-1 flex items-center gap-3">
 						<input
 							type="text"
@@ -113,10 +113,10 @@ templ ThemeEditor(data ThemeEditorData) {
 							value={data.Theme.TertiaryColor}
 							data-color-input="tertiary_color"
 							disabled?={data.ReadOnly}
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
+							class="w-full rounded-md border border-border px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
 						/>
 						<span
-							class="h-8 w-8 rounded-md border border-gray-200"
+							class="h-8 w-8 rounded-md border border-border"
 							data-color-swatch="tertiary_color"
 							style={fmt.Sprintf("background-color: %s;", data.Theme.TertiaryColor)}>
 						</span>
@@ -124,7 +124,7 @@ templ ThemeEditor(data ThemeEditorData) {
 				</div>
 
 				<div>
-					<label for="accent_color" class="block text-sm font-medium text-gray-700">Accent</label>
+					<label for="accent_color" class="block text-sm font-medium text-foreground">Accent</label>
 					<div class="mt-1 flex items-center gap-3">
 						<input
 							type="text"
@@ -135,10 +135,10 @@ templ ThemeEditor(data ThemeEditorData) {
 							value={data.Theme.AccentColor}
 							data-color-input="accent_color"
 							disabled?={data.ReadOnly}
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
+							class="w-full rounded-md border border-border px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
 						/>
 						<span
-							class="h-8 w-8 rounded-md border border-gray-200"
+							class="h-8 w-8 rounded-md border border-border"
 							data-color-swatch="accent_color"
 							style={fmt.Sprintf("background-color: %s;", data.Theme.AccentColor)}>
 						</span>
@@ -146,7 +146,7 @@ templ ThemeEditor(data ThemeEditorData) {
 				</div>
 
 				<div>
-					<label for="highlight_color" class="block text-sm font-medium text-gray-700">Highlight</label>
+					<label for="highlight_color" class="block text-sm font-medium text-foreground">Highlight</label>
 					<div class="mt-1 flex items-center gap-3">
 						<input
 							type="text"
@@ -157,10 +157,10 @@ templ ThemeEditor(data ThemeEditorData) {
 							value={data.Theme.HighlightColor}
 							data-color-input="highlight_color"
 							disabled?={data.ReadOnly}
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
+							class="w-full rounded-md border border-border px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:ring-blue-500"
 						/>
 						<span
-							class="h-8 w-8 rounded-md border border-gray-200"
+							class="h-8 w-8 rounded-md border border-border"
 							data-color-swatch="highlight_color"
 							style={fmt.Sprintf("background-color: %s;", data.Theme.HighlightColor)}>
 						</span>
@@ -175,7 +175,7 @@ templ ThemeEditor(data ThemeEditorData) {
 					class={templ.Classes(
 						"rounded-md px-4 py-2 text-sm font-semibold",
 						templ.KV("bg-blue-600 text-white hover:bg-blue-700", !data.ReadOnly),
-						templ.KV("bg-gray-200 text-gray-500", data.ReadOnly),
+						templ.KV("bg-muted text-muted-foreground", data.ReadOnly),
 					)}>
 					if data.Theme.ID == 0 {
 						Create Theme
@@ -185,7 +185,7 @@ templ ThemeEditor(data ThemeEditorData) {
 				</button>
 				<button
 					type="button"
-					class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+					class="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
 					hx-get={fmt.Sprintf("/api/v1/themes/new?facility_id=%d", data.FacilityID)}
 					hx-target="#theme-editor"
 					hx-swap="innerHTML">
@@ -194,22 +194,22 @@ templ ThemeEditor(data ThemeEditorData) {
 			</div>
 		</form>
 
-		<div class="mt-8 border-t border-gray-200 pt-6">
-			<h4 class="text-sm font-semibold text-gray-900">Live Preview</h4>
-			<p class="mt-1 text-sm text-gray-500">Preview common UI elements before saving.</p>
+		<div class="mt-8 border-t border-border pt-6">
+			<h4 class="text-sm font-semibold text-foreground">Live Preview</h4>
+			<p class="mt-1 text-sm text-muted-foreground">Preview common UI elements before saving.</p>
 			<div
-				class="mt-4 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4"
+				class="mt-4 space-y-4 rounded-lg border border-border bg-muted p-4"
 				data-theme-preview
 				style={fmt.Sprintf("--theme-primary:%s; --theme-secondary:%s; --theme-tertiary:%s; --theme-accent:%s; --theme-highlight:%s;", data.Theme.PrimaryColor, data.Theme.SecondaryColor, data.Theme.TertiaryColor, data.Theme.AccentColor, data.Theme.HighlightColor)}>
 				<div class="flex items-center justify-between rounded-lg px-4 py-3" style="background-color: var(--theme-primary); color: var(--theme-highlight);">
 					<span class="text-sm font-semibold">Facility Header</span>
-					<span class="rounded-full bg-white/20 px-2 py-1 text-xs">Open Play</span>
+					<span class="rounded-full bg-background/20 px-2 py-1 text-xs">Open Play</span>
 				</div>
-				<div class="rounded-lg border border-gray-200 p-4" style="background-color: var(--theme-secondary);">
+				<div class="rounded-lg border border-border p-4" style="background-color: var(--theme-secondary);">
 					<div class="flex items-center justify-between">
 						<div>
-							<p class="text-sm font-semibold text-gray-900">Court Reservation</p>
-							<p class="text-xs text-gray-600">Court 3 · 10:00 AM</p>
+							<p class="text-sm font-semibold text-foreground">Court Reservation</p>
+							<p class="text-xs text-muted-foreground">Court 3 · 10:00 AM</p>
 						</div>
 						<button class="rounded-md px-3 py-1.5 text-xs font-semibold text-white" style="background-color: var(--theme-accent);">Check In</button>
 					</div>
@@ -219,14 +219,14 @@ templ ThemeEditor(data ThemeEditorData) {
 					</div>
 				</div>
 				<div class="grid gap-3 md:grid-cols-2">
-					<div class="rounded-lg border border-gray-200 bg-white p-3">
-						<p class="text-xs font-semibold uppercase text-gray-400">Alerts</p>
+					<div class="rounded-lg border border-border bg-background p-3">
+						<p class="text-xs font-semibold uppercase text-muted-foreground">Alerts</p>
 						<div class="mt-2 rounded-md px-3 py-2 text-sm text-white" style="background-color: var(--theme-accent);">
 							Guest check-in limit reached.
 						</div>
 					</div>
-					<div class="rounded-lg border border-gray-200 bg-white p-3">
-						<p class="text-xs font-semibold uppercase text-gray-400">Highlights</p>
+					<div class="rounded-lg border border-border bg-background p-3">
+						<p class="text-xs font-semibold uppercase text-muted-foreground">Highlights</p>
 						<div class="mt-2 flex items-center justify-between rounded-md px-3 py-2 text-sm" style="background-color: var(--theme-tertiary); color: var(--theme-primary);">
 							<span>Theme accent</span>
 							<span class="h-3 w-3 rounded-full" style="background-color: var(--theme-highlight);"></span>

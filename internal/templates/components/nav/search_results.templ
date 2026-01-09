@@ -8,18 +8,18 @@ import (
 )
 
 templ SearchResults(query string, results []dbgen.SearchMembersRow) {
-	<div id="search-results" class="absolute w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+	<div id="search-results" class="absolute w-full mt-1 bg-background border border-border rounded-lg shadow-lg">
 		if query == "" {
-			<div class="px-4 py-2 text-sm text-gray-500">Type to search members...</div>
+			<div class="px-4 py-2 text-sm text-muted-foreground">Type to search members...</div>
 		} else if len(results) == 0 {
-			<div class="px-4 py-2 text-sm text-gray-500">No matches found</div>
+			<div class="px-4 py-2 text-sm text-muted-foreground">No matches found</div>
 		} else {
-			<div class="max-h-64 overflow-y-auto divide-y divide-gray-100">
+			<div class="max-h-64 overflow-y-auto divide-y divide-border">
 				for _, member := range results {
-					<button type="button" class="w-full text-left px-4 py-2 hover:bg-gray-50" hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)} hx-target="#member-detail">
-						<div class="text-sm font-medium text-gray-900">{member.FirstName} {member.LastName}</div>
+					<button type="button" class="w-full text-left px-4 py-2 hover:bg-muted" hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)} hx-target="#member-detail">
+						<div class="text-sm font-medium text-foreground">{member.FirstName} {member.LastName}</div>
 						if member.Email.Valid {
-							<div class="text-xs text-gray-500">{member.Email.String}</div>
+							<div class="text-xs text-muted-foreground">{member.Email.String}</div>
 						}
 					</button>
 				}

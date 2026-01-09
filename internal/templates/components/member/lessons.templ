@@ -4,12 +4,12 @@ import "fmt"
 
 templ LessonBookingForm(data LessonBookingFormData) {
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-		<div class="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
+		<div class="bg-background rounded-lg shadow-lg w-full max-w-2xl p-6">
 			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-semibold text-gray-900">Book a lesson</h2>
+				<h2 class="text-lg font-semibold text-foreground">Book a lesson</h2>
 				<button
 					type="button"
-					class="text-gray-400 hover:text-gray-600"
+					class="text-muted-foreground hover:text-foreground"
 					onclick="document.getElementById('modal').innerHTML=''">
 					<span class="sr-only">Close</span>&times;
 				</button>
@@ -18,7 +18,7 @@ templ LessonBookingForm(data LessonBookingFormData) {
 			<div id="lesson-booking-indicator" class="htmx-indicator">
 				<div class="flex items-center justify-center">
 					<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-					<span class="ml-2 text-sm text-gray-600">Submitting...</span>
+					<span class="ml-2 text-sm text-muted-foreground">Submitting...</span>
 				</div>
 			</div>
 
@@ -49,16 +49,16 @@ templ LessonBookingForm(data LessonBookingFormData) {
 				}
 
 				<div class="space-y-2">
-					<p class="text-sm font-semibold text-gray-900">Pick a pro</p>
+					<p class="text-sm font-semibold text-foreground">Pick a pro</p>
 					@ProList(data.Pros)
 				</div>
 
 				<div class="space-y-2">
-					<p class="text-sm font-semibold text-gray-900">Choose a time</p>
+					<p class="text-sm font-semibold text-foreground">Choose a time</p>
 					<div class="space-y-2">
-						<label class="block text-sm font-medium text-gray-700">Date</label>
+						<label class="block text-sm font-medium text-foreground">Date</label>
 						@DatePicker(data.DatePicker)
-						<p class="text-xs text-gray-500">
+						<p class="text-xs text-muted-foreground">
 							{fmt.Sprintf("Bookings open up to %d days in advance.", data.MaxAdvanceBookingDays)}
 						</p>
 					</div>
@@ -150,7 +150,7 @@ templ LessonBookingPanel() {
 	<div class="flex flex-wrap items-center gap-2">
 		<button
 			type="button"
-			class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+			class="inline-flex items-center rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"
 			hx-get="/member/booking/new"
 			hx-target="#modal"
 			hx-swap="innerHTML">
@@ -158,7 +158,7 @@ templ LessonBookingPanel() {
 		</button>
 		<button
 			type="button"
-			class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+			class="inline-flex items-center rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted"
 			hx-get="/member/lessons/new"
 			hx-target="#modal"
 			hx-swap="innerHTML">
@@ -169,13 +169,13 @@ templ LessonBookingPanel() {
 
 templ ProList(pros []LessonProCard) {
 	if len(pros) == 0 {
-		<p class="text-sm text-gray-500">No pros available right now.</p>
+		<p class="text-sm text-muted-foreground">No pros available right now.</p>
 	} else {
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			for _, pro := range pros {
 				<button
 					type="button"
-					class="group w-full rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
+					class="group w-full rounded-lg border border-border bg-background p-4 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
 					data-pro-id={fmt.Sprintf("%d", pro.ID)}
 					data-lesson-pro
 					hx-get="/member/lessons/slots"
@@ -185,12 +185,12 @@ templ ProList(pros []LessonProCard) {
 					hx-indicator="#lesson-booking-indicator"
 					hx-on::before-request="selectLessonPro(this)">
 					<div class="flex items-center gap-3">
-						<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
+						<div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
 							{pro.Initials}
 						</div>
 						<div>
-							<p class="text-sm font-semibold text-gray-900">{pro.Name}</p>
-							<p class="text-xs text-gray-500">Select a pro for your lesson.</p>
+							<p class="text-sm font-semibold text-foreground">{pro.Name}</p>
+							<p class="text-xs text-muted-foreground">Select a pro for your lesson.</p>
 						</div>
 					</div>
 				</button>
@@ -210,14 +210,14 @@ templ ProSlotPicker(slots []LessonSlotOption) {
 		hx-indicator="#lesson-booking-indicator"
 		class="space-y-4">
 		<div>
-			<label for="lesson_time_slot" class="block text-sm font-medium text-gray-700">Time slot</label>
+			<label for="lesson_time_slot" class="block text-sm font-medium text-foreground">Time slot</label>
 			<select
 				id="lesson_time_slot"
 				name="start_time"
 				required
 				disabled?={len(slots) == 0}
 				onchange="setLessonReservationEndTime(this)"
-				class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+				class="mt-1 block w-full rounded-md border border-border px-3 py-2">
 				if len(slots) == 0 {
 					<option value="">No slots available</option>
 				} else {
@@ -239,7 +239,7 @@ templ ProSlotPicker(slots []LessonSlotOption) {
 				id="lesson_end_time"
 				name="end_time"
 				value={defaultLessonEndTimeValue(slots)}/>
-			<p class="mt-1 text-xs text-gray-500">Select a time for your lesson.</p>
+			<p class="mt-1 text-xs text-muted-foreground">Select a time for your lesson.</p>
 		</div>
 	</div>
 }

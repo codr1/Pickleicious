@@ -11,15 +11,15 @@ templ MemberPhoto(member Member, size string) {
 		</div>
 	} else if member.FirstName != "" && member.LastName != "" {
 		// Show initials for existing members without photos
-		<div class={size + " rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"}>
-			<span class="text-gray-500 text-xl font-medium">
+		<div class={size + " rounded-full bg-muted flex items-center justify-center flex-shrink-0"}>
+			<span class="text-muted-foreground text-xl font-medium">
 				{string(member.FirstName[0])}{string(member.LastName[0])}
 			</span>
 		</div>
 	} else {
 		// Show empty circle for new members
-		<div class={size + " rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"}>
-			<span class="text-gray-400 text-xl">
+		<div class={size + " rounded-full bg-muted flex items-center justify-center flex-shrink-0"}>
+			<span class="text-muted-foreground text-xl">
 				+
 			</span>
 		</div>
@@ -28,7 +28,7 @@ templ MemberPhoto(member Member, size string) {
 
 // For the edit form camera preview
 templ MemberPhotoEdit(member Member) {
-	<div id="camera-preview" class="w-32 h-32 bg-gray-100 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
+	<div id="camera-preview" class="w-32 h-32 bg-muted rounded-full overflow-hidden flex items-center justify-center flex-shrink-0">
 		@MemberPhoto(member, "w-full h-full")
 	</div>
 } 

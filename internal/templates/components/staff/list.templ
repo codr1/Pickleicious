@@ -9,15 +9,15 @@ import (
 
 templ StaffLayout(staff []Staff) {
 	<div class="flex h-[calc(100vh-4rem)]">
-		<div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
-			<div class="p-4 border-b border-gray-200 bg-white">
+		<div class="w-1/2 border-r border-border flex flex-col min-w-[50%]">
+			<div class="p-4 border-b border-border bg-background">
 				<div id="staff-filters" class="space-y-3">
 					<div>
 						<input
 							type="search"
 							name="search"
 							placeholder="Search staff..."
-							class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+							class="w-full px-4 py-2 border border-border rounded-lg"
 							hx-get="/api/v1/staff"
 							hx-trigger="keyup changed delay:300ms"
 							hx-target="#staff-list"
@@ -28,7 +28,7 @@ templ StaffLayout(staff []Staff) {
 						<div class="flex gap-2">
 							<select
 								name="facility_id"
-								class="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+								class="px-3 py-2 border border-border rounded-lg text-sm"
 								hx-get="/api/v1/staff"
 								hx-target="#staff-list"
 								hx-trigger="change"
@@ -41,7 +41,7 @@ templ StaffLayout(staff []Staff) {
 							</select>
 							<select
 								name="role"
-								class="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+								class="px-3 py-2 border border-border rounded-lg text-sm"
 								hx-get="/api/v1/staff"
 								hx-target="#staff-list"
 								hx-trigger="change"
@@ -65,19 +65,19 @@ templ StaffLayout(staff []Staff) {
 			</div>
 
 			<div
-				class="flex-1 overflow-y-auto bg-gray-50"
+				class="flex-1 overflow-y-auto bg-muted"
 				id="staff-list"
 				hx-get="/api/v1/staff"
 				hx-trigger="load, refreshStaffList from:body"
 			>
-				<div class="flex items-center justify-center p-4 text-gray-500">
+				<div class="flex items-center justify-center p-4 text-muted-foreground">
 					Loading staff...
 				</div>
 			</div>
 		</div>
 
 		<div class="w-1/2 h-full min-w-[50%]" id="staff-detail">
-			<div class="h-full w-full flex items-center justify-center text-gray-500">
+			<div class="h-full w-full flex items-center justify-center text-muted-foreground">
 				Select a staff member to view details
 			</div>
 		</div>
@@ -87,24 +87,24 @@ templ StaffLayout(staff []Staff) {
 
 templ StaffList(staff []Staff) {
 	if len(staff) == 0 {
-		<div class="flex items-center justify-center p-6 text-gray-500">
+		<div class="flex items-center justify-center p-6 text-muted-foreground">
 			No staff found
 		</div>
 	} else {
 		for _, member := range staff {
 			<div
-				class="p-4 border-b border-gray-200 hover:bg-white cursor-pointer"
+				class="p-4 border-b border-border hover:bg-background cursor-pointer"
 				hx-get={fmt.Sprintf("/api/v1/staff/%d", member.ID)}
 				hx-target="#staff-detail"
 			>
 				<div class="flex items-center justify-between gap-4">
 					<div>
-						<p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
-						<p class="text-sm text-gray-500">{member.EmailStr()}</p>
+						<p class="font-medium text-foreground">{member.FirstName} {member.LastName}</p>
+						<p class="text-sm text-muted-foreground">{member.EmailStr()}</p>
 					</div>
 					<div class="text-right">
-						<p class="text-sm text-gray-700">{member.RoleStr()}</p>
-						<p class="text-sm text-gray-500">Facility {member.FacilityStr()}</p>
+						<p class="text-sm text-foreground">{member.RoleStr()}</p>
+						<p class="text-sm text-muted-foreground">Facility {member.FacilityStr()}</p>
 					</div>
 				</div>
 			</div>
@@ -113,12 +113,12 @@ templ StaffList(staff []Staff) {
 }
 
 templ StaffDetail(member Staff) {
-	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
-		<div class="p-6 border-b border-gray-200">
+	<div class="w-full h-full bg-background rounded-lg shadow divide-y divide-border">
+		<div class="p-6 border-b border-border">
 			<div class="flex items-center justify-between gap-4">
 				<div>
-					<h2 class="text-xl font-bold text-gray-900">Staff Profile</h2>
-					<p class="text-gray-600">{member.FirstName} {member.LastName}</p>
+					<h2 class="text-xl font-bold text-foreground">Staff Profile</h2>
+					<p class="text-muted-foreground">{member.FirstName} {member.LastName}</p>
 				</div>
 				<div class="flex items-center gap-3">
 					<span class="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
@@ -132,7 +132,7 @@ templ StaffDetail(member Staff) {
 						{member.UserStatus}
 					</span>
 					<button
-						class="px-3 py-1 text-xs font-semibold rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+						class="px-3 py-1 text-xs font-semibold rounded-full border border-border text-foreground hover:bg-muted"
 						hx-get={fmt.Sprintf("/api/v1/staff/%d/edit", member.ID)}
 						hx-target="#staff-detail">
 						Edit
@@ -150,15 +150,15 @@ templ StaffDetail(member Staff) {
 		</div>
 		<div class="p-6 space-y-6">
 			<div>
-				<h3 class="text-sm font-semibold text-gray-700">Contact</h3>
+				<h3 class="text-sm font-semibold text-foreground">Contact</h3>
 				<div class="mt-2 space-y-1">
-					<p class="text-gray-900">{member.EmailStr()}</p>
-					<p class="text-gray-900">{member.PhoneStr()}</p>
+					<p class="text-foreground">{member.EmailStr()}</p>
+					<p class="text-foreground">{member.PhoneStr()}</p>
 				</div>
 			</div>
 			<div>
-				<h3 class="text-sm font-semibold text-gray-700">Home Facility</h3>
-				<p class="text-gray-900">{member.FacilityStr()}</p>
+				<h3 class="text-sm font-semibold text-foreground">Home Facility</h3>
+				<p class="text-foreground">{member.FacilityStr()}</p>
 			</div>
 		</div>
 	</div>

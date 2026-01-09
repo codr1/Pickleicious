@@ -8,7 +8,7 @@ templ EditMemberForm(member Member) {
     <script src="/static/js/camera.js"></script>
     <script src="/static/js/members.js"></script>
 
-    <div class="bg-white p-6 rounded-lg shadow">
+    <div class="bg-background p-6 rounded-lg shadow">
          
         <div id="submit-indicator" class="htmx-indicator">
             <div class="flex items-center justify-center">
@@ -41,7 +41,7 @@ templ EditMemberForm(member Member) {
             
             <!-- Photo capture -->
             <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Photo</label>
+                <label class="block text-sm font-medium text-foreground mb-2">Photo</label>
                 <div class="flex items-start space-x-4">
                     @MemberPhotoEdit(member)
                     <div class="flex flex-col space-y-2">
@@ -74,25 +74,25 @@ templ EditMemberForm(member Member) {
             <!-- Name Fields -->
             <div class="grid grid-cols-2 gap-6">
                 <div>
-                    <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                    <label for="first_name" class="block text-sm font-medium text-foreground">First Name</label>
                     <input 
                         type="text" 
                         id="first_name" 
                         name="first_name" 
                         required 
                         value={member.FirstName}
-                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                 </div>
                 <div>
-                    <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                    <label for="last_name" class="block text-sm font-medium text-foreground">Last Name</label>
                     <input 
                         type="text" 
                         id="last_name" 
                         name="last_name" 
                         required 
                         value={member.LastName}
-                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                 </div>
             </div>
@@ -100,87 +100,87 @@ templ EditMemberForm(member Member) {
             <!-- Contact Fields -->
             <div class="grid grid-cols-2 gap-6">
                 <div>
-                    <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                    <label for="email" class="block text-sm font-medium text-foreground">Email</label>
                     <input 
                         type="email" 
                         id="email" 
                         name="email" 
                         required 
                         value={member.EmailStr()}
-                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                 </div>
                 <div>
-                    <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                    <label for="phone" class="block text-sm font-medium text-foreground">Phone</label>
                     <input 
                         type="tel" 
                         id="phone" 
                         name="phone" 
                         required 
                         value={member.PhoneStr()}
-                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                 </div>
             </div>
 
             <!-- Additional Fields -->
             <div>
-                <label for="date_of_birth" class="block text-sm font-medium text-gray-700">Date of Birth</label>
+                <label for="date_of_birth" class="block text-sm font-medium text-foreground">Date of Birth</label>
                 <input 
                     type="date" 
                     id="date_of_birth" 
                     name="date_of_birth" 
                     required 
                     value={member.DateOfBirth[:10]}
-                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                 />
             </div>
 
             <!-- Address Fields -->
             <div class="space-y-6">
                 <div>
-                    <label for="street_address" class="block text-sm font-medium text-gray-700">Street Address</label>
+                    <label for="street_address" class="block text-sm font-medium text-foreground">Street Address</label>
                     <input 
                         type="text" 
                         id="street_address" 
                         name="street_address" 
                         required 
                         value={member.AddressStr()}
-                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                        class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                 </div>
                 <div class="grid grid-cols-3 gap-6">
                     <div>
-                        <label for="city" class="block text-sm font-medium text-gray-700">City</label>
+                        <label for="city" class="block text-sm font-medium text-foreground">City</label>
                         <input 
                             type="text" 
                             id="city" 
                             name="city" 
                             required 
                             value={member.CityStr()}
-                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
                     <div>
-                        <label for="state" class="block text-sm font-medium text-gray-700">State</label>
+                        <label for="state" class="block text-sm font-medium text-foreground">State</label>
                         <input 
                             type="text" 
                             id="state" 
                             name="state" 
                             required 
                             value={member.StateStr()}
-                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
                     <div>
-                        <label for="postal_code" class="block text-sm font-medium text-gray-700">Postal Code</label>
+                        <label for="postal_code" class="block text-sm font-medium text-foreground">Postal Code</label>
                         <input 
                             type="text" 
                             id="postal_code" 
                             name="postal_code" 
                             required 
                             value={member.PostalCodeStr()}
-                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                     </div>
                 </div>
@@ -189,19 +189,19 @@ templ EditMemberForm(member Member) {
             <!-- Status and Waiver Fields -->
             <div class="grid grid-cols-2 gap-6">
                 <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                    <label for="status" class="block text-sm font-medium text-foreground">Status</label>
                     <select 
                         id="status" 
                         name="status" 
                         required
-                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+                        class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                         <option value="active" selected?={member.Status == "active"}>Active</option>
                         <option value="inactive" selected?={member.Status == "inactive"}>Inactive</option>
                     </select>
                 </div>
                 <div class="flex items-center space-x-4">
                     <div>
-                        <span class="block text-sm font-medium text-gray-700">Waiver Status</span>
+                        <span class="block text-sm font-medium text-foreground">Waiver Status</span>
                         <span class={templ.Classes(
                             "inline-block mt-2 px-3 py-1 rounded-full text-sm",
                             templ.KV("bg-green-100 text-green-800", member.WaiverSigned),
@@ -220,11 +220,11 @@ templ EditMemberForm(member Member) {
 
             <!-- Submit Button and Member ID -->
             <div class="flex justify-between items-center">
-                <p class="text-gray-500">Member ID: {fmt.Sprintf("%d", member.ID)}</p>
+                <p class="text-muted-foreground">Member ID: {fmt.Sprintf("%d", member.ID)}</p>
                 <div class="flex space-x-3">
                     <button
                         type="button"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+                        class="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-md shadow-sm hover:bg-muted"
                         hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)}
                         hx-target="#member-detail">
                         Cancel

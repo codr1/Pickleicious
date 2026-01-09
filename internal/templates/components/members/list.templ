@@ -9,15 +9,15 @@ import (
 templ MembersLayout(members []Member) {
     <div class="flex h-[calc(100vh-4rem)]">
         <!-- Left side: Member list -->
-        <div class="w-1/2 border-r border-gray-200 flex flex-col min-w-[50%]">
+        <div class="w-1/2 border-r border-border flex flex-col min-w-[50%]">
             <!-- Search and filters header -->
-            <div class="p-4 border-b border-gray-200 bg-white">
+            <div class="p-4 border-b border-border bg-background">
                 <div class="mb-4">
                     <input
                         type="search"
                         name="search"
                         placeholder="Search members..."
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        class="w-full px-4 py-2 border border-border rounded-lg"
                         hx-get="/api/v1/members/search"
                         hx-trigger="keyup changed delay:300ms"
                         hx-target="#members-list"
@@ -26,7 +26,7 @@ templ MembersLayout(members []Member) {
                 </div>
                 <div class="flex justify-between items-center">
                     <select
-                        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        class="px-3 py-1.5 border border-border rounded-lg text-sm"
                         hx-get="/api/v1/members"
                         hx-target="#members-list">
                         <option value="25">25 per page</option>
@@ -44,12 +44,12 @@ templ MembersLayout(members []Member) {
 
             <!-- Members list -->
             <div 
-                class="flex-1 overflow-y-auto bg-gray-50" 
+                class="flex-1 overflow-y-auto bg-muted" 
                 id="members-list"
                 hx-get="/api/v1/members"
                 hx-trigger="load, refreshMembersList from:body"
             >
-                <div class="flex items-center justify-center p-4 text-gray-500">
+                <div class="flex items-center justify-center p-4 text-muted-foreground">
                     Loading members...
                 </div>
             </div>
@@ -57,7 +57,7 @@ templ MembersLayout(members []Member) {
 
         <!-- Right side: Member details -->
         <div class="w-1/2 h-full min-w-[50%]" id="member-detail">
-            <div class="h-full w-full flex items-center justify-center text-gray-500">
+            <div class="h-full w-full flex items-center justify-center text-muted-foreground">
                 Select a member to view details
             </div>
         </div>
@@ -67,14 +67,14 @@ templ MembersLayout(members []Member) {
 templ MembersList(members []Member) {
     for _, member := range members {
         <div 
-            class="p-4 border-b border-gray-200 hover:bg-white cursor-pointer"
+            class="p-4 border-b border-border hover:bg-background cursor-pointer"
             hx-get={fmt.Sprintf("/api/v1/members/%d", member.ID)}
             hx-target="#member-detail">
             <div class="flex items-center">
                 @MemberPhoto(member, "w-10 h-10 mr-3")
                 <div>
-                    <p class="font-medium text-gray-900">{member.FirstName} {member.LastName}</p>
-                    <p class="text-sm text-gray-500">{member.EmailStr()}</p>
+                    <p class="font-medium text-foreground">{member.FirstName} {member.LastName}</p>
+                    <p class="text-sm text-muted-foreground">{member.EmailStr()}</p>
                 </div>
             </div>
         </div>
@@ -82,7 +82,7 @@ templ MembersList(members []Member) {
 }
 
 templ MemberDetail(member Member) {
-    <div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
+    <div class="w-full h-full bg-background rounded-lg shadow divide-y divide-border">
         <script>
             function confirmDelete(id, name) {
                 if (confirm("Are you sure you want to delete " + name + "?")) {
@@ -101,12 +101,12 @@ templ MemberDetail(member Member) {
         </script>
         
         <!-- Header -->
-        <div class="p-6 border-b border-gray-200">
+        <div class="p-6 border-b border-border">
             <div class="flex items-center justify-between">
-                <h2 class="text-xl font-bold text-gray-900">Member Details</h2>
+                <h2 class="text-xl font-bold text-foreground">Member Details</h2>
                 <div class="flex space-x-2">
                     <button
-                        class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                        class="px-4 py-2 bg-background border border-border rounded-lg text-sm hover:bg-muted"
                         hx-get={fmt.Sprintf("/api/v1/members/%d/edit", member.ID)}
                         hx-target="#member-detail">
                         Edit
@@ -120,34 +120,34 @@ templ MemberDetail(member Member) {
         <div class="flex-1 overflow-y-auto p-6">
             <!-- Basic Info -->
             <div class="mb-8">
-                <h3 class="text-lg font-bold text-gray-900 mb-4">Basic Information</h3>
+                <h3 class="text-lg font-bold text-foreground mb-4">Basic Information</h3>
                 <div class="grid grid-cols-2 gap-6">
                     <div class="col-span-2">
                         <div class="flex items-center">
                             @MemberPhoto(member, "w-20 h-20 mr-6")
                             <div>
-                                <h4 class="font-bold text-gray-900 text-xl">{member.FirstName} {member.LastName}</h4>
-                                <p class="text-gray-600">{member.EmailStr()}</p>
-                                <p class="text-gray-600">{member.PhoneStr()}</p>
+                                <h4 class="font-bold text-foreground text-xl">{member.FirstName} {member.LastName}</h4>
+                                <p class="text-muted-foreground">{member.EmailStr()}</p>
+                                <p class="text-muted-foreground">{member.PhoneStr()}</p>
                             </div>
                         </div>
                     </div>
                     
                     <div class="space-y-4">
                         <div>
-                            <h4 class="font-bold text-gray-900">Date of Birth</h4>
-                            <p class="text-gray-600">{member.DateOfBirth[:10]}</p>
+                            <h4 class="font-bold text-foreground">Date of Birth</h4>
+                            <p class="text-muted-foreground">{member.DateOfBirth[:10]}</p>
                         </div>
                         <div>
-                            <h4 class="font-bold text-gray-900">Address</h4>
-                            <p class="text-gray-600">{member.AddressStr()}</p>
-                            <p class="text-gray-600">{member.CityStr()}, {member.StateStr()} {member.PostalCodeStr()}</p>
+                            <h4 class="font-bold text-foreground">Address</h4>
+                            <p class="text-muted-foreground">{member.AddressStr()}</p>
+                            <p class="text-muted-foreground">{member.CityStr()}, {member.StateStr()} {member.PostalCodeStr()}</p>
                         </div>
                     </div>
 
                     <div class="space-y-4">
                         <div>
-                            <h4 class="font-bold text-gray-900">Status</h4>
+                            <h4 class="font-bold text-foreground">Status</h4>
                             <span class={templ.Classes(
                                 "px-2 py-1 text-sm rounded-full",
                                 templ.KV("bg-green-100 text-green-800", member.Status == "active"),
@@ -156,8 +156,8 @@ templ MemberDetail(member Member) {
                             </span>
                         </div>
                         <div>
-                            <h4 class="font-bold text-gray-900">Waiver Status</h4>
-                            <p class="text-gray-600">
+                            <h4 class="font-bold text-foreground">Waiver Status</h4>
+                            <p class="text-muted-foreground">
                                 if member.WaiverSigned {
                                     <span class="text-green-600">Waiver Signed</span>
                                 } else {
@@ -166,8 +166,8 @@ templ MemberDetail(member Member) {
                             </p>
                         </div>
                         <div>
-                            <h4 class="font-bold text-gray-900">Membership Level</h4>
-                            <p class="text-gray-600">
+                            <h4 class="font-bold text-foreground">Membership Level</h4>
+                            <p class="text-muted-foreground">
                                 switch member.MembershipLevel {
                                     case 0:
                                         <span>Unverified Guest</span>
@@ -181,8 +181,8 @@ templ MemberDetail(member Member) {
                             </p>
                         </div>
                         <div>
-                            <h4 class="font-bold text-gray-900">Member ID</h4>
-                            <p class="text-gray-600">{fmt.Sprintf("%d", member.ID)}</p>
+                            <h4 class="font-bold text-foreground">Member ID</h4>
+                            <p class="text-muted-foreground">{fmt.Sprintf("%d", member.ID)}</p>
                         </div>
                     </div>
                 </div>

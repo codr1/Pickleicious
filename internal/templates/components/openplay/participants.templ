@@ -4,12 +4,12 @@ package openplay
 import "fmt"
 
 templ OpenPlayParticipantsPanel(sessionID int64, facilityID int64) {
-	<div class="w-full h-full bg-white rounded-lg shadow divide-y divide-gray-200">
-		<div class="p-6 border-b border-gray-200">
+	<div class="w-full h-full bg-background rounded-lg shadow divide-y divide-border">
+		<div class="p-6 border-b border-border">
 			<div class="flex items-center justify-between">
 				<div>
-					<h2 class="text-xl font-bold text-gray-900">Participants</h2>
-					<p class="text-sm text-gray-500">Open play signups for this session.</p>
+					<h2 class="text-xl font-bold text-foreground">Participants</h2>
+					<p class="text-sm text-muted-foreground">Open play signups for this session.</p>
 				</div>
 			</div>
 		</div>
@@ -21,7 +21,7 @@ templ OpenPlayParticipantsPanel(sessionID int64, facilityID int64) {
 			hx-target="this"
 			hx-swap="innerHTML"
 		>
-			<div class="text-sm text-gray-500">Loading participants...</div>
+			<div class="text-sm text-muted-foreground">Loading participants...</div>
 		</div>
 	</div>
 }
@@ -29,11 +29,11 @@ templ OpenPlayParticipantsPanel(sessionID int64, facilityID int64) {
 templ OpenPlayParticipantsList(participants []OpenPlayParticipant, minParticipants int64) {
 	<div class="space-y-4">
 		<div class="flex items-center justify-between">
-			<p class="text-sm font-semibold text-gray-900">Participant count</p>
-			<p class="text-sm text-gray-500">{fmt.Sprintf("%d / %d minimum", len(participants), minParticipants)}</p>
+			<p class="text-sm font-semibold text-foreground">Participant count</p>
+			<p class="text-sm text-muted-foreground">{fmt.Sprintf("%d / %d minimum", len(participants), minParticipants)}</p>
 		</div>
 		if len(participants) == 0 {
-			<div class="rounded border border-dashed border-gray-200 p-4 text-sm text-gray-500">
+			<div class="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
 				No participants yet.
 			</div>
 		} else {
@@ -42,7 +42,7 @@ templ OpenPlayParticipantsList(participants []OpenPlayParticipant, minParticipan
 					<div class="flex items-center">
 						@OpenPlayParticipantAvatar(participant, "w-10 h-10 mr-3")
 						<div>
-							<p class="font-medium text-gray-900">{participant.FirstName} {participant.LastName}</p>
+							<p class="font-medium text-foreground">{participant.FirstName} {participant.LastName}</p>
 						</div>
 					</div>
 				}
@@ -61,14 +61,14 @@ templ OpenPlayParticipantAvatar(participant OpenPlayParticipant, size string) {
 			/>
 		</div>
 	} else if participant.Initials() != "" {
-		<div class={size + " rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"}>
-			<span class="text-gray-500 text-sm font-medium">
+		<div class={size + " rounded-full bg-muted flex items-center justify-center flex-shrink-0"}>
+			<span class="text-muted-foreground text-sm font-medium">
 				{participant.Initials()}
 			</span>
 		</div>
 	} else {
-		<div class={size + " rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"}>
-			<span class="text-gray-400 text-sm">
+		<div class={size + " rounded-full bg-muted flex items-center justify-center flex-shrink-0"}>
+			<span class="text-muted-foreground text-sm">
 				+
 			</span>
 		</div>

@@ -6,10 +6,10 @@ import "fmt"
 templ DeactivateModal(staffMember Staff, proOptions []Staff, futureSessions int, selectedAction string, notice string) {
 	<div class="fixed inset-0 z-50 flex items-center justify-center">
 		<div class="absolute inset-0 bg-black bg-opacity-50" onclick="document.getElementById('modal').innerHTML=''"></div>
-		<div class="relative w-full max-w-lg rounded-lg bg-white shadow-lg">
-			<div class="border-b border-gray-200 px-6 py-4">
-				<h3 class="text-lg font-semibold text-gray-900">Deactivate Staff</h3>
-				<p class="mt-1 text-sm text-gray-600">
+		<div class="relative w-full max-w-lg rounded-lg bg-background shadow-lg">
+			<div class="border-b border-border px-6 py-4">
+				<h3 class="text-lg font-semibold text-foreground">Deactivate Staff</h3>
+				<p class="mt-1 text-sm text-muted-foreground">
 					{staffMember.FirstName} {staffMember.LastName} has {fmt.Sprintf("%d", futureSessions)} upcoming pro sessions.
 				</p>
 				if notice != "" {
@@ -24,7 +24,7 @@ templ DeactivateModal(staffMember Staff, proOptions []Staff, futureSessions int,
 			>
 				<input type="hidden" name="expected_sessions" value={fmt.Sprintf("%d", futureSessions)} />
 				<div class="space-y-3">
-					<label class="flex items-center gap-2 text-sm text-gray-700">
+					<label class="flex items-center gap-2 text-sm text-foreground">
 						<input
 							type="radio"
 							name="deactivation_action"
@@ -37,7 +37,7 @@ templ DeactivateModal(staffMember Staff, proOptions []Staff, futureSessions int,
 					<div>
 						<select
 							name="reassign_to"
-							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+							class="w-full rounded-md border border-border px-3 py-2 text-sm"
 							disabled={len(proOptions) == 0}
 						>
 							if len(proOptions) == 0 {
@@ -50,19 +50,19 @@ templ DeactivateModal(staffMember Staff, proOptions []Staff, futureSessions int,
 							}
 						</select>
 					</div>
-					<label class="flex items-center gap-2 text-sm text-gray-700">
+					<label class="flex items-center gap-2 text-sm text-foreground">
 						<input type="radio" name="deactivation_action" value="cancel" checked={resolveAction(proOptions, selectedAction) == "cancel"} />
 						Cancel upcoming sessions
 					</label>
-					<label class="flex items-center gap-2 text-sm text-gray-700">
+					<label class="flex items-center gap-2 text-sm text-foreground">
 						<input type="radio" name="deactivation_action" value="abort" checked={resolveAction(proOptions, selectedAction) == "abort"} />
 						Abort deactivation
 					</label>
 				</div>
-				<div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4">
+				<div class="flex items-center justify-end gap-3 border-t border-border pt-4">
 					<button
 						type="button"
-						class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+						class="rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-muted"
 						onclick="document.getElementById('modal').innerHTML=''"
 					>
 						Close
