@@ -89,26 +89,28 @@ templ StaffAuthSection() {
         <button
             class="text-sm text-muted-foreground hover:text-blue-600"
             hx-get="/api/v1/auth/staff-login"
-            hx-include="#login-form [name=organization_id]"
+            hx-include="#login-form [name=organization_id], #login-form [name=identifier]"
             hx-target="#login-form">
             Sign in with staff credentials
         </button>
     </div>
 }
 
-templ StaffLoginForm(organizationID string) {
+templ StaffLoginForm(organizationID string, identifier string) {
     <div class="space-y-6">
         <input type="hidden" name="organization_id" value={organizationID}/>
+        <input type="hidden" name="identifier" value={identifier}/>
         <div id="auth-error"></div>
         <div>
-            <label for="identifier" class="block text-sm font-medium text-foreground">
+            <label for="identifier-display" class="block text-sm font-medium text-foreground">
                 Email or Phone
             </label>
             <input
                 type="text"
-                id="identifier"
-                name="identifier"
-                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-blue-500 focus:border-blue-500"
+                id="identifier-display"
+                value={identifier}
+                readonly
+                class="mt-1 block w-full px-4 py-2 border border-border rounded-lg bg-muted text-muted-foreground cursor-not-allowed"
             />
         </div>
 

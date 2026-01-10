@@ -819,7 +819,8 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
 		organizationID := r.FormValue("organization_id")
-		component := authtempl.StaffLoginForm(organizationID)
+		identifier := r.FormValue("identifier")
+		component := authtempl.StaffLoginForm(organizationID, identifier)
 		err := component.Render(r.Context(), w)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to render staff login form")
