@@ -1,12 +1,16 @@
 // web/tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    darkMode: [ "class" ],
+    darkMode: "class",
     content: [
         "../internal/templates/components/**/*.templ",
         "../internal/templates/components/**/*_templ.go",
         "../internal/templates/layouts/**/*.templ",
         "../internal/templates/layouts/**/*_templ.go"
+    ],
+    safelist: [
+        "dark:hidden",
+        "dark:block",
     ],
     theme: {
         extend: {

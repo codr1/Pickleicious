@@ -72,7 +72,7 @@ templ Calendar(data CalendarData) {
 			</div>
 		</div>
 
-		<div id="calendar-content" class="overflow-x-auto" hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) } hx-trigger="load, refreshCourtsCalendar from:body">
+		<div id="calendar-content" class="overflow-x-auto" hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) } hx-trigger="refreshCourtsCalendar from:body">
 			<div class="flex min-w-full">
 				<!-- Time slots column -->
 				<div class="w-16 flex-none bg-muted border-r border-border">

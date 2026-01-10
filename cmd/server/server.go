@@ -63,6 +63,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 
 	auth.InitHandlers(database.Queries, config)
 	members.InitHandlers(database.Queries, cognitoClient)
+	nav.InitHandlers(database.Queries)
 	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)

@@ -1,5 +1,5 @@
 @layer base {
-  /* Base theme variables - these act as fallbacks */
+  /* Base theme variables */
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -23,6 +23,7 @@
     --radius: 0.5rem;
   }
 
+  /* Dark mode - applied when .dark class is on html element */
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -46,18 +47,17 @@
     --radius: 0.5rem;
   }
 
-  /* Example built-in themes - these will eventually be dynamic */
-  [data-theme="sunset"] {
-    --background: 32 98% 96%;
-    --foreground: 20 84% 14.9%;
-    /* ... sunset theme variables ... */
+  /* Fallback backgrounds for html and body - ensures non-transparent even if variables fail */
+  html {
+    background-color: #ffffff;
+    background-color: hsl(var(--background));
   }
 
-  /* Theme template for dynamic themes */
-  [data-theme="custom"] {
-    /* These will be set via CSS custom properties in JavaScript */
-    background: var(--theme-background);
-    foreground: var(--theme-foreground);
-    /* ... other dynamic variables ... */
+  .dark {
+    background-color: #0a0a14;
+  }
+
+  body {
+    background-color: inherit;
   }
 }
