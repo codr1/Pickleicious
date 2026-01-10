@@ -281,7 +281,8 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		http.MethodDelete: staff.HandleDeleteProUnavailability,
 	}))
 	mux.HandleFunc("/api/v1/staff", methodHandler(map[string]http.HandlerFunc{
-		http.MethodGet: staff.HandleStaffList,
+		http.MethodGet:  staff.HandleStaffList,
+		http.MethodPost: staff.HandleCreateStaff,
 	}))
 	mux.HandleFunc("/api/v1/staff/new", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -291,11 +292,38 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		staff.HandleNewStaffForm(w, r)
 	})
 	mux.HandleFunc("/api/v1/staff/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		path := strings.TrimSuffix(r.URL.Path, "/")
+
+		// Handle deactivation routes
+		if strings.HasSuffix(path, "/deactivate") {
+			if r.Method == http.MethodPost {
+				staff.HandleDeactivateStaff(w, r)
+				return
+			}
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		staff.HandleStaffDetail(w, r)
+		if strings.HasSuffix(path, "/deactivation/confirm") {
+			if r.Method == http.MethodPost {
+				staff.HandleConfirmDeactivation(w, r)
+				return
+			}
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			if strings.HasSuffix(path, "/edit") {
+				staff.HandleEditStaffForm(w, r)
+			} else {
+				staff.HandleStaffDetail(w, r)
+			}
+		case http.MethodPut:
+			staff.HandleUpdateStaff(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	// Court routes

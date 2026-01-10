@@ -85,6 +85,21 @@ templ Menu(facilityID int64, user *MenuUser) {
                         Member Management
                     </span>
                 }
+                if facilityID > 0 {
+                    <a href={templ.SafeURL(fmt.Sprintf("/admin/themes?facility_id=%d", facilityID))}
+                       class="block rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                       hx-boost="true"
+                       hx-push-url="false"
+                       hx-target="main"
+                       onclick="closeMenu()">
+                        Themes
+                    </a>
+                } else {
+                    <span
+                        class="block rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground cursor-not-allowed">
+                        Themes
+                    </span>
+                }
             </div>
         </nav>
 
