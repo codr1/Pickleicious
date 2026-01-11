@@ -51,7 +51,7 @@ func HandleLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {
@@ -122,7 +122,7 @@ func HandleLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {
@@ -181,7 +181,7 @@ func HandleListPros(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {
@@ -244,7 +244,7 @@ func HandleProAvailability(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {
@@ -345,7 +345,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {

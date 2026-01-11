@@ -168,14 +168,11 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		http.MethodPut: notifications.HandleMarkAsRead,
 	}))
 
-	// Auth routes
+	// Auth routes (unified for staff and members)
 	mux.HandleFunc("/login", auth.HandleLoginPage)
-	mux.HandleFunc("/member/login", auth.HandleMemberLoginPage)
 	mux.HandleFunc("/api/v1/auth/check-staff", auth.HandleCheckStaff)
 	mux.HandleFunc("/api/v1/auth/send-code", auth.HandleSendCode)
 	mux.HandleFunc("/api/v1/auth/verify-code", auth.HandleVerifyCode)
-	mux.HandleFunc("/api/v1/auth/member/send-code", auth.HandleMemberSendCode)
-	mux.HandleFunc("/api/v1/auth/member/verify-code", auth.HandleMemberVerifyCode)
 	mux.HandleFunc("/api/v1/auth/resend-code", auth.HandleResendCode)
 	mux.HandleFunc("/api/v1/auth/staff-login", auth.HandleStaffLogin)
 	mux.HandleFunc("/api/v1/auth/reset-password", auth.HandleResetPassword)

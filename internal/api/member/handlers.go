@@ -68,7 +68,7 @@ func RequireMemberSession(next http.Handler) http.Handler {
 
 		user := authz.UserFromContext(r.Context())
 		if user == nil || user.SessionType != auth.SessionTypeMember {
-			http.Redirect(w, r, "/member/login", http.StatusFound)
+			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
@@ -85,7 +85,7 @@ func RequireMemberSession(next http.Handler) http.Handler {
 		memberRow, err := q.GetMemberByID(ctx, user.ID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				http.Redirect(w, r, "/member/login", http.StatusFound)
+				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
 			logger.Error().Err(err).Int64("member_id", user.ID).Msg("Failed to load member profile")
@@ -119,7 +119,7 @@ func HandleMemberPortal(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
@@ -129,7 +129,7 @@ func HandleMemberPortal(w http.ResponseWriter, r *http.Request) {
 	memberRow, err := q.GetMemberByID(ctx, user.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Redirect(w, r, "/member/login", http.StatusFound)
+			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 		logger.Error().Err(err).Msg("Failed to load member profile")
@@ -188,7 +188,7 @@ func HandleMemberReservationsPartial(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
@@ -227,7 +227,7 @@ func HandleMemberReservationsWidget(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
@@ -265,7 +265,7 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {
@@ -335,7 +335,7 @@ func HandleMemberBookingSlots(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 	if user.HomeFacilityID == nil {
@@ -406,7 +406,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
@@ -608,7 +608,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 
 	user := authz.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/member/login", http.StatusFound)
+		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 

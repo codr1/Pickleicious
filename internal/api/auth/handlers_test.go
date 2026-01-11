@@ -2,13 +2,13 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/config"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/testutil"
@@ -74,18 +74,20 @@ func setupAuthTest(t *testing.T, env string) authTestContext {
 	return authTestContext{orgID: orgID, facilityID: facilityID}
 }
 
-func TestDevBypassMemberSendCode(t *testing.T) {
+func TestDevBypassSendCode(t *testing.T) {
 	tc := setupAuthTest(t, devEnvironment)
 
 	form := url.Values{}
 	form.Set("identifier", "member@test.com")
-	form.Set("organization_id", fmt.Sprintf("%d", tc.orgID))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/member/send-code", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/send-code", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Add organization context (simulates subdomain middleware)
+	ctx := authz.ContextWithOrganization(req.Context(), &authz.Organization{ID: tc.orgID, Name: "Test Org", Slug: "test-org"})
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	HandleMemberSendCode(rec, req)
+	HandleSendCode(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
@@ -98,26 +100,28 @@ func TestDevBypassMemberSendCode(t *testing.T) {
 	}
 }
 
-func TestDevBypassMemberVerifyCode(t *testing.T) {
+func TestDevBypassVerifyCode(t *testing.T) {
 	tc := setupAuthTest(t, devEnvironment)
 
 	form := url.Values{}
 	form.Set("identifier", "member@test.com")
-	form.Set("organization_id", fmt.Sprintf("%d", tc.orgID))
 	form.Set("session", devBypassSession)
 	form.Set("code", devBypassCode)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/member/verify-code", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify-code", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Add organization context (simulates subdomain middleware)
+	ctx := authz.ContextWithOrganization(req.Context(), &authz.Organization{ID: tc.orgID, Name: "Test Org", Slug: "test-org"})
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	HandleMemberVerifyCode(rec, req)
+	HandleVerifyCode(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Should have HX-Redirect header set
+	// Should have HX-Redirect header set (members go to /member)
 	redirect := rec.Header().Get("HX-Redirect")
 	if redirect != "/member" {
 		t.Errorf("expected HX-Redirect to /member, got %q", redirect)
@@ -142,15 +146,17 @@ func TestDevBypassWrongCodeFails(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("identifier", "member@test.com")
-	form.Set("organization_id", fmt.Sprintf("%d", tc.orgID))
 	form.Set("session", devBypassSession)
 	form.Set("code", "999999") // Wrong code
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/member/verify-code", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify-code", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Add organization context (simulates subdomain middleware)
+	ctx := authz.ContextWithOrganization(req.Context(), &authz.Organization{ID: tc.orgID, Name: "Test Org", Slug: "test-org"})
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	HandleMemberVerifyCode(rec, req)
+	HandleVerifyCode(rec, req)
 
 	// Should fail - wrong code should not grant access
 	redirect := rec.Header().Get("HX-Redirect")
@@ -164,15 +170,17 @@ func TestDevBypassDisabledInProduction(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("identifier", "member@test.com")
-	form.Set("organization_id", fmt.Sprintf("%d", tc.orgID))
 	form.Set("session", devBypassSession)
 	form.Set("code", devBypassCode)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/member/verify-code", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/verify-code", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Add organization context (simulates subdomain middleware)
+	ctx := authz.ContextWithOrganization(req.Context(), &authz.Organization{ID: tc.orgID, Name: "Test Org", Slug: "test-org"})
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	HandleMemberVerifyCode(rec, req)
+	HandleVerifyCode(rec, req)
 
 	// Should fail - bypass not active in production
 	redirect := rec.Header().Get("HX-Redirect")
