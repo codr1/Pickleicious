@@ -8,34 +8,32 @@ func TestIsPhoneNumber(t *testing.T) {
 		input    string
 		expected bool
 	}{
-		// Valid phone numbers
-		{"10 digits", "5551234567", true},
-		{"10 digits with dashes", "555-123-4567", true},
-		{"10 digits with parens", "(555) 123-4567", true},
-		{"10 digits with dots", "555.123.4567", true},
-		{"11 digits with leading 1", "15551234567", true},
-		{"E.164 format", "+15551234567", true},
-		{"E.164 with spaces", "+1 555 123 4567", true},
+		// Valid phone numbers (using real area codes, not 555)
+		{"10 digits", "3024422842", true},
+		{"10 digits with dashes", "302-442-2842", true},
+		{"10 digits with parens", "(302) 442-2842", true},
+		{"10 digits with dots", "302.442.2842", true},
+		{"11 digits with leading 1", "13024422842", true},
+		{"E.164 format", "+13024422842", true},
+		{"E.164 with spaces", "+1 302 442 2842", true},
 
 		// Invalid - emails
 		{"simple email", "user@example.com", false},
 		{"email with plus", "+user@example.com", false},
 		{"email with plus tag", "user+tag@example.com", false},
-		{"numeric local part email", "5551234567@carrier.com", false},
+		{"numeric local part email", "3024422842@carrier.com", false},
 		{"email with digits", "user123@example.com", false},
 
-		// Invalid - too short
+		// Invalid - too short or invalid
 		{"empty string", "", false},
 		{"single digit", "5", false},
-		{"9 digits", "555123456", false},
+		{"9 digits", "302442284", false},
 
-		// Invalid - not enough digits
+		// Invalid - not phone number format
 		{"letters only", "abcdefghij", false},
 		{"mixed but few digits", "abc123def", false},
-
-		// Invalid - contains letters (not valid phone formatting)
 		{"garbage with 10 digits", "abc1234567890xyz", false},
-		{"letters mixed in", "555abc1234567", false},
+		{"letters mixed in", "302abc4422842", false},
 	}
 
 	for _, tt := range tests {
@@ -55,27 +53,30 @@ func TestNormalizePhone(t *testing.T) {
 		expected string
 	}{
 		// 10 digit US numbers -> +1 prefix
-		{"10 digits plain", "5551234567", "+15551234567"},
-		{"10 digits with dashes", "555-123-4567", "+15551234567"},
-		{"10 digits with parens", "(555) 123-4567", "+15551234567"},
-		{"10 digits with dots", "555.123.4567", "+15551234567"},
-		{"10 digits with spaces", "555 123 4567", "+15551234567"},
+		{"10 digits plain", "3024422842", "+13024422842"},
+		{"10 digits with dashes", "302-442-2842", "+13024422842"},
+		{"10 digits with parens", "(302) 442-2842", "+13024422842"},
+		{"10 digits with dots", "302.442.2842", "+13024422842"},
+		{"10 digits with spaces", "302 442 2842", "+13024422842"},
 
 		// 11 digit US numbers starting with 1
-		{"11 digits with 1", "15551234567", "+15551234567"},
-		{"11 digits formatted", "1-555-123-4567", "+15551234567"},
+		{"11 digits with 1", "13024422842", "+13024422842"},
+		{"11 digits formatted", "1-302-442-2842", "+13024422842"},
 
 		// Already E.164
-		{"E.164 format", "+15551234567", "+15551234567"},
-		{"E.164 with spaces", "+1 555 123 4567", "+15551234567"},
+		{"E.164 format", "+13024422842", "+13024422842"},
+		{"E.164 with spaces", "+1 302 442 2842", "+13024422842"},
+		{"E.164 with dashes", "+1-302-442-2842", "+13024422842"},
 
-		// International (12+ digits) - already E.164 preserved
-		{"UK number", "+447911123456", "+447911123456"},
+		// International numbers
+		{"UK mobile", "+447911123456", "+447911123456"},
+		{"German number", "+4915123456789", "+4915123456789"},
 
-		// Invalid - too short
+		// Invalid - too short or malformed
 		{"empty string", "", ""},
-		{"9 digits", "555123456", ""},
+		{"9 digits", "302442284", ""},
 		{"few digits", "123", ""},
+		{"invalid format", "not-a-phone", ""},
 	}
 
 	for _, tt := range tests {

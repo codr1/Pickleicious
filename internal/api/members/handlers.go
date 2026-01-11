@@ -28,6 +28,20 @@ var cognitoClient *cognito.CognitoClient
 
 const membersQueryTimeout = 5 * time.Second
 
+// normalizePhoneInput normalizes a phone number to E.164 format.
+// Returns empty string if input is empty, or error if invalid non-empty phone.
+func normalizePhoneInput(phone string) (sql.NullString, error) {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return sql.NullString{String: "", Valid: false}, nil
+	}
+	normalized := cognito.NormalizePhone(phone)
+	if normalized == "" {
+		return sql.NullString{}, fmt.Errorf("invalid phone number format")
+	}
+	return sql.NullString{String: normalized, Valid: true}, nil
+}
+
 func InitHandlers(q *dbgen.Queries, cc *cognito.CognitoClient) {
 	queries = q
 	cognitoClient = cc
@@ -277,13 +291,20 @@ func HandleUpdateMember(w http.ResponseWriter, r *http.Request) {
 		Int("photo_data_length", len(r.FormValue("photo_data"))).
 		Msg("Form data received")
 
+	// Normalize phone number to E.164 format
+	phone, err := normalizePhoneInput(r.FormValue("phone"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// First update the member details
 	err = queries.UpdateMember(r.Context(), dbgen.UpdateMemberParams{
 		ID:            id,
 		FirstName:     r.FormValue("first_name"),
 		LastName:      r.FormValue("last_name"),
 		Email:         sql.NullString{String: r.FormValue("email"), Valid: true},
-		Phone:         sql.NullString{String: r.FormValue("phone"), Valid: true},
+		Phone:         phone,
 		StreetAddress: sql.NullString{String: r.FormValue("street_address"), Valid: true},
 		City:          sql.NullString{String: r.FormValue("city"), Valid: true},
 		State:         sql.NullString{String: r.FormValue("state"), Valid: true},
@@ -550,12 +571,19 @@ func HandleCreateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Normalize phone number to E.164 format
+	phone, err := normalizePhoneInput(r.FormValue("phone"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// Create member and get ID
 	memberID, err := queries.CreateMember(r.Context(), dbgen.CreateMemberParams{
 		FirstName:     r.FormValue("first_name"),
 		LastName:      r.FormValue("last_name"),
 		Email:         sql.NullString{String: r.FormValue("email"), Valid: true},
-		Phone:         sql.NullString{String: r.FormValue("phone"), Valid: true},
+		Phone:         phone,
 		StreetAddress: sql.NullString{String: r.FormValue("street_address"), Valid: true},
 		City:          sql.NullString{String: r.FormValue("city"), Valid: true},
 		State:         sql.NullString{String: r.FormValue("state"), Valid: true},

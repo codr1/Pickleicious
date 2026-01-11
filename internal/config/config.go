@@ -30,7 +30,8 @@ type Config struct {
 		Environment string `yaml:"environment"`
 		Port        int    `yaml:"port"`
 		BaseURL     string `yaml:"base_url"`
-		SecretKey   string `yaml:"-"` // Loaded from environment
+		BaseDomain  string `yaml:"base_domain"` // e.g., "localhost" for dev (subdomain.localhost), "pickleicious.com" for prod
+		SecretKey   string `yaml:"-"`           // Loaded from environment
 	} `yaml:"app"`
 
 	Database DatabaseConfig `yaml:"database"`

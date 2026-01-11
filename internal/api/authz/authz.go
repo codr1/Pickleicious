@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -25,9 +26,41 @@ type StaffAccess struct {
 }
 
 type userContextKey struct{}
+type organizationContextKey struct{}
+
+// Organization represents the current organization from subdomain routing.
+type Organization struct {
+	ID   int64
+	Name string
+	Slug string
+}
 
 func ContextWithUser(ctx context.Context, user *AuthUser) context.Context {
 	return context.WithValue(ctx, userContextKey{}, user)
+}
+
+func ContextWithOrganization(ctx context.Context, org *Organization) context.Context {
+	return context.WithValue(ctx, organizationContextKey{}, org)
+}
+
+func OrganizationFromContext(ctx context.Context) *Organization {
+	if ctx == nil {
+		return nil
+	}
+	org, ok := ctx.Value(organizationContextKey{}).(*Organization)
+	if !ok {
+		return nil
+	}
+	return org
+}
+
+// OrganizationIDString returns the org ID as a string, or empty if no org in context.
+// Use this for passing org ID to templates.
+func OrganizationIDString(ctx context.Context) string {
+	if org := OrganizationFromContext(ctx); org != nil {
+		return strconv.FormatInt(org.ID, 10)
+	}
+	return ""
 }
 
 func UserFromContext(ctx context.Context) *AuthUser {

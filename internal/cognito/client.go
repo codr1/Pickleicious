@@ -10,6 +10,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/nyaruka/phonenumbers"
 )
 
 // ErrCognitoThrottled marks errors returned when Cognito throttles requests.
@@ -212,60 +213,37 @@ func regionFromPoolID(poolID string) (string, error) {
 }
 
 // IsPhoneNumber returns true if the identifier looks like a phone number.
-// It explicitly rejects anything containing @ to avoid misclassifying emails.
-// Only allows digits and valid phone formatting characters (+, -, (, ), spaces, dots).
+// Uses libphonenumber for proper international phone detection.
 func IsPhoneNumber(identifier string) bool {
 	// Emails always contain @, phones never do
 	if strings.Contains(identifier, "@") {
 		return false
 	}
-	// Empty string is not a phone
 	if identifier == "" {
 		return false
 	}
-	// Count digits and check for invalid characters
-	digitCount := 0
-	for _, c := range identifier {
-		if c >= '0' && c <= '9' {
-			digitCount++
-		} else if c != '+' && c != '-' && c != '(' && c != ')' && c != ' ' && c != '.' {
-			// Invalid character for phone number
-			return false
-		}
+	// Try to parse as phone number (default to US region for numbers without country code)
+	num, err := phonenumbers.Parse(identifier, "US")
+	if err != nil {
+		return false
 	}
-	// Phone numbers have at least 10 digits
-	return digitCount >= 10
+	return phonenumbers.IsValidNumber(num)
 }
 
-// NormalizePhone converts phone to E.164 format.
-// Assumes US (+1) for 10-digit numbers without country code.
-// Returns empty string if the input doesn't look like a valid phone.
+// NormalizePhone converts phone to E.164 format using libphonenumber.
+// Handles all international formats. Defaults to US for numbers without country code.
+// Returns empty string if the input is not a valid phone number.
 func NormalizePhone(phone string) string {
-	// Extract digits only
-	var digits strings.Builder
-	for _, c := range phone {
-		if c >= '0' && c <= '9' {
-			digits.WriteRune(c)
-		}
+	if phone == "" {
+		return ""
 	}
-	d := digits.String()
-
-	// Validate minimum length
-	if len(d) < 10 {
-		return "" // Invalid - too short
+	// Parse with US as default region for numbers without country code
+	num, err := phonenumbers.Parse(phone, "US")
+	if err != nil {
+		return ""
 	}
-
-	// 10 digits: assume US, prepend +1
-	if len(d) == 10 {
-		return "+1" + d
+	if !phonenumbers.IsValidNumber(num) {
+		return ""
 	}
-
-	// 11 digits starting with 1: US with country code
-	if len(d) == 11 && d[0] == '1' {
-		return "+" + d
-	}
-
-	// Other lengths: just prepend + and hope for the best
-	// TODO: Add proper international phone validation if needed
-	return "+" + d
+	return phonenumbers.Format(num, phonenumbers.E164)
 }

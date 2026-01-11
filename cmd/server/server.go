@@ -45,6 +45,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		api.WithLogging,
 		api.WithRecovery,
 		api.WithRequestID,
+		api.WithOrganization(database.Queries, config.App.BaseDomain),
 		api.WithAuth,
 		api.WithContentType,
 	)

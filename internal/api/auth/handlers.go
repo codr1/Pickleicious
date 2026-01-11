@@ -105,8 +105,7 @@ func HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID := r.FormValue("organization_id")
-	component := authtempl.LoginPage(organizationID)
+	component := authtempl.LoginPage(authz.OrganizationIDString(r.Context()))
 	if err := component.Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render login page")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -128,8 +127,7 @@ func HandleMemberLoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID := r.FormValue("organization_id")
-	component := authtempl.MemberLoginPage(organizationID)
+	component := authtempl.MemberLoginPage(authz.OrganizationIDString(r.Context()))
 	if err := component.Render(r.Context(), w); err != nil {
 		logger.Error().Err(err).Msg("Failed to render member login page")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -221,10 +219,17 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 
-	if identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+	organizationIDStr := strconv.FormatInt(org.ID, 10)
+
+	if identifier == "" {
+		http.Error(w, "Identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -238,11 +243,6 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, false)
 			return
 		}
-	}
-
-	if _, err := strconv.ParseInt(organizationIDStr, 10, 64); err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -325,11 +325,17 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 
 	code := r.FormValue("code")
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 	session := r.FormValue("session")
 
-	if code == "" || identifier == "" || organizationIDStr == "" || session == "" {
-		http.Error(w, "Code, identifier, organization, and session are required", http.StatusBadRequest)
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+
+	if code == "" || identifier == "" || session == "" {
+		http.Error(w, "Code, identifier, and session are required", http.StatusBadRequest)
 		return
 	}
 
@@ -343,12 +349,6 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, true)
 			return
 		}
-	}
-
-	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -502,10 +502,17 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 
-	if identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+	organizationIDStr := strconv.FormatInt(org.ID, 10)
+
+	if identifier == "" {
+		http.Error(w, "Identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -519,12 +526,6 @@ func HandleMemberSendCode(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, false)
 			return
 		}
-	}
-
-	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -607,11 +608,17 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 
 	code := r.FormValue("code")
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 	session := r.FormValue("session")
 
-	if code == "" || identifier == "" || organizationIDStr == "" || session == "" {
-		http.Error(w, "Code, identifier, organization, and session are required", http.StatusBadRequest)
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+
+	if code == "" || identifier == "" || session == "" {
+		http.Error(w, "Code, identifier, and session are required", http.StatusBadRequest)
 		return
 	}
 
@@ -625,12 +632,6 @@ func HandleMemberVerifyCode(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, true)
 			return
 		}
-	}
-
-	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -721,10 +722,17 @@ func HandleMemberResendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 
-	if identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+	organizationIDStr := strconv.FormatInt(org.ID, 10)
+
+	if identifier == "" {
+		http.Error(w, "Identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -738,11 +746,6 @@ func HandleMemberResendCode(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, false)
 			return
 		}
-	}
-
-	if _, err := strconv.ParseInt(organizationIDStr, 10, 64); err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -818,9 +821,8 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
 	if r.Method == http.MethodGet {
-		organizationID := r.FormValue("organization_id")
 		identifier := r.FormValue("identifier")
-		component := authtempl.StaffLoginForm(organizationID, identifier)
+		component := authtempl.StaffLoginForm(authz.OrganizationIDString(r.Context()), identifier)
 		err := component.Render(r.Context(), w)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to render staff login form")
@@ -915,10 +917,10 @@ func HandleStaffLogin(w http.ResponseWriter, r *http.Request) {
 
 func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+
 	if r.Method == http.MethodGet {
 		identifier := r.FormValue("identifier")
-		organizationID := r.FormValue("organization_id")
-		component := authtempl.ResetPasswordForm(identifier, organizationID)
+		component := authtempl.ResetPasswordForm(identifier, authz.OrganizationIDString(r.Context()))
 		err := component.Render(r.Context(), w)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to render reset password form")
@@ -932,11 +934,16 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
+	// Require organization for POST (access control)
+	if authz.OrganizationFromContext(r.Context()) == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
 
-	if identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+	identifier := r.FormValue("identifier")
+
+	if identifier == "" {
+		http.Error(w, "Identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -950,12 +957,6 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, false)
 			return
 		}
-	}
-
-	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -973,7 +974,7 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user exists in our database before burning quota
 	// This prevents attackers from exhausting quota for non-existent users
-	_, err = getUserByIdentifier(r.Context(), identifier)
+	_, err := getUserByIdentifier(r.Context(), identifier)
 	userExists := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		logger.Error().Err(err).Msg("Failed to check user for password reset")
@@ -1004,7 +1005,7 @@ func HandleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// If user doesn't exist, we silently succeed (don't reveal user existence)
 
-	component := authtempl.ResetPasswordConfirmation(identifier, organizationIDStr)
+	component := authtempl.ResetPasswordConfirmation(identifier, authz.OrganizationIDString(r.Context()))
 	err = component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render password reset confirmation form")
@@ -1020,13 +1021,19 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+
 	code := r.FormValue("code")
 	newPassword := r.FormValue("new_password")
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 
-	if code == "" || newPassword == "" || identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Code, new password, identifier, and organization are required", http.StatusBadRequest)
+	if code == "" || newPassword == "" || identifier == "" {
+		http.Error(w, "Code, new password, and identifier are required", http.StatusBadRequest)
 		return
 	}
 
@@ -1040,12 +1047,6 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, true)
 			return
 		}
-	}
-
-	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -1063,7 +1064,7 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user exists in our database before burning quota
 	// This prevents attackers from exhausting quota for non-existent users
-	_, err = getUserByIdentifier(r.Context(), identifier)
+	_, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// User doesn't exist - don't burn quota, return generic error
@@ -1105,7 +1106,7 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		otpLimiter.ResetVerifyAttempts(identifier)
 	}
 
-	w.Header().Set("HX-Redirect", fmt.Sprintf("/login?organization_id=%s", organizationIDStr))
+	w.Header().Set("HX-Redirect", "/login")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -1117,10 +1118,17 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identifier := r.FormValue("identifier")
-	organizationIDStr := r.FormValue("organization_id")
 
-	if identifier == "" || organizationIDStr == "" {
-		http.Error(w, "Identifier and organization are required", http.StatusBadRequest)
+	// Get organization from context (set by subdomain middleware)
+	org := authz.OrganizationFromContext(r.Context())
+	if org == nil {
+		http.Error(w, "Organization required", http.StatusBadRequest)
+		return
+	}
+	organizationIDStr := strconv.FormatInt(org.ID, 10)
+
+	if identifier == "" {
+		http.Error(w, "Identifier is required", http.StatusBadRequest)
 		return
 	}
 
@@ -1134,12 +1142,6 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 			writeRateLimitError(w, r, result.RetryAfter, false)
 			return
 		}
-	}
-
-	_, err := strconv.ParseInt(organizationIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
-		return
 	}
 
 	if queries == nil {
@@ -1221,8 +1223,7 @@ func HandleStandardLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	organizationID := r.FormValue("organization_id")
-	component := authtempl.LoginLayout(organizationID)
+	component := authtempl.LoginLayout(authz.OrganizationIDString(r.Context()))
 	err := component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render login page")
@@ -1264,7 +1265,12 @@ func getUserByIdentifier(ctx context.Context, identifier string) (dbgen.User, er
 	// Normalize identifier to match rate limiter behavior and ensure consistent lookups
 	identifier = strings.ToLower(strings.TrimSpace(identifier))
 	if cognito.IsPhoneNumber(identifier) {
-		return queries.GetUserByPhone(ctx, sql.NullString{String: identifier, Valid: true})
+		// Normalize phone to E.164 format for consistent lookup
+		normalized := cognito.NormalizePhone(identifier)
+		if normalized == "" {
+			return dbgen.User{}, sql.ErrNoRows // Invalid phone format
+		}
+		return queries.GetUserByPhone(ctx, sql.NullString{String: normalized, Valid: true})
 	}
 	return queries.GetUserByEmail(ctx, sql.NullString{String: identifier, Valid: true})
 }
