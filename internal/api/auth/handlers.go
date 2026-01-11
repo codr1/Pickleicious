@@ -255,17 +255,12 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Don't consume rate limit quota for non-existent users
-			writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
+			// Use vague message to prevent user enumeration attacks
+			writeHTMXError(w, r, http.StatusUnauthorized, "We couldn't verify your credentials. Please check and try again.")
 			return
 		}
 		logger.Error().Err(err).Msg("Failed to load user for auth")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	if !user.IsStaff {
-		// Don't consume rate limit quota for non-staff users
-		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
@@ -274,10 +269,12 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		otpLimiter.RecordOTPSend(identifier, clientIP)
 	}
 
+	sentTo := getSentToChannel(user, identifier)
+
 	// Dev mode bypass - skip Cognito, return fake session for code entry
 	if isDevMode() {
-		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito send-code for staff")
-		component := authtempl.CodeVerification(identifier, organizationIDStr, devBypassSession)
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito send-code")
+		component := authtempl.CodeVerification(identifier, organizationIDStr, devBypassSession, sentTo)
 		if err := component.Render(r.Context(), w); err != nil {
 			logger.Error().Err(err).Msg("Failed to render code verification form")
 			http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -307,7 +304,7 @@ func HandleSendCode(w http.ResponseWriter, r *http.Request) {
 		session = *authResponse.Session
 	}
 
-	component := authtempl.CodeVerification(identifier, organizationIDStr, session)
+	component := authtempl.CodeVerification(identifier, organizationIDStr, session, sentTo)
 	err = component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render verification screen")
@@ -369,12 +366,6 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !user.IsStaff {
-		// Don't consume rate limit for non-staff users
-		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
-		return
-	}
-
 	// User validated - now record the verify attempt (consumes quota)
 	if otpLimiter != nil {
 		otpLimiter.RecordOTPVerify(identifier, clientIP)
@@ -382,11 +373,11 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 
 	// Dev mode bypass - accept devBypassCode as valid
 	if isDevMode() && code == devBypassCode {
-		logger.Warn().Str("identifier", identifier).Msg("Dev mode: bypassing Cognito verify-code for staff")
+		logger.Warn().Str("identifier", identifier).Msg("Dev mode: bypassing Cognito verify-code")
 		if otpLimiter != nil {
 			otpLimiter.ResetVerifyAttempts(identifier)
 		}
-		setStaffSession(w, r, user)
+		setSessionByUserType(w, r, user)
 		return
 	}
 
@@ -428,7 +419,16 @@ func HandleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		otpLimiter.ResetVerifyAttempts(identifier)
 	}
 
-	setStaffSession(w, r, user)
+	setSessionByUserType(w, r, user)
+}
+
+// setSessionByUserType creates the appropriate session based on user type.
+func setSessionByUserType(w http.ResponseWriter, r *http.Request, user dbgen.User) {
+	if user.IsStaff {
+		setStaffSession(w, r, user)
+	} else {
+		setMemberSession(w, r, user)
+	}
 }
 
 // isDevMode returns true if running in development environment
@@ -1162,22 +1162,17 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// This endpoint is for staff resend - verify user is staff
-	if !user.IsStaff {
-		// Don't consume rate limit for non-staff users
-		writeHTMXError(w, r, http.StatusUnauthorized, "Invalid credentials")
-		return
-	}
-
 	// User validated - now record the rate limit (consumes quota)
 	if otpLimiter != nil {
 		otpLimiter.RecordOTPSend(identifier, clientIP)
 	}
 
+	sentTo := getSentToChannel(user, identifier)
+
 	// Dev mode bypass - return fake session for code entry
 	if isDevMode() {
 		logger.Warn().Str("identifier", identifier).Msg("Dev mode: skipping Cognito resend-code")
-		component := authtempl.CodeVerification(identifier, organizationIDStr, devBypassSession)
+		component := authtempl.CodeVerification(identifier, organizationIDStr, devBypassSession, sentTo)
 		if err := component.Render(r.Context(), w); err != nil {
 			logger.Error().Err(err).Msg("Failed to render code verification form")
 			http.Error(w, "Failed to render page", http.StatusInternalServerError)
@@ -1207,7 +1202,7 @@ func HandleResendCode(w http.ResponseWriter, r *http.Request) {
 		session = *authResponse.Session
 	}
 
-	component := authtempl.CodeVerification(identifier, organizationIDStr, session)
+	component := authtempl.CodeVerification(identifier, organizationIDStr, session, sentTo)
 	err = component.Render(r.Context(), w)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to render verification screen")
@@ -1273,6 +1268,16 @@ func getUserByIdentifier(ctx context.Context, identifier string) (dbgen.User, er
 		return queries.GetUserByPhone(ctx, sql.NullString{String: normalized, Valid: true})
 	}
 	return queries.GetUserByEmail(ctx, sql.NullString{String: identifier, Valid: true})
+}
+
+// getSentToChannel returns "phone" or "email" based on how the user authenticated.
+// Used for friendly "Check your {phone/email}" messages. Output is always one of
+// these two strings - never user input, so safe to render in templates.
+func getSentToChannel(user dbgen.User, identifier string) string {
+	if user.Phone.Valid && user.Phone.String != "" && cognito.IsPhoneNumber(identifier) {
+		return "phone"
+	}
+	return "email"
 }
 
 func handleCognitoAuthError(w http.ResponseWriter, r *http.Request, err error, unauthorizedMsg string, expiredMsg string) bool {

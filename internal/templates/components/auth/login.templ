@@ -154,14 +154,14 @@ templ StaffLoginForm(organizationID string, identifier string) {
     </div>
 }
 
-templ CodeVerification(identifier string, organizationID string, session string) {
+templ CodeVerification(identifier string, organizationID string, session string, sentTo string) {
     <div class="space-y-6">
         <input type="hidden" name="identifier" value={identifier}/>
         <input type="hidden" name="organization_id" value={organizationID}/>
         <input type="hidden" name="session" value={session}/>
         <div id="auth-error"></div>
         <div class="text-center">
-            <h3 class="text-lg font-medium text-foreground">Check your email/phone</h3>
+            <h3 class="text-lg font-medium text-foreground">Check your { sentTo }</h3>
             <p class="mt-2 text-sm text-muted-foreground">We've sent you a verification code</p>
         </div>
 

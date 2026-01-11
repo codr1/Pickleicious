@@ -17,8 +17,10 @@
 --
 -- TEST CREDENTIALS (Members):
 --   Member login uses OTP bypass in dev mode.
---   Enter any member email, then use code: 123456
---   Example: alice.j@email.test / code: 123456
+--   Enter any member email OR phone, then use code: 123456
+--   Examples:
+--     alice.j@email.test / code: 123456
+--     3024422842 / code: 123456 (Alice's phone)
 --
 -- IMPORTANT NOTES:
 --   - This script is DESTRUCTIVE. Run only via `task db:seed` which resets first.
@@ -36,8 +38,8 @@ BEGIN TRANSACTION;
 -- ORGANIZATIONS
 --------------------------------------------------------------------------------
 INSERT INTO organizations (id, name, slug, status) VALUES
-    (1, 'Pickle Paradise', 'pickle-paradise', 'active'),
-    (2, 'Metro Pickleball', 'metro-pickleball', 'active');
+    (1, 'Pickle Paradise', 'pickle', 'active'),
+    (2, 'Metro Pickleball', 'metro', 'active');
 
 --------------------------------------------------------------------------------
 -- FACILITIES
@@ -131,68 +133,69 @@ INSERT INTO users (id, email, phone, first_name, last_name, is_staff, is_member,
      3, 'admin', 0, 0, '', 'active'),
 
     -- MEMBERS (IDs 7-26)
+    -- Members use OTP auth (local_auth_enabled=0), phone numbers in E.164 format
     -- Downtown Club members (IDs 7-14)
-    (7, 'alice.j@email.test', '555-0101', 'Alice', 'Johnson', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (7, 'alice.j@email.test', '+13024422842', 'Alice', 'Johnson', 0, 1, 0,
+     NULL,
      1, NULL, 2, 1, '1985-03-15', 'active'),
-    (8, 'bob.s@email.test', '555-0102', 'Bob', 'Smith', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (8, 'bob.s@email.test', '+13025550102', 'Bob', 'Smith', 0, 1, 0,
+     NULL,
      1, NULL, 3, 1, '1978-07-22', 'active'),
-    (9, 'carol.w@email.test', '555-0103', 'Carol', 'Williams', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (9, 'carol.w@email.test', '+13025550103', 'Carol', 'Williams', 0, 1, 0,
+     NULL,
      1, NULL, 2, 1, '1990-11-08', 'active'),
-    (10, 'david.b@email.test', '555-0104', 'David', 'Brown', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (10, 'david.b@email.test', '+13025550104', 'David', 'Brown', 0, 1, 0,
+     NULL,
      1, NULL, 1, 0, '1982-05-30', 'active'),
-    (11, 'emma.d@email.test', '555-0105', 'Emma', 'Davis', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (11, 'emma.d@email.test', '+13025550105', 'Emma', 'Davis', 0, 1, 0,
+     NULL,
      1, NULL, 2, 1, '1995-09-12', 'active'),
-    (12, 'frank.m@email.test', '555-0106', 'Frank', 'Miller', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (12, 'frank.m@email.test', '+13025550106', 'Frank', 'Miller', 0, 1, 0,
+     NULL,
      1, NULL, 0, 0, '1970-01-25', 'active'),
-    (13, 'grace.w@email.test', '555-0107', 'Grace', 'Wilson', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (13, 'grace.w@email.test', '+13025550107', 'Grace', 'Wilson', 0, 1, 0,
+     NULL,
      1, NULL, 3, 1, '1988-04-18', 'active'),
-    (14, 'henry.m@email.test', '555-0108', 'Henry', 'Moore', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (14, 'henry.m@email.test', '+13025550108', 'Henry', 'Moore', 0, 1, 0,
+     NULL,
      1, NULL, 2, 1, '1975-12-03', 'active'),
     -- Westside Center members (IDs 15-20)
-    (15, 'ivy.t@email.test', '555-0201', 'Ivy', 'Taylor', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (15, 'ivy.t@email.test', '+13025550201', 'Ivy', 'Taylor', 0, 1, 0,
+     NULL,
      2, NULL, 2, 1, '1992-06-20', 'active'),
-    (16, 'jack.a@email.test', '555-0202', 'Jack', 'Anderson', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (16, 'jack.a@email.test', '+13025550202', 'Jack', 'Anderson', 0, 1, 0,
+     NULL,
      2, NULL, 1, 1, '1980-08-14', 'active'),
-    (17, 'kate.t@email.test', '555-0203', 'Kate', 'Thomas', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (17, 'kate.t@email.test', '+13025550203', 'Kate', 'Thomas', 0, 1, 0,
+     NULL,
      2, NULL, 3, 1, '1987-02-28', 'active'),
-    (18, 'leo.j@email.test', '555-0204', 'Leo', 'Jackson', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (18, 'leo.j@email.test', '+13025550204', 'Leo', 'Jackson', 0, 1, 0,
+     NULL,
      2, NULL, 2, 0, '1993-10-05', 'active'),
-    (19, 'mia.w@email.test', '555-0205', 'Mia', 'White', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (19, 'mia.w@email.test', '+13025550205', 'Mia', 'White', 0, 1, 0,
+     NULL,
      2, NULL, 2, 1, '1991-07-17', 'active'),
-    (20, 'noah.h@email.test', '555-0206', 'Noah', 'Harris', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (20, 'noah.h@email.test', '+13025550206', 'Noah', 'Harris', 0, 1, 0,
+     NULL,
      2, NULL, 1, 1, '1983-11-22', 'active'),
     -- Metro Courts members (IDs 21-26)
-    (21, 'olivia.m@email.test', '555-0301', 'Olivia', 'Martin', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (21, 'olivia.m@email.test', '+13025550301', 'Olivia', 'Martin', 0, 1, 0,
+     NULL,
      3, NULL, 2, 1, '1989-04-10', 'active'),
-    (22, 'paul.g@email.test', '555-0302', 'Paul', 'Garcia', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (22, 'paul.g@email.test', '+13025550302', 'Paul', 'Garcia', 0, 1, 0,
+     NULL,
      3, NULL, 3, 1, '1976-09-08', 'active'),
-    (23, 'quinn.m@email.test', '555-0303', 'Quinn', 'Martinez', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (23, 'quinn.m@email.test', '+13025550303', 'Quinn', 'Martinez', 0, 1, 0,
+     NULL,
      3, NULL, 1, 0, '1994-01-30', 'active'),
-    (24, 'ruby.r@email.test', '555-0304', 'Ruby', 'Robinson', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (24, 'ruby.r@email.test', '+13025550304', 'Ruby', 'Robinson', 0, 1, 0,
+     NULL,
      3, NULL, 2, 1, '1986-06-15', 'active'),
-    (25, 'sam.c@email.test', '555-0305', 'Sam', 'Clark', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (25, 'sam.c@email.test', '+13025550305', 'Sam', 'Clark', 0, 1, 0,
+     NULL,
      3, NULL, 2, 1, '1979-03-25', 'active'),
-    (26, 'tina.l@email.test', '555-0306', 'Tina', 'Lewis', 0, 1, 1,
-     '$2a$10$n3lrgD6MOhe4pxAPerIoJO.GZsdS52SSF0oVT.zoWFSTWqJ/qdw/G',
+    (26, 'tina.l@email.test', '+13025550306', 'Tina', 'Lewis', 0, 1, 0,
+     NULL,
      3, NULL, 0, 0, '1997-12-01', 'active');
 
 --------------------------------------------------------------------------------
