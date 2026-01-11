@@ -151,6 +151,19 @@ tasks:
     cmds:
       - air -c .air.toml
 
+  staging:
+    desc: Run server in staging mode (real Cognito, no dev bypasses)
+    env:
+      STATIC_DIR: web/static
+      APP_SECRET_KEY: dev-secret-key-not-for-production
+      APP_ENVIRONMENT: staging
+    deps:
+      - generate
+      - css
+      - db:migrate
+    cmds:
+      - go run ./cmd/server
+
   clean:
     desc: Remove build artifacts
     cmds:

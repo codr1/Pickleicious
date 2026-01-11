@@ -98,6 +98,11 @@ func Load(configPath string) (*Config, error) {
 	cfg.AWS.CognitoPoolID = os.Getenv("COGNITO_POOL_ID")
 	cfg.AWS.CognitoClientID = os.Getenv("COGNITO_CLIENT_ID")
 
+	// Allow environment override (e.g., APP_ENVIRONMENT=staging for real Cognito)
+	if env := os.Getenv("APP_ENVIRONMENT"); env != "" {
+		cfg.App.Environment = env
+	}
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)

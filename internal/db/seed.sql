@@ -2,6 +2,8 @@
 -- ============================================================================
 --
 -- USAGE:
+--   task dev                      # Run server in dev mode (OTP bypass: 123456)
+--   task staging                  # Run server in staging mode (real Cognito SMS)
 --   task db:seed                  # Reset DB and apply seed data
 --   task db:snapshot -- name      # Save current DB state
 --   task db:restore -- name       # Restore from snapshot
