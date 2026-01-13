@@ -36,6 +36,18 @@ templ MemberPortal(profile PortalProfile, reservations ReservationListData) {
 		</div>
 
 		@MemberReservations(reservations)
+		<div
+			id="member-open-play-sessions"
+			class="bg-background rounded-lg shadow-sm border border-border p-6"
+			hx-get="/member/openplay"
+			hx-trigger="load"
+			hx-swap="outerHTML">
+			<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+				<h2 class="text-xl font-bold text-foreground">Open Play Sessions</h2>
+				<p class="text-sm text-muted-foreground">Sign up for upcoming open play sessions.</p>
+			</div>
+			<p class="mt-4 text-muted-foreground">Loading open play sessions...</p>
+		</div>
 	</div>
 }
 
