@@ -5,6 +5,33 @@ WHERE status = 'scheduled'
   AND start_time > @comparison_time
 ORDER BY facility_id;
 
+-- name: ListMemberUpcomingOpenPlaySessions :many
+SELECT ops.id,
+    ops.start_time,
+    ops.end_time,
+    ops.status,
+    opr.name AS rule_name,
+    (
+        SELECT COUNT(*)
+        FROM reservation_participants rp
+        JOIN reservations r ON r.id = rp.reservation_id
+        JOIN reservation_types rt ON rt.id = r.reservation_type_id
+        WHERE r.facility_id = ops.facility_id
+          AND r.open_play_rule_id = ops.open_play_rule_id
+          AND r.start_time = ops.start_time
+          AND r.end_time = ops.end_time
+          AND rt.name = 'OPEN_PLAY'
+    ) AS participant_count,
+    opr.min_participants
+FROM open_play_sessions ops
+JOIN open_play_rules opr
+  ON ops.open_play_rule_id = opr.id
+-- Empty facility_ids intentionally yields zero rows (caller should prefilter).
+WHERE ops.facility_id IN (sqlc.slice('facility_ids'))
+  AND ops.status = 'scheduled'
+  AND ops.start_time > @comparison_time
+ORDER BY ops.start_time;
+
 -- name: ListOpenPlaySessionsApproachingCutoff :many
 SELECT open_play_sessions.id,
     open_play_sessions.facility_id,
@@ -166,6 +193,23 @@ WHERE r.facility_id = @facility_id
   AND r.end_time = @end_time
   AND rt.name = 'OPEN_PLAY'
 RETURNING id, reservation_id, user_id, created_at, updated_at;
+
+-- name: IsMemberOpenPlayParticipant :one
+SELECT EXISTS (
+    SELECT 1
+    FROM open_play_sessions ops
+    JOIN reservations r
+      ON r.facility_id = ops.facility_id
+     AND r.open_play_rule_id = ops.open_play_rule_id
+     AND r.start_time = ops.start_time
+     AND r.end_time = ops.end_time
+    JOIN reservation_types rt ON rt.id = r.reservation_type_id
+    JOIN reservation_participants rp ON rp.reservation_id = r.id
+    WHERE ops.id = @session_id
+      AND ops.facility_id = @facility_id
+      AND rt.name = 'OPEN_PLAY'
+      AND rp.user_id = @user_id
+) AS is_participant;
 
 -- name: RemoveOpenPlayParticipant :execrows
 DELETE FROM reservation_participants
