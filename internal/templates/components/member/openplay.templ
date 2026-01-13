@@ -1,0 +1,98 @@
+package member
+
+import "fmt"
+
+templ MemberOpenPlaySessions(data OpenPlayListData) {
+	<div
+		id="member-open-play-sessions"
+		class="bg-background rounded-lg shadow-sm border border-border p-6"
+		hx-get="/member/openplay"
+		hx-trigger="refreshMemberOpenPlay from:body"
+		hx-swap="outerHTML">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+			<h2 class="text-xl font-bold text-foreground">Open play sessions</h2>
+			<p class="text-sm text-muted-foreground">Sign up for upcoming open play sessions.</p>
+		</div>
+		if len(data.Upcoming) == 0 {
+			<p class="mt-4 text-muted-foreground">No open play sessions available yet.</p>
+		} else {
+			<div class="mt-6 space-y-6">
+				<div>
+					<h3 class="text-lg font-semibold text-foreground">Upcoming</h3>
+					if len(data.Upcoming) == 0 {
+						<p class="mt-2 text-sm text-muted-foreground">No upcoming sessions.</p>
+					} else {
+						<div class="mt-3 space-y-3">
+							for _, session := range data.Upcoming {
+								<div class="rounded-lg border border-border bg-background p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+									<div class="space-y-1">
+										<p class="text-foreground font-medium">{session.RuleName}</p>
+										<p class="text-sm text-muted-foreground">
+											{session.StartTime.Format("Jan 2, 2006 3:04 PM")} - {session.EndTime.Format("3:04 PM")}
+										</p>
+										<p class="text-sm text-muted-foreground">
+											Signed up: {fmt.Sprintf("%d", session.ParticipantCount)} (min {fmt.Sprintf("%d", session.MinParticipants)})
+										</p>
+										if session.Status != "" {
+											<span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+												{session.Status}
+											</span>
+										}
+									</div>
+									<div class="flex items-center gap-2">
+										if session.IsSignedUp {
+											<button
+												type="button"
+												class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100"
+												hx-delete={fmt.Sprintf("/member/openplay/%d", session.ID)}
+												hx-confirm="Cancel this open play session?"
+												hx-on::response-error="handleMemberOpenPlayError(event)"
+												hx-swap="none">
+												Cancel
+											</button>
+										} else {
+											<button
+												type="button"
+												class="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+												hx-post={fmt.Sprintf("/member/openplay/%d", session.ID)}
+												hx-on::response-error="handleMemberOpenPlayError(event)"
+												hx-swap="none">
+												Sign up
+											</button>
+										}
+									</div>
+								</div>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		}
+		<script>
+			(function () {
+				if (window.handleMemberOpenPlayError) {
+					return;
+				}
+
+				window.handleMemberOpenPlayError = function (event) {
+					if (!event || !event.detail || !event.detail.xhr) {
+						return;
+					}
+					if (event.detail.xhr.status !== 409) {
+						return;
+					}
+					const modal = document.getElementById("modal");
+					if (!modal) {
+						return;
+					}
+					const responseText = event.detail.xhr.responseText || "";
+					if (window.htmx && window.htmx.swap) {
+						window.htmx.swap(modal, responseText, { swapStyle: "innerHTML" });
+						return;
+					}
+					modal.innerHTML = responseText;
+				};
+			})();
+		</script>
+	</div>
+}
