@@ -3,8 +3,9 @@ package member
 import "fmt"
 
 templ LessonBookingForm(data LessonBookingFormData) {
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-		<div class="bg-background rounded-lg shadow-lg w-full max-w-2xl p-6">
+	<div class="fixed inset-0 z-50 flex items-center justify-center">
+		<div class="absolute inset-0 bg-black bg-opacity-50" onclick="document.getElementById('modal').innerHTML=''"></div>
+		<div class="relative bg-background rounded-lg shadow-lg w-full max-w-2xl p-6">
 			<div class="flex items-center justify-between mb-4">
 				<h2 class="text-lg font-semibold text-foreground">Book a lesson</h2>
 				<button
