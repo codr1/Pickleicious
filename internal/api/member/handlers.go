@@ -951,6 +951,34 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already signed up"}
 		}
 
+		reservationCount, err := qtx.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
+			FacilityID:     *user.HomeFacilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
+		}
+		if reservationCount == 0 {
+			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
+		}
+		if reservationCount > 1 {
+			return apiutil.HandlerError{
+				Status:  http.StatusInternalServerError,
+				Message: "Open play reservation is misconfigured",
+				Err: fmt.Errorf(
+					"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
+					reservationCount,
+					session.ID,
+					session.OpenPlayRuleID,
+					*user.HomeFacilityID,
+					session.StartTime.Format(time.RFC3339),
+					session.EndTime.Format(time.RFC3339),
+				),
+			}
+		}
+
 		participant, err = qtx.AddOpenPlayParticipant(ctx, dbgen.AddOpenPlayParticipantParams{
 			UserID:         user.ID,
 			FacilityID:     *user.HomeFacilityID,
@@ -997,6 +1025,11 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 // HandleMemberOpenPlayCancel handles DELETE /member/openplay/{id}.
 func HandleMemberOpenPlayCancel(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
 	q := loadQueries()
 	database := loadDB()
@@ -1072,6 +1105,34 @@ func HandleMemberOpenPlayCancel(w http.ResponseWriter, r *http.Request) {
 			cutoff := session.StartTime.Add(-time.Duration(rule.CancellationCutoffMinutes) * time.Minute)
 			if !now.Before(cutoff) {
 				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Cancellation cutoff has passed"}
+			}
+		}
+
+		reservationCount, err := qtx.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
+			FacilityID:     *user.HomeFacilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
+		}
+		if reservationCount == 0 {
+			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
+		}
+		if reservationCount > 1 {
+			return apiutil.HandlerError{
+				Status:  http.StatusInternalServerError,
+				Message: "Open play reservation is misconfigured",
+				Err: fmt.Errorf(
+					"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
+					reservationCount,
+					session.ID,
+					session.OpenPlayRuleID,
+					*user.HomeFacilityID,
+					session.StartTime.Format(time.RFC3339),
+					session.EndTime.Format(time.RFC3339),
+				),
 			}
 		}
 

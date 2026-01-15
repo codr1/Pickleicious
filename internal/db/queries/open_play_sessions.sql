@@ -192,6 +192,7 @@ WHERE r.facility_id = @facility_id
   AND r.start_time = @start_time
   AND r.end_time = @end_time
   AND rt.name = 'OPEN_PLAY'
+LIMIT 1
 RETURNING id, reservation_id, user_id, created_at, updated_at;
 
 -- name: IsMemberOpenPlayParticipant :one
@@ -210,6 +211,16 @@ SELECT EXISTS (
       AND rt.name = 'OPEN_PLAY'
       AND rp.user_id = @user_id
 ) AS is_participant;
+
+-- name: CountOpenPlayReservationsForSession :one
+SELECT COUNT(*)
+FROM reservations r
+JOIN reservation_types rt ON rt.id = r.reservation_type_id
+WHERE r.facility_id = @facility_id
+  AND r.open_play_rule_id = @open_play_rule_id
+  AND r.start_time = @start_time
+  AND r.end_time = @end_time
+  AND rt.name = 'OPEN_PLAY';
 
 -- name: RemoveOpenPlayParticipant :execrows
 DELETE FROM reservation_participants
