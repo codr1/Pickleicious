@@ -61,6 +61,38 @@ func loadDB() *appdb.DB {
 	return store
 }
 
+func ensureOpenPlayReservation(ctx context.Context, qtx *dbgen.Queries, session dbgen.GetOpenPlaySessionRow, facilityID int64) error {
+	reservationCount, err := qtx.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
+		FacilityID:     facilityID,
+		OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+		StartTime:      session.StartTime,
+		EndTime:        session.EndTime,
+	})
+	if err != nil {
+		return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
+	}
+	if reservationCount == 0 {
+		return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
+	}
+	if reservationCount > 1 {
+		return apiutil.HandlerError{
+			Status:  http.StatusInternalServerError,
+			Message: "Open play reservation is misconfigured",
+			Err: fmt.Errorf(
+				"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
+				reservationCount,
+				session.ID,
+				session.OpenPlayRuleID,
+				facilityID,
+				session.StartTime.Format(time.RFC3339),
+				session.EndTime.Format(time.RFC3339),
+			),
+		}
+	}
+
+	return nil
+}
+
 // RequireMemberSession ensures member-authenticated sessions reach member routes.
 func RequireMemberSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -951,32 +983,8 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already signed up"}
 		}
 
-		reservationCount, err := qtx.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
-			FacilityID:     *user.HomeFacilityID,
-			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
-			StartTime:      session.StartTime,
-			EndTime:        session.EndTime,
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
-		}
-		if reservationCount == 0 {
-			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
-		}
-		if reservationCount > 1 {
-			return apiutil.HandlerError{
-				Status:  http.StatusInternalServerError,
-				Message: "Open play reservation is misconfigured",
-				Err: fmt.Errorf(
-					"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
-					reservationCount,
-					session.ID,
-					session.OpenPlayRuleID,
-					*user.HomeFacilityID,
-					session.StartTime.Format(time.RFC3339),
-					session.EndTime.Format(time.RFC3339),
-				),
-			}
+		if err := ensureOpenPlayReservation(ctx, qtx, session, *user.HomeFacilityID); err != nil {
+			return err
 		}
 
 		participant, err = qtx.AddOpenPlayParticipant(ctx, dbgen.AddOpenPlayParticipantParams{
@@ -1119,32 +1127,8 @@ func HandleMemberOpenPlayCancel(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		reservationCount, err := qtx.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
-			FacilityID:     *user.HomeFacilityID,
-			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
-			StartTime:      session.StartTime,
-			EndTime:        session.EndTime,
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
-		}
-		if reservationCount == 0 {
-			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
-		}
-		if reservationCount > 1 {
-			return apiutil.HandlerError{
-				Status:  http.StatusInternalServerError,
-				Message: "Open play reservation is misconfigured",
-				Err: fmt.Errorf(
-					"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
-					reservationCount,
-					session.ID,
-					session.OpenPlayRuleID,
-					*user.HomeFacilityID,
-					session.StartTime.Format(time.RFC3339),
-					session.EndTime.Format(time.RFC3339),
-				),
-			}
+		if err := ensureOpenPlayReservation(ctx, qtx, session, *user.HomeFacilityID); err != nil {
+			return err
 		}
 
 		removed, err := qtx.RemoveOpenPlayParticipant(ctx, dbgen.RemoveOpenPlayParticipantParams{
