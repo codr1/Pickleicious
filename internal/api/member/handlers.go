@@ -993,6 +993,17 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add open play participant", Err: err}
 		}
 
+		updatedSession, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+			ID:         sessionID,
+			FacilityID: *user.HomeFacilityID,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play capacity", Err: err}
+		}
+		if updatedSession.ParticipantCount > maxParticipants {
+			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Session is full"}
+		}
+
 		return nil
 	})
 	if err != nil {
