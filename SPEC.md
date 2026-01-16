@@ -1169,6 +1169,9 @@ Authorization failures are logged with facility_id and user_id.
 | GET | `/member/lessons/pros` | List pros available for lessons |
 | GET | `/member/lessons/pros/{id}/slots` | Get available lesson slots for a pro |
 | POST | `/member/lessons` | Create lesson booking |
+| GET | `/member/openplay` | List upcoming open play sessions |
+| POST | `/member/openplay/{id}` | Sign up for open play session |
+| DELETE | `/member/openplay/{id}` | Cancel open play signup |
 | GET | `/api/v1/member/reservations/widget` | Reservations widget data |
 
 ### Courts and Calendar
@@ -1652,6 +1655,7 @@ Members with verified accounts (membership_level >= 1) can access a self-service
 | Reservations List | View upcoming and past reservations at home facility |
 | Court Booking | Book available courts at home facility |
 | Lesson Booking | Book lessons with teaching pros at home facility |
+| Open Play Signup | Sign up for and cancel open play sessions at home facility |
 | Reservation Cancellation | Cancel own upcoming reservations (courts and lessons) |
 
 ### Member Booking
@@ -1724,14 +1728,59 @@ When a lesson is booked:
 - Member is added to `reservation_participants`
 - Displays on staff court calendar with PRO_SESSION styling
 
+### Open Play Signup
+
+Members can view and sign up for upcoming open play sessions at their home facility:
+
+- **Session List**: Shows scheduled open play sessions with rule name, date/time, current participant count vs minimum required
+- **Signup**: Single-click signup adds member as participant to the session's OPEN_PLAY reservation
+- **Cancel Signup**: Members can cancel their signup before the session starts, subject to cancellation cutoff rules
+- **Refresh**: Session list auto-refreshes after signup/cancel via `refreshMemberOpenPlay` trigger
+
+#### Open Play Display
+
+Each session card shows:
+- Rule name (e.g., "Morning Open Play")
+- Date and time range
+- Current signup count and minimum required
+- Session status badge (scheduled/cancelled)
+- Sign Up or Cancel button based on participation status
+
+#### Open Play Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Facility | Sessions shown for member's home facility only |
+| Session Status | Must be 'scheduled' (not cancelled) |
+| Timing | Session start time must be in the future |
+| Signup Limit | Counts toward max_member_reservations (same as GAME and LESSON) |
+| Capacity | Cannot sign up if session is full (participants >= max_participants_per_court * courts) |
+| No Duplicates | Cannot sign up twice for the same session |
+| Cancellation Cutoff | Must cancel before rule's cancellation_cutoff_minutes before session start |
+
+#### Signup Process
+
+1. Member clicks "Sign up" on a session card
+2. System validates constraints in transaction
+3. Creates reservation_participant record linking member to OPEN_PLAY reservation
+4. Returns HTTP 201, triggers `refreshMemberReservations` and `refreshMemberOpenPlay`
+5. Session appears in "Your reservations" as type 'Open Play'
+
+#### Cancel Signup Process
+
+1. Member clicks "Cancel" on a session they've signed up for
+2. System validates cancellation cutoff hasn't passed
+3. Removes reservation_participant record in transaction
+4. Returns HTTP 204, triggers reservation and open play list refresh
+
 ### Reservation Limits
 
 The system enforces a per-member limit on active future reservations:
 
-- Counts GAME and PRO_SESSION type reservations where member is `primary_user_id`
+- Counts GAME, PRO_SESSION, and OPEN_PLAY type reservations where member is participant
 - Excludes LEAGUE and TOURNAMENT types from the count
 - Staff-created reservations (where creator differs from primary_user) do not count against member limit
-- When limit is reached, returns HTTP 409 with JSON: `{"error": "You have reached the maximum of X active reservations", "current_count": N, "limit": X}`
+- When limit is reached, returns HTTP 409 with message: "You have reached the maximum of X active reservations"
 
 ### Reservation Cancellation
 
@@ -1786,6 +1835,7 @@ This prevents members from seeing one penalty, waiting, and receiving a differen
 | Trigger | Action |
 |---------|--------|
 | `refreshMemberReservations` | Reloads reservations list after booking/cancellation |
+| `refreshMemberOpenPlay` | Reloads open play sessions list after signup/cancel |
 
 ---
 

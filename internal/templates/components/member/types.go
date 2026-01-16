@@ -91,6 +91,21 @@ type ReservationWidgetData struct {
 	Count    int
 }
 
+type OpenPlaySessionSummary struct {
+	ID               int64
+	RuleName         string
+	StartTime        time.Time
+	EndTime          time.Time
+	Status           string
+	ParticipantCount int64
+	MinParticipants  int64
+	IsSignedUp       bool
+}
+
+type OpenPlayListData struct {
+	Upcoming []OpenPlaySessionSummary
+}
+
 type CancellationPenaltyData struct {
 	ReservationID    int64     `json:"reservation_id"`
 	FeePercentage    int64     `json:"fee_percentage"`
@@ -210,6 +225,26 @@ func NewReservationWidgetData(upcoming []ReservationSummary) ReservationWidgetDa
 		Upcoming: upcoming,
 		Count:    len(upcoming),
 	}
+}
+
+func NewOpenPlaySessionSummary(row dbgen.ListMemberUpcomingOpenPlaySessionsRow) OpenPlaySessionSummary {
+	return OpenPlaySessionSummary{
+		ID:               row.ID,
+		RuleName:         row.RuleName,
+		StartTime:        row.StartTime,
+		EndTime:          row.EndTime,
+		Status:           row.Status,
+		ParticipantCount: row.ParticipantCount,
+		MinParticipants:  row.MinParticipants,
+	}
+}
+
+func NewOpenPlaySessionSummaries(rows []dbgen.ListMemberUpcomingOpenPlaySessionsRow) []OpenPlaySessionSummary {
+	summaries := make([]OpenPlaySessionSummary, len(rows))
+	for i, row := range rows {
+		summaries[i] = NewOpenPlaySessionSummary(row)
+	}
+	return summaries
 }
 
 func (r ReservationWidgetData) BadgeLabel() string {

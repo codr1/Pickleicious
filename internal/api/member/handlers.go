@@ -61,6 +61,38 @@ func loadDB() *appdb.DB {
 	return store
 }
 
+func ensureOpenPlayReservation(ctx context.Context, qtx *dbgen.Queries, session dbgen.GetOpenPlaySessionRow, facilityID int64) error {
+	reservationCount, err := qtx.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
+		FacilityID:     facilityID,
+		OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+		StartTime:      session.StartTime,
+		EndTime:        session.EndTime,
+	})
+	if err != nil {
+		return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
+	}
+	if reservationCount == 0 {
+		return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
+	}
+	if reservationCount > 1 {
+		return apiutil.HandlerError{
+			Status:  http.StatusInternalServerError,
+			Message: "Open play reservation is misconfigured",
+			Err: fmt.Errorf(
+				"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
+				reservationCount,
+				session.ID,
+				session.OpenPlayRuleID,
+				facilityID,
+				session.StartTime.Format(time.RFC3339),
+				session.EndTime.Format(time.RFC3339),
+			),
+		}
+	}
+
+	return nil
+}
+
 // RequireMemberSession ensures member-authenticated sessions reach member routes.
 func RequireMemberSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -787,6 +819,352 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleMemberOpenPlayList renders upcoming open play sessions for members.
+func HandleMemberOpenPlayList(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	rows, err := q.ListMemberUpcomingOpenPlaySessions(ctx, dbgen.ListMemberUpcomingOpenPlaySessionsParams{
+		FacilityIds:    []int64{*user.HomeFacilityID},
+		ComparisonTime: time.Now(),
+	})
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load open play sessions")
+		http.Error(w, "Failed to load open play sessions", http.StatusInternalServerError)
+		return
+	}
+
+	summaries := membertempl.NewOpenPlaySessionSummaries(rows)
+	for i := range summaries {
+		isParticipant, err := q.IsMemberOpenPlayParticipant(ctx, dbgen.IsMemberOpenPlayParticipantParams{
+			SessionID:  summaries[i].ID,
+			FacilityID: *user.HomeFacilityID,
+			UserID:     user.ID,
+		})
+		if err != nil {
+			logger.Error().Err(err).Int64("session_id", summaries[i].ID).Msg("Failed to check open play participation")
+			continue
+		}
+		summaries[i].IsSignedUp = isParticipant > 0
+	}
+
+	component := membertempl.MemberOpenPlaySessions(membertempl.OpenPlayListData{Upcoming: summaries})
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render open play list", "Failed to render open play sessions") {
+		return
+	}
+}
+
+// HandleMemberOpenPlaySignup handles POST /member/openplay/{id}.
+func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	sessionID, err := memberOpenPlaySessionIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	maxMemberReservations := int64(0)
+	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+	} else {
+		maxMemberReservations = facility.MaxMemberReservations
+	}
+
+	var participant dbgen.ReservationParticipant
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		if maxMemberReservations > 0 {
+			activeCount, err := qtx.CountActiveMemberReservations(ctx, dbgen.CountActiveMemberReservationsParams{
+				FacilityID:    *user.HomeFacilityID,
+				PrimaryUserID: sql.NullInt64{Int64: user.ID, Valid: true},
+			})
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check reservation limits", Err: err}
+			}
+			if activeCount >= maxMemberReservations {
+				return reservationLimitError{currentCount: activeCount, limit: maxMemberReservations}
+			}
+		}
+
+		session, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+			ID:         sessionID,
+			FacilityID: *user.HomeFacilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play session not found", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play session", Err: err}
+		}
+		if session.Status != "scheduled" {
+			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session is not scheduled"}
+		}
+		if !session.StartTime.After(time.Now()) {
+			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session must be in the future"}
+		}
+
+		rule, err := qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: *user.HomeFacilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play rule", Err: err}
+		}
+		maxParticipants := rule.MaxParticipantsPerCourt * session.CurrentCourtCount
+		if session.ParticipantCount >= maxParticipants {
+			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Session is full"}
+		}
+
+		isParticipant, err := qtx.IsMemberOpenPlayParticipant(ctx, dbgen.IsMemberOpenPlayParticipantParams{
+			SessionID:  sessionID,
+			FacilityID: *user.HomeFacilityID,
+			UserID:     user.ID,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check open play participation", Err: err}
+		}
+		if isParticipant > 0 {
+			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already signed up"}
+		}
+
+		if err := ensureOpenPlayReservation(ctx, qtx, session, *user.HomeFacilityID); err != nil {
+			return err
+		}
+
+		participant, err = qtx.AddOpenPlayParticipant(ctx, dbgen.AddOpenPlayParticipantParams{
+			UserID:         user.ID,
+			FacilityID:     *user.HomeFacilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add open play participant", Err: err}
+		}
+
+		updatedSession, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+			ID:         sessionID,
+			FacilityID: *user.HomeFacilityID,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play capacity", Err: err}
+		}
+		if updatedSession.ParticipantCount > maxParticipants {
+			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Session is full"}
+		}
+
+		return nil
+	})
+	if err != nil {
+		var limitErr reservationLimitError
+		if errors.As(err, &limitErr) {
+			message := fmt.Sprintf("You have reached the maximum of %d active reservations", limitErr.limit)
+			http.Error(w, message, http.StatusConflict)
+			return
+		}
+		var herr apiutil.HandlerError
+		if errors.As(err, &herr) {
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("session_id", sessionID).Msg(herr.Message)
+			}
+			http.Error(w, herr.Message, herr.Status)
+			return
+		}
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to sign up for open play")
+		http.Error(w, "Failed to sign up for open play", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Trigger", "refreshMemberReservations,refreshMemberOpenPlay")
+	if err := apiutil.WriteJSON(w, http.StatusCreated, participant); err != nil {
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to write open play signup response")
+		return
+	}
+}
+
+// HandleMemberOpenPlayCancel handles DELETE /member/openplay/{id}.
+func HandleMemberOpenPlayCancel(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	database := loadDB()
+	if q == nil || database == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	sessionID, err := memberOpenPlaySessionIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		session, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+			ID:         sessionID,
+			FacilityID: *user.HomeFacilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play session not found", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play session", Err: err}
+		}
+		if session.Status != "scheduled" {
+			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session is not scheduled"}
+		}
+		now := time.Now()
+		if !session.StartTime.After(now) {
+			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session must be in the future"}
+		}
+
+		isParticipant, err := qtx.IsMemberOpenPlayParticipant(ctx, dbgen.IsMemberOpenPlayParticipantParams{
+			SessionID:  sessionID,
+			FacilityID: *user.HomeFacilityID,
+			UserID:     user.ID,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check open play participation", Err: err}
+		}
+		if isParticipant == 0 {
+			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play participant not found"}
+		}
+
+		rule, err := qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: *user.HomeFacilityID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play rule", Err: err}
+		}
+		if rule.CancellationCutoffMinutes > 0 {
+			cutoff := session.StartTime.Add(-time.Duration(rule.CancellationCutoffMinutes) * time.Minute)
+			if !now.Before(cutoff) {
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Cancellation cutoff has passed"}
+			}
+		}
+
+		if err := ensureOpenPlayReservation(ctx, qtx, session, *user.HomeFacilityID); err != nil {
+			return err
+		}
+
+		removed, err := qtx.RemoveOpenPlayParticipant(ctx, dbgen.RemoveOpenPlayParticipantParams{
+			UserID:         user.ID,
+			FacilityID:     *user.HomeFacilityID,
+			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+			StartTime:      session.StartTime,
+			EndTime:        session.EndTime,
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to cancel open play signup", Err: err}
+		}
+		if removed == 0 {
+			return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play participant not found"}
+		}
+
+		return nil
+	})
+	if err != nil {
+		var herr apiutil.HandlerError
+		if errors.As(err, &herr) {
+			if herr.Status == http.StatusInternalServerError {
+				logger.Error().Err(herr.Err).Int64("session_id", sessionID).Msg(herr.Message)
+			}
+			http.Error(w, herr.Message, herr.Status)
+			return
+		}
+		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to cancel open play signup")
+		http.Error(w, "Failed to cancel open play signup", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Trigger", "refreshMemberReservations,refreshMemberOpenPlay")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
 	resType, err := q.GetReservationTypeByName(ctx, name)
 	if err != nil {
@@ -1210,6 +1588,18 @@ func parseMemberCourtID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("court_ids must be a positive integer")
+	}
+	return id, nil
+}
+
+func memberOpenPlaySessionIDFromRequest(r *http.Request) (int64, error) {
+	pathID := strings.TrimSpace(r.PathValue("id"))
+	if pathID == "" {
+		return 0, fmt.Errorf("invalid session ID")
+	}
+	id, err := strconv.ParseInt(pathID, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid session ID")
 	}
 	return id, nil
 }

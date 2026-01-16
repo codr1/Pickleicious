@@ -1054,6 +1054,34 @@ func fetchOpenPlaySessionAndReservation(ctx context.Context, q *dbgen.Queries, s
 		return dbgen.GetOpenPlaySessionRow{}, 0, apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session is not scheduled"}
 	}
 
+	reservationCount, err := q.CountOpenPlayReservationsForSession(ctx, dbgen.CountOpenPlayReservationsForSessionParams{
+		FacilityID:     facilityID,
+		OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
+		StartTime:      session.StartTime,
+		EndTime:        session.EndTime,
+	})
+	if err != nil {
+		return session, 0, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to verify open play reservation", Err: err}
+	}
+	if reservationCount == 0 {
+		return session, 0, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play reservation not found"}
+	}
+	if reservationCount > 1 {
+		return session, 0, apiutil.HandlerError{
+			Status:  http.StatusInternalServerError,
+			Message: "Open play reservation is misconfigured",
+			Err: fmt.Errorf(
+				"expected 1 open play reservation, found %d for session %d (rule %d, facility %d, start %s, end %s)",
+				reservationCount,
+				session.ID,
+				session.OpenPlayRuleID,
+				facilityID,
+				session.StartTime.Format(time.RFC3339),
+				session.EndTime.Format(time.RFC3339),
+			),
+		}
+	}
+
 	reservationID, err := q.GetOpenPlayReservationID(ctx, dbgen.GetOpenPlayReservationIDParams{
 		FacilityID:     facilityID,
 		OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},

@@ -195,6 +195,13 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.Handle("/member/reservations/{id}", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodDelete: member.HandleMemberReservationCancel,
 	}))))
+	mux.Handle("/member/openplay", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: member.HandleMemberOpenPlayList,
+	}))))
+	mux.Handle("/member/openplay/{id}", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost:   member.HandleMemberOpenPlaySignup,
+		http.MethodDelete: member.HandleMemberOpenPlayCancel,
+	}))))
 	mux.Handle("/member/lessons/pros", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: member.HandleListPros,
 	}))))
