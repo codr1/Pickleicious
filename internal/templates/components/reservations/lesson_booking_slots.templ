@@ -1,0 +1,112 @@
+// internal/templates/components/reservations/lesson_booking_slots.templ
+package reservations
+
+import (
+	"fmt"
+)
+
+templ StaffLessonSlotPicker(data StaffLessonSlotsData) {
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+		<div class="bg-background rounded-lg shadow-lg w-full max-w-xl p-6">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-lg font-semibold text-foreground">Select Lesson Time</h2>
+				<button
+					type="button"
+					class="text-muted-foreground hover:text-foreground"
+					onclick="document.getElementById('modal').innerHTML=''">
+					<span class="sr-only">Close</span>&times;
+				</button>
+			</div>
+
+			<div id="staff-lesson-booking-indicator" class="htmx-indicator">
+				<div class="flex items-center justify-center">
+					<div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+					<span class="ml-2 text-sm text-muted-foreground">Saving...</span>
+				</div>
+			</div>
+
+			<div
+				id="staff-lesson-booking-errors"
+				class="hidden rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+			</div>
+
+			<form
+				id="staff-lesson-slots-form"
+				hx-post="/api/v1/staff/lessons/booking"
+				hx-indicator="#staff-lesson-booking-indicator"
+				hx-swap="none"
+				hx-on::before-request="document.getElementById('staff-lesson-booking-errors').classList.add('hidden');"
+				hx-on::response-error="document.getElementById('staff-lesson-booking-errors').textContent = event.detail.xhr.responseText; document.getElementById('staff-lesson-booking-errors').classList.remove('hidden');"
+				hx-on::after-request="if(event.detail.xhr.status === 201 || event.detail.xhr.status === 200){document.getElementById('modal').innerHTML='';}"
+				class="space-y-4">
+				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)}/>
+				<input type="hidden" name="pro_id" value={fmt.Sprintf("%d", data.ProID)}/>
+				<input type="hidden" name="date" value={data.DateValue}/>
+				if data.PrimaryUserID != nil {
+					<input type="hidden" name="primary_user_id" value={fmt.Sprintf("%d", *data.PrimaryUserID)}/>
+				}
+
+				<div class="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+					<div>Pro: {data.ProName}</div>
+					<div>Date: {data.DateValue}</div>
+					if data.PrimaryUserID != nil {
+						<div>Member ID: {fmt.Sprintf("%d", *data.PrimaryUserID)}</div>
+					}
+				</div>
+
+				<div>
+					<label for="lesson_time_slot" class="block text-sm font-medium text-foreground">Time slot</label>
+					<select
+						id="lesson_time_slot"
+						name="start_time"
+						required
+						disabled?={len(data.Slots) == 0}
+						hx-on:change="document.getElementById('staff-lesson-end-time').value=this.options[this.selectedIndex].dataset.endTime || ''"
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2">
+						if len(data.Slots) == 0 {
+							<option value="">No slots available</option>
+						} else {
+							for _, slot := range data.Slots {
+								<option
+									value={slot.StartTime}
+									data-end-time={slot.EndTime}>
+									{slot.Label}
+								</option>
+							}
+						}
+					</select>
+					<input
+						type="hidden"
+						id="staff-lesson-end-time"
+						name="end_time"
+						value={defaultStaffLessonEndTimeValue(data.Slots)}/>
+					<p class="mt-1 text-xs text-muted-foreground">Select a time for the lesson.</p>
+				</div>
+
+				<div class="flex justify-end space-x-3 pt-2">
+					<button
+						type="button"
+						class="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-md shadow-sm hover:bg-muted"
+						hx-get="/api/v1/staff/lessons/booking/new"
+						hx-include="#staff-lesson-slots-form"
+						hx-target="#modal"
+						hx-swap="innerHTML">
+						Back
+					</button>
+					<button
+						type="button"
+						class="px-4 py-2 text-sm font-medium text-foreground bg-background border border-border rounded-md shadow-sm hover:bg-muted"
+						onclick="document.getElementById('modal').innerHTML=''">
+						Close
+					</button>
+					<button
+						type="submit"
+						disabled?={len(data.Slots) == 0}
+						class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+						Book Lesson
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}

@@ -4,6 +4,7 @@ INSERT INTO reservations (
     reservation_type_id,
     recurrence_rule_id,
     primary_user_id,
+    created_by_user_id,
     pro_id,
     open_play_rule_id,
     start_time,
@@ -16,6 +17,7 @@ INSERT INTO reservations (
     @reservation_type_id,
     @recurrence_rule_id,
     @primary_user_id,
+    @created_by_user_id,
     @pro_id,
     @open_play_rule_id,
     @start_time,
@@ -25,12 +27,12 @@ INSERT INTO reservations (
     @people_per_team
 )
 RETURNING id, facility_id, reservation_type_id, recurrence_rule_id,
-    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
     is_open_event, teams_per_court, people_per_team, created_at, updated_at;
 
 -- name: GetReservation :one
 SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
-    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
     is_open_event, teams_per_court, people_per_team, created_at, updated_at
 FROM reservations
 WHERE id = @id
@@ -38,14 +40,14 @@ WHERE id = @id
 
 -- name: GetReservationByID :one
 SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
-    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
     is_open_event, teams_per_court, people_per_team, created_at, updated_at
 FROM reservations
 WHERE id = @id;
 
 -- name: ListReservationsByDateRange :many
 SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
-    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
     is_open_event, teams_per_court, people_per_team, created_at, updated_at
 FROM reservations
 WHERE facility_id = @facility_id
@@ -89,7 +91,7 @@ SET reservation_type_id = @reservation_type_id,
 WHERE id = @id
   AND facility_id = @facility_id
 RETURNING id, facility_id, reservation_type_id, recurrence_rule_id,
-    primary_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
     is_open_event, teams_per_court, people_per_team, created_at, updated_at;
 
 -- name: DeleteReservation :execrows
@@ -144,6 +146,7 @@ SELECT
     r.reservation_type_id,
     r.recurrence_rule_id,
     r.primary_user_id,
+    r.created_by_user_id,
     r.pro_id,
     r.open_play_rule_id,
     r.start_time,
@@ -183,6 +186,7 @@ GROUP BY r.id,
     r.reservation_type_id,
     r.recurrence_rule_id,
     r.primary_user_id,
+    r.created_by_user_id,
     r.pro_id,
     r.open_play_rule_id,
     r.start_time,

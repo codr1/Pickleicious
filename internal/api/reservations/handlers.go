@@ -78,6 +78,12 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), reservationQueryTimeout)
 	defer cancel()
 
@@ -126,6 +132,7 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 			ReservationTypeID: req.ReservationTypeID,
 			RecurrenceRuleID:  toNullInt64(req.RecurrenceRuleID),
 			PrimaryUserID:     toNullInt64(req.PrimaryUserID),
+			CreatedByUserID:   user.ID,
 			ProID:             toNullInt64(req.ProID),
 			OpenPlayRuleID:    toNullInt64(req.OpenPlayRuleID),
 			StartTime:         startTime,
@@ -284,6 +291,7 @@ func HandleEventBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,
@@ -373,6 +381,7 @@ func HandleReservationEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,

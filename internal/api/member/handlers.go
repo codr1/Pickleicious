@@ -561,6 +561,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 			ReservationTypeID: reservationTypeID,
 			RecurrenceRuleID:  sql.NullInt64{},
 			PrimaryUserID:     sql.NullInt64{Int64: user.ID, Valid: true},
+			CreatedByUserID:   user.ID,
 			ProID:             sql.NullInt64{},
 			OpenPlayRuleID:    sql.NullInt64{},
 			StartTime:         startTime,

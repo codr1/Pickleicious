@@ -18,6 +18,10 @@ LEFT JOIN user_billing ub ON ub.user_id = u.id
 WHERE u.is_member = 1
     AND u.status <> 'deleted'
     AND (
+        @facility_id IS NULL
+        OR u.home_facility_id = @facility_id
+    )
+    AND (
         @search_term IS NULL
         OR u.first_name LIKE '%' || @search_term || '%'
         OR u.last_name LIKE '%' || @search_term || '%'

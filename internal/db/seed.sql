@@ -252,74 +252,74 @@ INSERT INTO open_play_rules (id, facility_id, name, min_participants, max_partic
 
 -- Past reservations (last 2 weeks) - Downtown Club
 -- reservation_type_id: 1=OPEN_PLAY, 2=GAME, 3=PRO_SESSION, 4=EVENT, 5=MAINTENANCE, 6=LEAGUE
-INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, start_time, end_time) VALUES
-    (1, 1, 2, 7, datetime('now', '-14 days', 'start of day', '+9 hours'), datetime('now', '-14 days', 'start of day', '+10 hours')),
-    (2, 1, 2, 8, datetime('now', '-14 days', 'start of day', '+10 hours'), datetime('now', '-14 days', 'start of day', '+11 hours')),
-    (3, 1, 2, 9, datetime('now', '-13 days', 'start of day', '+14 hours'), datetime('now', '-13 days', 'start of day', '+15 hours')),
-    (4, 1, 2, 10, datetime('now', '-12 days', 'start of day', '+18 hours'), datetime('now', '-12 days', 'start of day', '+19 hours')),
-    (5, 1, 2, 11, datetime('now', '-11 days', 'start of day', '+9 hours'), datetime('now', '-11 days', 'start of day', '+10 hours')),
-    (6, 1, 2, 7, datetime('now', '-10 days', 'start of day', '+11 hours'), datetime('now', '-10 days', 'start of day', '+12 hours')),
-    (7, 1, 2, 12, datetime('now', '-9 days', 'start of day', '+16 hours'), datetime('now', '-9 days', 'start of day', '+17 hours')),
-    (8, 1, 2, 13, datetime('now', '-8 days', 'start of day', '+10 hours'), datetime('now', '-8 days', 'start of day', '+11 hours')),
-    (9, 1, 2, 14, datetime('now', '-7 days', 'start of day', '+15 hours'), datetime('now', '-7 days', 'start of day', '+16 hours')),
-    (10, 1, 2, 7, datetime('now', '-6 days', 'start of day', '+9 hours'), datetime('now', '-6 days', 'start of day', '+10 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, created_by_user_id, start_time, end_time) VALUES
+    (1, 1, 2, 7, 7, datetime('now', '-14 days', 'start of day', '+9 hours'), datetime('now', '-14 days', 'start of day', '+10 hours')),
+    (2, 1, 2, 8, 8, datetime('now', '-14 days', 'start of day', '+10 hours'), datetime('now', '-14 days', 'start of day', '+11 hours')),
+    (3, 1, 2, 9, 9, datetime('now', '-13 days', 'start of day', '+14 hours'), datetime('now', '-13 days', 'start of day', '+15 hours')),
+    (4, 1, 2, 10, 10, datetime('now', '-12 days', 'start of day', '+18 hours'), datetime('now', '-12 days', 'start of day', '+19 hours')),
+    (5, 1, 2, 11, 11, datetime('now', '-11 days', 'start of day', '+9 hours'), datetime('now', '-11 days', 'start of day', '+10 hours')),
+    (6, 1, 2, 7, 7, datetime('now', '-10 days', 'start of day', '+11 hours'), datetime('now', '-10 days', 'start of day', '+12 hours')),
+    (7, 1, 2, 12, 12, datetime('now', '-9 days', 'start of day', '+16 hours'), datetime('now', '-9 days', 'start of day', '+17 hours')),
+    (8, 1, 2, 13, 13, datetime('now', '-8 days', 'start of day', '+10 hours'), datetime('now', '-8 days', 'start of day', '+11 hours')),
+    (9, 1, 2, 14, 14, datetime('now', '-7 days', 'start of day', '+15 hours'), datetime('now', '-7 days', 'start of day', '+16 hours')),
+    (10, 1, 2, 7, 7, datetime('now', '-6 days', 'start of day', '+9 hours'), datetime('now', '-6 days', 'start of day', '+10 hours'));
 
 -- Pro sessions (past) - pro_id references staff.id (Pete Pro = staff ID 4)
-INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, pro_id, start_time, end_time) VALUES
-    (11, 1, 3, 8, 4, datetime('now', '-13 days', 'start of day', '+10 hours'), datetime('now', '-13 days', 'start of day', '+11 hours')),
-    (12, 1, 3, 9, 4, datetime('now', '-10 days', 'start of day', '+14 hours'), datetime('now', '-10 days', 'start of day', '+15 hours')),
-    (13, 1, 3, 13, 4, datetime('now', '-7 days', 'start of day', '+11 hours'), datetime('now', '-7 days', 'start of day', '+12 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, created_by_user_id, pro_id, start_time, end_time) VALUES
+    (11, 1, 3, 8, 8, 4, datetime('now', '-13 days', 'start of day', '+10 hours'), datetime('now', '-13 days', 'start of day', '+11 hours')),
+    (12, 1, 3, 9, 9, 4, datetime('now', '-10 days', 'start of day', '+14 hours'), datetime('now', '-10 days', 'start of day', '+15 hours')),
+    (13, 1, 3, 13, 13, 4, datetime('now', '-7 days', 'start of day', '+11 hours'), datetime('now', '-7 days', 'start of day', '+12 hours'));
 
 -- Current/upcoming reservations (today and next 2 weeks) - Downtown Club
-INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, start_time, end_time) VALUES
-    (20, 1, 2, 7, datetime('now', 'start of day', '+10 hours'), datetime('now', 'start of day', '+11 hours')),
-    (21, 1, 2, 8, datetime('now', 'start of day', '+14 hours'), datetime('now', 'start of day', '+15 hours')),
-    (22, 1, 2, 9, datetime('now', '+1 days', 'start of day', '+9 hours'), datetime('now', '+1 days', 'start of day', '+10 hours')),
-    (23, 1, 2, 10, datetime('now', '+1 days', 'start of day', '+18 hours'), datetime('now', '+1 days', 'start of day', '+19 hours')),
-    (24, 1, 2, 11, datetime('now', '+2 days', 'start of day', '+11 hours'), datetime('now', '+2 days', 'start of day', '+12 hours')),
-    (25, 1, 2, 12, datetime('now', '+3 days', 'start of day', '+16 hours'), datetime('now', '+3 days', 'start of day', '+17 hours')),
-    (26, 1, 2, 13, datetime('now', '+4 days', 'start of day', '+10 hours'), datetime('now', '+4 days', 'start of day', '+11 hours')),
-    (27, 1, 2, 14, datetime('now', '+5 days', 'start of day', '+15 hours'), datetime('now', '+5 days', 'start of day', '+16 hours')),
-    (28, 1, 2, 7, datetime('now', '+6 days', 'start of day', '+9 hours'), datetime('now', '+6 days', 'start of day', '+10 hours')),
-    (29, 1, 2, 8, datetime('now', '+7 days', 'start of day', '+14 hours'), datetime('now', '+7 days', 'start of day', '+15 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, created_by_user_id, start_time, end_time) VALUES
+    (20, 1, 2, 7, 7, datetime('now', 'start of day', '+10 hours'), datetime('now', 'start of day', '+11 hours')),
+    (21, 1, 2, 8, 8, datetime('now', 'start of day', '+14 hours'), datetime('now', 'start of day', '+15 hours')),
+    (22, 1, 2, 9, 9, datetime('now', '+1 days', 'start of day', '+9 hours'), datetime('now', '+1 days', 'start of day', '+10 hours')),
+    (23, 1, 2, 10, 10, datetime('now', '+1 days', 'start of day', '+18 hours'), datetime('now', '+1 days', 'start of day', '+19 hours')),
+    (24, 1, 2, 11, 11, datetime('now', '+2 days', 'start of day', '+11 hours'), datetime('now', '+2 days', 'start of day', '+12 hours')),
+    (25, 1, 2, 12, 12, datetime('now', '+3 days', 'start of day', '+16 hours'), datetime('now', '+3 days', 'start of day', '+17 hours')),
+    (26, 1, 2, 13, 13, datetime('now', '+4 days', 'start of day', '+10 hours'), datetime('now', '+4 days', 'start of day', '+11 hours')),
+    (27, 1, 2, 14, 14, datetime('now', '+5 days', 'start of day', '+15 hours'), datetime('now', '+5 days', 'start of day', '+16 hours')),
+    (28, 1, 2, 7, 7, datetime('now', '+6 days', 'start of day', '+9 hours'), datetime('now', '+6 days', 'start of day', '+10 hours')),
+    (29, 1, 2, 8, 8, datetime('now', '+7 days', 'start of day', '+14 hours'), datetime('now', '+7 days', 'start of day', '+15 hours'));
 
 -- Upcoming pro sessions
-INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, pro_id, start_time, end_time) VALUES
-    (30, 1, 3, 9, 4, datetime('now', '+2 days', 'start of day', '+10 hours'), datetime('now', '+2 days', 'start of day', '+11 hours')),
-    (31, 1, 3, 11, 4, datetime('now', '+4 days', 'start of day', '+14 hours'), datetime('now', '+4 days', 'start of day', '+15 hours')),
-    (32, 1, 3, 13, 4, datetime('now', '+6 days', 'start of day', '+11 hours'), datetime('now', '+6 days', 'start of day', '+12 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, created_by_user_id, pro_id, start_time, end_time) VALUES
+    (30, 1, 3, 9, 9, 4, datetime('now', '+2 days', 'start of day', '+10 hours'), datetime('now', '+2 days', 'start of day', '+11 hours')),
+    (31, 1, 3, 11, 11, 4, datetime('now', '+4 days', 'start of day', '+14 hours'), datetime('now', '+4 days', 'start of day', '+15 hours')),
+    (32, 1, 3, 13, 13, 4, datetime('now', '+6 days', 'start of day', '+11 hours'), datetime('now', '+6 days', 'start of day', '+12 hours'));
 
 -- Westside Center reservations (members 15-20)
-INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, start_time, end_time) VALUES
-    (40, 2, 2, 15, datetime('now', '-5 days', 'start of day', '+10 hours'), datetime('now', '-5 days', 'start of day', '+11 hours')),
-    (41, 2, 2, 16, datetime('now', '-3 days', 'start of day', '+14 hours'), datetime('now', '-3 days', 'start of day', '+15 hours')),
-    (42, 2, 2, 17, datetime('now', 'start of day', '+16 hours'), datetime('now', 'start of day', '+17 hours')),
-    (43, 2, 2, 18, datetime('now', '+1 days', 'start of day', '+10 hours'), datetime('now', '+1 days', 'start of day', '+11 hours')),
-    (44, 2, 2, 19, datetime('now', '+3 days', 'start of day', '+18 hours'), datetime('now', '+3 days', 'start of day', '+19 hours')),
-    (45, 2, 2, 20, datetime('now', '+5 days', 'start of day', '+11 hours'), datetime('now', '+5 days', 'start of day', '+12 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, created_by_user_id, start_time, end_time) VALUES
+    (40, 2, 2, 15, 15, datetime('now', '-5 days', 'start of day', '+10 hours'), datetime('now', '-5 days', 'start of day', '+11 hours')),
+    (41, 2, 2, 16, 16, datetime('now', '-3 days', 'start of day', '+14 hours'), datetime('now', '-3 days', 'start of day', '+15 hours')),
+    (42, 2, 2, 17, 17, datetime('now', 'start of day', '+16 hours'), datetime('now', 'start of day', '+17 hours')),
+    (43, 2, 2, 18, 18, datetime('now', '+1 days', 'start of day', '+10 hours'), datetime('now', '+1 days', 'start of day', '+11 hours')),
+    (44, 2, 2, 19, 19, datetime('now', '+3 days', 'start of day', '+18 hours'), datetime('now', '+3 days', 'start of day', '+19 hours')),
+    (45, 2, 2, 20, 20, datetime('now', '+5 days', 'start of day', '+11 hours'), datetime('now', '+5 days', 'start of day', '+12 hours'));
 
 -- Metro Courts reservations (members 21-26)
-INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, start_time, end_time) VALUES
-    (50, 3, 2, 21, datetime('now', '-4 days', 'start of day', '+9 hours'), datetime('now', '-4 days', 'start of day', '+10 hours')),
-    (51, 3, 2, 22, datetime('now', '-2 days', 'start of day', '+15 hours'), datetime('now', '-2 days', 'start of day', '+16 hours')),
-    (52, 3, 2, 23, datetime('now', 'start of day', '+11 hours'), datetime('now', 'start of day', '+12 hours')),
-    (53, 3, 2, 24, datetime('now', '+2 days', 'start of day', '+17 hours'), datetime('now', '+2 days', 'start of day', '+18 hours')),
-    (54, 3, 2, 25, datetime('now', '+4 days', 'start of day', '+10 hours'), datetime('now', '+4 days', 'start of day', '+11 hours')),
-    (55, 3, 2, 26, datetime('now', '+6 days', 'start of day', '+14 hours'), datetime('now', '+6 days', 'start of day', '+15 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, primary_user_id, created_by_user_id, start_time, end_time) VALUES
+    (50, 3, 2, 21, 21, datetime('now', '-4 days', 'start of day', '+9 hours'), datetime('now', '-4 days', 'start of day', '+10 hours')),
+    (51, 3, 2, 22, 22, datetime('now', '-2 days', 'start of day', '+15 hours'), datetime('now', '-2 days', 'start of day', '+16 hours')),
+    (52, 3, 2, 23, 23, datetime('now', 'start of day', '+11 hours'), datetime('now', 'start of day', '+12 hours')),
+    (53, 3, 2, 24, 24, datetime('now', '+2 days', 'start of day', '+17 hours'), datetime('now', '+2 days', 'start of day', '+18 hours')),
+    (54, 3, 2, 25, 25, datetime('now', '+4 days', 'start of day', '+10 hours'), datetime('now', '+4 days', 'start of day', '+11 hours')),
+    (55, 3, 2, 26, 26, datetime('now', '+6 days', 'start of day', '+14 hours'), datetime('now', '+6 days', 'start of day', '+15 hours'));
 
 -- League reservations
-INSERT INTO reservations (id, facility_id, reservation_type_id, start_time, end_time, is_open_event, teams_per_court, people_per_team) VALUES
-    (60, 1, 6, datetime('now', '+7 days', 'start of day', '+18 hours'), datetime('now', '+7 days', 'start of day', '+21 hours'), 0, 2, 4),
-    (61, 2, 6, datetime('now', '+8 days', 'start of day', '+18 hours'), datetime('now', '+8 days', 'start of day', '+21 hours'), 0, 2, 4);
+INSERT INTO reservations (id, facility_id, reservation_type_id, created_by_user_id, start_time, end_time, is_open_event, teams_per_court, people_per_team) VALUES
+    (60, 1, 6, 1, datetime('now', '+7 days', 'start of day', '+18 hours'), datetime('now', '+7 days', 'start of day', '+21 hours'), 0, 2, 4),
+    (61, 2, 6, 5, datetime('now', '+8 days', 'start of day', '+18 hours'), datetime('now', '+8 days', 'start of day', '+21 hours'), 0, 2, 4);
 
 -- Events
-INSERT INTO reservations (id, facility_id, reservation_type_id, start_time, end_time, is_open_event) VALUES
-    (70, 1, 4, datetime('now', '+10 days', 'start of day', '+9 hours'), datetime('now', '+10 days', 'start of day', '+17 hours'), 1),
-    (71, 3, 4, datetime('now', '+12 days', 'start of day', '+10 hours'), datetime('now', '+12 days', 'start of day', '+16 hours'), 1);
+INSERT INTO reservations (id, facility_id, reservation_type_id, created_by_user_id, start_time, end_time, is_open_event) VALUES
+    (70, 1, 4, 1, datetime('now', '+10 days', 'start of day', '+9 hours'), datetime('now', '+10 days', 'start of day', '+17 hours'), 1),
+    (71, 3, 4, 6, datetime('now', '+12 days', 'start of day', '+10 hours'), datetime('now', '+12 days', 'start of day', '+16 hours'), 1);
 
 -- Maintenance
-INSERT INTO reservations (id, facility_id, reservation_type_id, start_time, end_time) VALUES
-    (80, 1, 5, datetime('now', '+14 days', 'start of day', '+6 hours'), datetime('now', '+14 days', 'start of day', '+8 hours'));
+INSERT INTO reservations (id, facility_id, reservation_type_id, created_by_user_id, start_time, end_time) VALUES
+    (80, 1, 5, 1, datetime('now', '+14 days', 'start of day', '+6 hours'), datetime('now', '+14 days', 'start of day', '+8 hours'));
 
 --------------------------------------------------------------------------------
 -- RESERVATION COURTS (link reservations to courts)

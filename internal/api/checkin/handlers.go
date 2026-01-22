@@ -101,7 +101,7 @@ func HandleCheckinPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -154,7 +154,7 @@ func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -188,6 +188,7 @@ func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	rows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{Int64: facilityID, Valid: true},
 		Limit:      limit,
 		Offset:     offset,
 		SearchTerm: sql.NullString{String: searchTerm, Valid: true},
@@ -242,7 +243,7 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -440,7 +441,7 @@ func HandleCheckinActivityUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

@@ -4,6 +4,7 @@ package courts
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,7 +54,9 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 
 	var activeTheme *models.Theme
 	displayDate := calendarDateFromRequest(r)
-	calendarData := courts.CalendarData{DisplayDate: displayDate}
+	user := authz.UserFromContext(r.Context())
+	isStaff := authz.IsStaff(user)
+	calendarData := courts.CalendarData{DisplayDate: displayDate, IsStaff: isStaff}
 	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 			return
@@ -70,9 +73,10 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		calendarData, err = buildCalendarData(ctx, q, facilityID, displayDate)
+		calendarData.IsStaff = isStaff
 		if err != nil {
 			log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
-			calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID}
+			calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID, IsStaff: isStaff}
 		}
 	}
 
@@ -112,6 +116,8 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load calendar reservations", http.StatusInternalServerError)
 		return
 	}
+	user := authz.UserFromContext(r.Context())
+	calendarData.IsStaff = authz.IsStaff(user)
 
 	component := courts.Calendar(calendarData)
 	component.Render(r.Context(), w)
@@ -176,6 +182,7 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{Int64: facilityID, Valid: true},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,
@@ -279,6 +286,16 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 		return calendarData, err
 	}
 
+	staffRows, err := q.ListStaff(ctx)
+	if err != nil {
+		log.Ctx(ctx).Warn().Err(err).Msg("Failed to load staff list for calendar")
+		staffRows = nil
+	}
+	staffByUserID := make(map[int64]struct{}, len(staffRows))
+	for _, staff := range staffRows {
+		staffByUserID[staff.UserID] = struct{}{}
+	}
+
 	typeByID := make(map[int64]dbgen.ReservationType, len(reservationTypes))
 	for _, resType := range reservationTypes {
 		typeByID[resType.ID] = resType
@@ -301,14 +318,16 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 			typeColor = strings.TrimSpace(resType.Color.String)
 		}
 
+		_, createdByStaff := staffByUserID[reservation.CreatedByUserID]
 		for _, courtNumber := range courtsByReservation[reservation.ID] {
 			calendarData.Reservations = append(calendarData.Reservations, courts.CalendarReservation{
-				ID:          reservation.ID,
-				CourtNumber: courtNumber,
-				StartTime:   reservation.StartTime,
-				EndTime:     reservation.EndTime,
-				TypeName:    typeName,
-				TypeColor:   typeColor,
+				ID:             reservation.ID,
+				CourtNumber:    courtNumber,
+				StartTime:      reservation.StartTime,
+				EndTime:        reservation.EndTime,
+				TypeName:       typeName,
+				TypeColor:      typeColor,
+				CreatedByStaff: createdByStaff,
 			})
 		}
 	}

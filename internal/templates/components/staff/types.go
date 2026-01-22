@@ -10,6 +10,11 @@ type Staff struct {
 	dbgen.ListStaffRow
 }
 
+type ProScheduleViewData struct {
+	ProName  string
+	Sessions []dbgen.GetFutureProSessionsByStaffIDRow
+}
+
 // NewStaff creates a Staff from ListStaffRow.
 func NewStaff(row dbgen.ListStaffRow) Staff {
 	return Staff{ListStaffRow: row}

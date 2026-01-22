@@ -265,7 +265,7 @@ Organization (corporate entity)
 |-------|---------|
 | reservation_types | Booking type lookup (system types: GAME, OPEN_PLAY, PRO_SESSION, EVENT, MAINTENANCE, LEAGUE, LESSON, TOURNAMENT, CLINIC) |
 | recurrence_rules | Recurring patterns (WEEKLY, BIWEEKLY, MONTHLY) |
-| reservations | Booking records |
+| reservations | Booking records (includes created_by_user_id to track who created the reservation) |
 | reservation_courts | Multi-court junction |
 | reservation_participants | Multi-member junction |
 | reservation_cancellations | Cancellation log: reservation_id, cancelled_by_user_id, cancelled_at, refund_percentage_applied, fee_waived, hours_before_start |
@@ -514,6 +514,7 @@ Each reservation captures:
 - **Time window**: Start and end datetime
 - **Type**: What kind of reservation
 - **Primary user**: Who's responsible
+- **Created by user**: Who created the reservation (tracks staff-created bookings)
 - **Participants**: Who's playing (junction table)
 - **Recurrence**: One-time or repeating pattern
 - **Open play rule**: For open play sessions, which rules apply
@@ -535,6 +536,17 @@ Multi-court reservations are supported through a junction table. A tournament mi
 - Extended options for events
 - Same validation as quick booking
 
+**Staff Lesson Booking (`/api/v1/staff/lessons/booking/new`)**
+- Accessed via "Book Lesson" action on courts calendar (staff only)
+- Facility selector for org-level staff (home_facility_id=NULL)
+- Pro selection dropdown showing active pros at selected facility
+- Date picker with available lesson slots for selected pro
+- Member search scoped to selected facility only
+- Creates PRO_SESSION reservation with pro_id, member as primary_user
+- Enforces lesson_min_notice_hours facility setting
+- Counts toward member's max_member_reservations limit
+- Staff can view pro's upcoming lesson schedule before booking
+
 ### Calendar Display
 
 - Courts shown as columns, hours as rows
@@ -543,6 +555,7 @@ Multi-court reservations are supported through a junction table. A tournament mi
 - Clicking empty cell opens quick booking form
 - Clicking reservation block opens edit form
 - Date navigation with query parameter `?date=YYYY-MM-DD`
+- "Book Lesson" action button available for staff users
 
 ### Visual Indicators
 
@@ -556,6 +569,8 @@ Reservations use these colors by type:
 | Purple | Event/tournament |
 | Gray | Maintenance block |
 | Red | League play |
+
+Reservations created by staff display a small "Staff" badge on the calendar block, distinguishing staff-booked lessons from member self-bookings.
 
 ### Recurrence Patterns
 
@@ -1265,6 +1280,12 @@ Authorization failures are logged with facility_id and user_id.
 | GET | `/staff/unavailability` | Pro unavailability page (pros only) |
 | POST | `/staff/unavailability` | Create unavailability block |
 | DELETE | `/staff/unavailability/{id}` | Delete unavailability block |
+| GET | `/api/v1/staff/lessons/booking/new` | Staff lesson booking form |
+| GET | `/api/v1/staff/lessons/booking/slots` | Available lesson slots for pro/date |
+| GET | `/api/v1/staff/lessons/schedule` | Pro's upcoming lesson schedule |
+| POST | `/api/v1/staff/lessons/booking` | Create lesson (form submission) |
+| POST | `/api/v1/staff/lessons` | Create lesson (JSON API) |
+| GET | `/api/v1/staff/members/search` | Search members scoped to facility |
 
 ### Notifications
 
@@ -1983,6 +2004,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Authorization | Complete | Facility-scoped access, admin override |
 | Operating Hours | Complete | Admin UI, per-day CRUD, default hours, HTMX updates |
 | Staff Management | Complete | CRUD, facility-scoped authorization, deactivation with session handling |
+| Staff Lesson Booking | Complete | Book lessons for members from calendar, facility selector for org-level staff, staff badge on calendar |
 | Staff Notifications | Complete | Bell icon, dropdown panel, unread badge, mark-as-read, facility scoping |
 | Member Portal | Complete | Self-service portal, court booking, lesson booking, reservation cancellation |
 | Pro Unavailability | Complete | Pros can block time, affects lesson availability |

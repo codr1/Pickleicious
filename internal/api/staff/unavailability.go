@@ -207,7 +207,7 @@ func HandleDeleteProUnavailability(w http.ResponseWriter, r *http.Request) {
 func requireProStaff(w http.ResponseWriter, r *http.Request, ctx context.Context) (dbgen.GetStaffByUserIDRow, bool) {
 	logger := log.Ctx(r.Context())
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return dbgen.GetStaffByUserIDRow{}, false
 	}

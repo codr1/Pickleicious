@@ -1,0 +1,39 @@
+// internal/templates/components/staff/pro_schedule.templ
+package staff
+
+import (
+	"database/sql"
+	"fmt"
+	"time"
+)
+
+templ ProScheduleView(data ProScheduleViewData) {
+	<div class="rounded-lg border border-border bg-background shadow-sm">
+		<div class="border-b border-border px-4 py-3">
+			<h3 class="text-lg font-semibold text-foreground">Upcoming lessons for {data.ProName}</h3>
+		</div>
+		<div class="divide-y divide-border">
+			if len(data.Sessions) == 0 {
+				<div class="px-4 py-6 text-sm text-muted-foreground">No upcoming lessons.</div>
+			} else {
+				for _, session := range data.Sessions {
+					<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+						<div class="text-foreground">{formatScheduleRange(session.StartTime, session.EndTime)}</div>
+						<div class="text-muted-foreground">{formatScheduleMember(session.PrimaryUserID)}</div>
+					</div>
+				}
+			}
+		</div>
+	</div>
+}
+
+func formatScheduleRange(start time.Time, end time.Time) string {
+	return fmt.Sprintf("%s - %s", start.Format("Jan 2, 2006 3:04 PM"), end.Format("3:04 PM"))
+}
+
+func formatScheduleMember(memberID sql.NullInt64) string {
+	if memberID.Valid {
+		return fmt.Sprintf("Member ID %d", memberID.Int64)
+	}
+	return "Member TBD"
+}
