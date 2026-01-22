@@ -20,6 +20,7 @@ type CalendarData struct {
 	FacilityID   int64
 	Courts       []CalendarCourt
 	Reservations []CalendarReservation
+	IsStaff      bool
 }
 
 type CalendarCourt struct {
@@ -62,6 +63,14 @@ templ Calendar(data CalendarData) {
 				</button>
 			</div>
 			<div class="flex space-x-2">
+				if data.IsStaff {
+					<button
+						class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+						hx-get={ fmt.Sprintf("/api/v1/staff/lessons/booking/new?facility_id=%d", data.FacilityID) }
+						hx-target="#modal">
+						Book Lesson
+					</button>
+				}
 				<button class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground">
 					Today
 				</button>

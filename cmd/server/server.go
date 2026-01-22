@@ -295,6 +295,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/staff/lessons/booking/slots", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: staff.HandleStaffLessonBookingSlots,
 	}))
+	mux.HandleFunc("/api/v1/staff/lessons/schedule", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: staff.HandleStaffProScheduleView,
+	}))
 	mux.HandleFunc("/api/v1/staff/lessons/booking", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: staff.HandleStaffLessonBookingCreate,
 	}))

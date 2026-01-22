@@ -18,6 +18,7 @@ import (
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/request"
 	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
+	stafftempl "github.com/codr1/Pickleicious/internal/templates/components/staff"
 )
 
 const (
@@ -274,6 +275,103 @@ func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		ShowFacilitySelector: showFacilitySelector,
 	})
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render lesson booking form", "Failed to render lesson booking form") {
+		return
+	}
+}
+
+// HandleStaffProScheduleView handles GET /api/v1/staff/lessons/schedule.
+func HandleStaffProScheduleView(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), staffQueryTimeout)
+	defer cancel()
+
+	facilityID, err := resolveStaffLessonFacility(ctx, r, user)
+	if err != nil {
+		if facilityErr, ok := err.(staffLessonFacilityError); ok {
+			http.Error(w, facilityErr.msg, facilityErr.status)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if user.HomeFacilityID != nil {
+		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+			return
+		}
+	}
+
+	proID, err := requiredProID(r)
+	if err != nil {
+		http.Error(w, "Invalid pro_id", http.StatusBadRequest)
+		return
+	}
+
+	proRow, err := queries.GetStaffByID(ctx, proID)
+	if err != nil {
+		logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to load pro")
+		http.Error(w, "Pro not found", http.StatusNotFound)
+		return
+	}
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != facilityID || strings.EqualFold(proRow.UserStatus, "deleted") {
+		http.Error(w, "Pro not found", http.StatusNotFound)
+		return
+	}
+
+	facilityLoc := time.Local
+	facility, err := queries.GetFacilityByID(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
+		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
+		return
+	}
+	if facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr != nil {
+			logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+		} else {
+			facilityLoc = loadedLoc
+		}
+	}
+
+	sessions, err := queries.GetFutureProSessionsByStaffID(ctx, dbgen.GetFutureProSessionsByStaffIDParams{
+		ProID:     sql.NullInt64{Int64: proID, Valid: true},
+		StartTime: time.Now().In(facilityLoc),
+	})
+	if err != nil {
+		logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to load upcoming lessons")
+		http.Error(w, "Failed to load upcoming lessons", http.StatusInternalServerError)
+		return
+	}
+
+	proName := strings.TrimSpace(strings.Join([]string{proRow.FirstName, proRow.LastName}, " "))
+	if proName == "" {
+		proName = "TBD"
+	}
+
+	component := stafftempl.ProScheduleView(stafftempl.ProScheduleViewData{
+		ProName:  proName,
+		Sessions: sessions,
+	})
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render pro schedule", "Failed to render pro schedule") {
 		return
 	}
 }

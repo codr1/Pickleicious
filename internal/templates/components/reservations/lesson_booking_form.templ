@@ -59,6 +59,20 @@ templ StaffLessonBookingForm(data StaffLessonBookingFormData) {
 							}
 						}
 					</select>
+					if len(data.Pros) > 0 {
+						<div
+							id="staff-pro-schedule"
+							class="mt-3"
+							hx-get="/api/v1/staff/lessons/schedule"
+							hx-trigger="load, change from:#lesson_pro_id"
+							hx-target="#staff-pro-schedule-content"
+							hx-include="#staff-lesson-booking-form"
+							hx-swap="innerHTML">
+							<div id="staff-pro-schedule-content" class="text-sm text-muted-foreground">
+								Loading upcoming lessons...
+							</div>
+						</div>
+					}
 				</div>
 
 				<div>
