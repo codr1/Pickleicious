@@ -304,7 +304,8 @@ CREATE TABLE reservations (
     facility_id INTEGER NOT NULL,
     reservation_type_id INTEGER NOT NULL,
     recurrence_rule_id INTEGER,        -- null if it's not recurring
-    primary_user_id INTEGER,           -- if there's a responsible user (e.g. for a game)
+    primary_user_id INTEGER,           -- who the reservation is for (e.g. member booking)
+    created_by_user_id INTEGER NOT NULL, -- who created the reservation (staff/member)
     pro_id INTEGER,                    -- if it's a pro session (FK to staff)
     open_play_rule_id INTEGER,
     start_time DATETIME NOT NULL,
@@ -323,6 +324,7 @@ CREATE TABLE reservations (
     FOREIGN KEY (reservation_type_id) REFERENCES reservation_types(id),
     FOREIGN KEY (recurrence_rule_id)  REFERENCES recurrence_rules(id),
     FOREIGN KEY (primary_user_id)     REFERENCES users(id),
+    FOREIGN KEY (created_by_user_id)  REFERENCES users(id),
     FOREIGN KEY (pro_id)              REFERENCES staff(id),
     -- No ON DELETE action: deletion is intentionally blocked when reservations exist.
     FOREIGN KEY (open_play_rule_id)   REFERENCES open_play_rules(id)
@@ -371,6 +373,7 @@ CREATE TABLE reservation_cancellations (
 CREATE INDEX idx_reservation_cancellations_reservation_id ON reservation_cancellations(reservation_id);
 CREATE INDEX idx_reservation_cancellations_cancelled_by_user_id ON reservation_cancellations(cancelled_by_user_id);
 CREATE INDEX idx_reservation_cancellations_cancelled_at ON reservation_cancellations(cancelled_at);
+CREATE INDEX idx_reservations_created_by_user_id ON reservations(created_by_user_id);
 
 ------ CANCELLATION POLICIES ------
 CREATE TABLE cancellation_policy_tiers (
