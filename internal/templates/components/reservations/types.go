@@ -93,6 +93,10 @@ type StaffLessonSlotsData struct {
 	Slots         []StaffLessonSlotOption
 }
 
+// NewCourtOptions converts database court rows into a slice of CourtOption.
+// Each returned option contains the court ID and a human-readable label: the
+// trimmed court name followed by " (Court N)" when a name is present, or
+// "Court N" when the name is empty.
 func NewCourtOptions(rows []dbgen.Court) []CourtOption {
 	options := make([]CourtOption, 0, len(rows))
 	for _, court := range rows {
@@ -115,6 +119,9 @@ func NewReservationTypeOptions(rows []dbgen.ReservationType) []ReservationTypeOp
 	return options
 }
 
+// NewMemberOptions converts database member rows into a slice of MemberOption.
+// Each MemberOption.Label is the member's first and last name (trimmed); if the
+// member has an email, the label appends " - <email>".
 func NewMemberOptions(rows []dbgen.ListMembersRow) []MemberOption {
 	options := make([]MemberOption, 0, len(rows))
 	for _, member := range rows {
@@ -127,6 +134,8 @@ func NewMemberOptions(rows []dbgen.ListMembersRow) []MemberOption {
 	return options
 }
 
+// NewFacilityOptions converts database facility rows into a slice of FacilityOption.
+// Each input row produces a FacilityOption with the same ID and Name, preserving input order.
 func NewFacilityOptions(rows []dbgen.Facility) []FacilityOption {
 	options := make([]FacilityOption, 0, len(rows))
 	for _, facility := range rows {
@@ -135,6 +144,8 @@ func NewFacilityOptions(rows []dbgen.Facility) []FacilityOption {
 	return options
 }
 
+// NewProOptions builds ProOption entries from database pro rows.
+// The Name field combines the pro's first and last name (trimmed); if an email is present it appends " - <email>". It preserves the input order.
 func NewProOptions(rows []dbgen.ListProsByFacilityRow) []ProOption {
 	options := make([]ProOption, 0, len(rows))
 	for _, pro := range rows {
@@ -147,6 +158,7 @@ func NewProOptions(rows []dbgen.ListProsByFacilityRow) []ProOption {
 	return options
 }
 
+// defaultStaffLessonEndTimeValue returns the EndTime of the first slot, or an empty string if the provided slice has no slots.
 func defaultStaffLessonEndTimeValue(slots []StaffLessonSlotOption) string {
 	if len(slots) == 0 {
 		return ""

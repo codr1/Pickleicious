@@ -39,6 +39,13 @@ func InitHandlers(q *dbgen.Queries) {
 	})
 }
 
+// HandleCourtsPage handles requests for the courts page and renders a calendar view.
+//
+// It reads an optional `facility_id` query parameter to load facility-specific theme
+// and calendar data, enforces facility access, and annotates the calendar with the
+// requesting user's staff status. If facility-specific data cannot be loaded, it
+// falls back to a minimal calendar containing the requested display date and facility
+// identifier (when provided). The rendered page is written to the response writer.
 func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	log.Info().
 		Str("path", r.URL.Path).
@@ -86,6 +93,12 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	page.Render(r.Context(), w)
 }
 
+// HandleCalendarView renders the calendar component for the facility referenced by the current booking request.
+// 
+// It requires a facility ID to be present in the booking request and enforces facility access checks.
+// If the global database queries are not initialized, it responds with HTTP 500. If the facility ID is missing,
+// it responds with HTTP 400. If loading calendar data fails, it responds with HTTP 500.
+// The rendered calendar data includes an IsStaff flag derived from the request's user context.
 func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -123,7 +136,19 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 	component.Render(r.Context(), w)
 }
 
-// GET /api/v1/courts/booking/new
+// HandleBookingFormNew renders the booking creation form for a specified facility.
+//
+// It requires a facility ID to be present in the booking request and enforces facility access.
+// Query parameters supported:
+//   - "court": court number to preselect (integer)
+//   - "hour": start hour for the booking (0–23)
+//   - "date": booking date in "2006-01-02" format
+//
+// The handler computes start and end times from the provided date/hour (or defaults to now),
+// loads courts, reservation types, and up to 50 members for the facility, and selects a court
+// by its number if provided. If member loading fails the form still renders with no members;
+// failures to load courts, reservation types, or to render the template result in a 500 response.
+// If the facility ID is missing the handler responds with 400.
 func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -244,6 +269,13 @@ func calendarDateFromRequest(r *http.Request) time.Time {
 	return parsed
 }
 
+// buildCalendarData builds a courts.CalendarData for the given facility and display date.
+// It populates DisplayDate and FacilityID, loads courts for the facility and adds them
+// to CalendarData.Courts, loads reservations and their associated courts within the
+// display date range and adds them to CalendarData.Reservations, and includes reservation
+// type name and color. If the staff list can be loaded, reservations created by staff are
+// flagged via CreatedByStaff; failure to load staff is logged and processing continues.
+// Returns the populated CalendarData and a non-nil error if a database query fails.
 func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, displayDate time.Time) (courts.CalendarData, error) {
 	calendarData := courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID}
 

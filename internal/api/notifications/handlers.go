@@ -44,7 +44,10 @@ func loadQueries() *dbgen.Queries {
 	return queries
 }
 
-// /api/v1/notifications/count
+// HandleNotificationCount handles the /api/v1/notifications/count endpoint by counting unread staff
+// notifications and rendering an HTML badge with the resulting count.
+// It requires the request user to be a staff member and, when present, filters notifications by the
+// user's HomeFacilityID. On database or rendering failures it writes an appropriate HTTP error response.
 func HandleNotificationCount(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -82,7 +85,11 @@ func HandleNotificationCount(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// /api/v1/notifications
+// HandleNotificationsList writes an HTML panel listing staff notifications for the user's facility or corporate scope.
+// 
+// It requires the requester to be a staff user and will respond with HTTP 401 if not authorized. On success it renders
+// the notifications panel HTML; on internal failures it responds with HTTP 500. The facility scope defaults to the
+// user's HomeFacilityID when present.
 func HandleNotificationsList(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -124,7 +131,13 @@ func HandleNotificationsList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// /api/v1/notifications/{id}/read
+// HandleMarkAsRead marks a staff notification as read and returns an updated notifications panel for HTMX requests.
+//
+// It validates the notification ID from the URL path, determines the facility from the user's HomeFacilityID or the
+// `facility_id` query parameter, and enforces staff authorization and facility access. On success it sets the
+// `HX-Trigger: refreshNotificationCount` header; non-HTMX requests receive HTTP 204 No Content, while HTMX requests
+// receive a rendered notifications panel. Responds with appropriate HTTP status codes for invalid input, missing
+// resources, authorization failures, and internal errors.
 func HandleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 

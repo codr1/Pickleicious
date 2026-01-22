@@ -63,6 +63,8 @@ func OrganizationIDString(ctx context.Context) string {
 	return ""
 }
 
+// UserFromContext retrieves the AuthUser stored in ctx.
+// It returns nil if ctx is nil, if no user is stored, or if the stored value has a different type.
 func UserFromContext(ctx context.Context) *AuthUser {
 	if ctx == nil {
 		return nil
@@ -76,10 +78,16 @@ func UserFromContext(ctx context.Context) *AuthUser {
 	return user
 }
 
+// IsStaff reports whether the given AuthUser represents a staff user.
+// It returns true if user is non-nil and its IsStaff field is true.
 func IsStaff(user *AuthUser) bool {
 	return user != nil && user.IsStaff
 }
 
+// CanManageStaff reports whether a staff member (requesterStaff) is permitted to manage another staff member (targetStaff).
+// It permits management only when the requester's Role is "admin" or "manager" (case-insensitive).
+// If the requester has no HomeFacilityID, cross-facility management is allowed. If the target has no HomeFacilityID, management is denied.
+// Otherwise, management is allowed only when both staff share the same HomeFacilityID.
 func CanManageStaff(requesterStaff, targetStaff StaffAccess) bool {
 	if !strings.EqualFold(requesterStaff.Role, "admin") && !strings.EqualFold(requesterStaff.Role, "manager") {
 		return false

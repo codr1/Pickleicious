@@ -47,7 +47,13 @@ func InitHandlers(q *dbgen.Queries, cc *cognito.CognitoClient) {
 	cognitoClient = cc
 }
 
-// /members
+// HandleMembersPage renders the initial members page containing a paginated list of members.
+//
+// It fetches the first page of members (default limit 25, offset 0) and, if a facility_id query
+// parameter is provided, attempts to load that facility's active theme with a short timeout.
+// The handler converts the result to template data, composes the full page with layout and
+// session context, and writes the rendered HTML to the response. On failures it logs the error
+// and writes an appropriate HTTP error status.
 func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -100,6 +106,13 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleMembersList renders a paginated list of members using the `limit` and `offset` URL
+// query parameters.
+//
+// HandleMembersList reads `limit` and `offset` from the request query string (defaults to
+// 25 and 0 respectively when absent or invalid), fetches the corresponding members, and
+// renders the members list template. On fetch or render failures it writes an HTTP 500
+// response.
 func HandleMembersList(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -139,6 +152,14 @@ func HandleMembersList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleMemberSearch handles HTTP requests to search members by the "q" query
+// parameter and render a paginated members list.
+//
+// It reads "q" (search term), "limit", and "offset" from the request URL (defaulting
+// to limit=25 and offset=0 when missing or invalid), queries the database for
+// matching members (no facility filter), converts results to template members,
+// and renders the MembersList component. On database or render failure it logs
+// the error and responds with HTTP 500.
 func HandleMemberSearch(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 	searchTerm := r.URL.Query().Get("q")
@@ -451,6 +472,16 @@ func HandleMemberBilling(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleMemberVisits renders recent visit history for a member; it requires a staff user.
+//
+// HandleMemberVisits checks that the request user is staff, parses the member ID from the URL
+// path (expects at least five path segments, with the member ID in the second-to-last segment),
+// retrieves recent visits for that member, looks up facility names when available, and renders
+// the visit history template.
+//
+// It sends HTTP 401 if the user is not authorized, HTTP 400 for an invalid URL or member ID,
+// and HTTP 500 if fetching visits or rendering the template fails. If facility lookup fails it
+// logs the error and continues rendering without facility names.
 func HandleMemberVisits(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 

@@ -112,6 +112,9 @@ func methodHandler(handlers map[string]http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// registerRoutes registers the application's HTTP routes and associates each path with its handler on the provided ServeMux.
+//
+// It wires all page and API endpoints (main page, health, navigation, notifications, auth, member portal and APIs, check-in, staff and staff-related lesson endpoints, courts and events, reservations, open-play rules and sessions, theme and operating-hours administration, cancellation policy, static file serving, and the member restore endpoint). Handlers that require DB access use the supplied database; static files are served from STATIC_DIR (defaults to "build/bin/static").
 func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Main page handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
