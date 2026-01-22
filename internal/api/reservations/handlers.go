@@ -291,6 +291,7 @@ func HandleEventBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,
@@ -380,6 +381,7 @@ func HandleReservationEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,

@@ -4,6 +4,7 @@ package courts
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
@@ -176,6 +177,7 @@ func HandleBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	memberRows, err := q.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{Int64: facilityID, Valid: true},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,

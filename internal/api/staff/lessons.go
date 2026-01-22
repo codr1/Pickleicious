@@ -26,6 +26,162 @@ const (
 	staffLessonMinDuration         = time.Hour
 )
 
+type staffLessonCreateRequest struct {
+	ProID     int64  `json:"pro_id"`
+	MemberID  int64  `json:"member_id"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
+
+type staffLessonReservationInput struct {
+	FacilityID      int64
+	Facility        dbgen.Facility
+	FacilityLoc     *time.Location
+	ProID           int64
+	MemberID        int64
+	StartTime       time.Time
+	EndTime         time.Time
+	CreatedByUserID int64
+	ProRow          *dbgen.GetStaffByIDRow
+}
+
+func createStaffLessonReservation(ctx context.Context, input staffLessonReservationInput) (dbgen.Reservation, error) {
+	if input.FacilityLoc == nil {
+		input.FacilityLoc = time.Local
+	}
+
+	if !input.EndTime.After(input.StartTime) {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusBadRequest, Message: "end_time must be after start_time"}
+	}
+	if input.EndTime.Sub(input.StartTime) < staffLessonMinDuration {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Lesson must be at least 1 hour"}
+	}
+
+	now := time.Now().In(input.FacilityLoc)
+	if input.StartTime.Before(now) {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusBadRequest, Message: "start_time must be in the future"}
+	}
+	if input.Facility.LessonMinNoticeHours > 0 {
+		earliest := now.Add(time.Duration(input.Facility.LessonMinNoticeHours) * time.Hour)
+		if input.StartTime.Before(earliest) {
+			return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusBadRequest, Message: fmt.Sprintf("Lessons must be booked at least %d hours in advance", input.Facility.LessonMinNoticeHours)}
+		}
+	}
+
+	memberRow, err := queries.GetUserByID(ctx, input.MemberID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Member not found"}
+		}
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load member", Err: err}
+	}
+	if !memberRow.IsMember || strings.EqualFold(memberRow.Status, "deleted") {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Member not found"}
+	}
+	if !memberRow.HomeFacilityID.Valid || memberRow.HomeFacilityID.Int64 != input.FacilityID {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Member not found"}
+	}
+
+	proRow := input.ProRow
+	if proRow == nil {
+		row, err := queries.GetStaffByID(ctx, input.ProID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Pro not found"}
+			}
+			return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load pro", Err: err}
+		}
+		proRow = &row
+	}
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != input.FacilityID || strings.EqualFold(proRow.UserStatus, "deleted") {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Pro not found"}
+	}
+
+	reservationTypeID, err := lookupReservationTypeID(ctx, queries, staffLessonReservationTypeName)
+	if err != nil {
+		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Reservation type not available", Err: err}
+	}
+
+	var created dbgen.Reservation
+	err = store.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		if input.Facility.MaxMemberReservations > 0 {
+			activeCount, err := qtx.CountActiveMemberReservations(ctx, dbgen.CountActiveMemberReservationsParams{
+				FacilityID:    input.FacilityID,
+				PrimaryUserID: sql.NullInt64{Int64: input.MemberID, Valid: true},
+			})
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check reservation limits", Err: err}
+			}
+			if activeCount >= input.Facility.MaxMemberReservations {
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: fmt.Sprintf("Member has reached the maximum of %d active reservations", input.Facility.MaxMemberReservations)}
+			}
+		}
+
+		slotMinutes := fmt.Sprintf("%d", int64(staffLessonMinDuration.Minutes()))
+		slots, err := qtx.GetProLessonSlots(ctx, dbgen.GetProLessonSlotsParams{
+			TargetDate:  input.StartTime.Format("2006-01-02"),
+			FacilityID:  input.FacilityID,
+			SlotMinutes: sql.NullString{String: slotMinutes, Valid: true},
+			ProID:       sql.NullInt64{Int64: input.ProID, Valid: true},
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
+		}
+
+		available := false
+		for _, slot := range slots {
+			slotStart, err := parseLessonSlotTime(slot.StartTime, input.FacilityLoc)
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
+			}
+			slotEnd, err := parseLessonSlotTime(slot.EndTime, input.FacilityLoc)
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
+			}
+			if slotStart.Equal(input.StartTime) && slotEnd.Equal(input.EndTime) {
+				available = true
+				break
+			}
+		}
+		if !available {
+			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Selected lesson time is no longer available", Err: errors.New("lesson slot unavailable")}
+		}
+
+		created, err = qtx.CreateReservation(ctx, dbgen.CreateReservationParams{
+			FacilityID:        input.FacilityID,
+			ReservationTypeID: reservationTypeID,
+			RecurrenceRuleID:  sql.NullInt64{},
+			PrimaryUserID:     sql.NullInt64{Int64: input.MemberID, Valid: true},
+			CreatedByUserID:   input.CreatedByUserID,
+			ProID:             sql.NullInt64{Int64: input.ProID, Valid: true},
+			OpenPlayRuleID:    sql.NullInt64{},
+			StartTime:         input.StartTime,
+			EndTime:           input.EndTime,
+			IsOpenEvent:       false,
+			TeamsPerCourt:     sql.NullInt64{},
+			PeoplePerTeam:     sql.NullInt64{},
+		})
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to create lesson reservation", Err: err}
+		}
+
+		if err := qtx.AddParticipant(ctx, dbgen.AddParticipantParams{
+			ReservationID: created.ID,
+			UserID:        input.MemberID,
+		}); err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add lesson participant", Err: err}
+		}
+		return nil
+	})
+	if err != nil {
+		return dbgen.Reservation{}, err
+	}
+
+	return created, nil
+}
+
 // HandleStaffLessonBookingFormNew handles GET /api/v1/staff/lessons/booking/new.
 func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -98,6 +254,7 @@ func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	selectedProID := selectedProIDFromRequest(r, proOptions)
 
 	memberRows, err := queries.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{Int64: selectedFacilityID, Valid: true},
 		SearchTerm: nil,
 		Offset:     0,
 		Limit:      50,
@@ -105,8 +262,6 @@ func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to load members for lesson booking form")
 		memberRows = nil
-	} else {
-		memberRows = filterMembersByFacility(memberRows, selectedFacilityID)
 	}
 
 	component := reservationstempl.StaffLessonBookingForm(reservationstempl.StaffLessonBookingFormData{
@@ -288,146 +443,23 @@ func HandleStaffLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !endTime.After(startTime) {
-		http.Error(w, "end_time must be after start_time", http.StatusBadRequest)
-		return
-	}
-	if endTime.Sub(startTime) < staffLessonMinDuration {
-		http.Error(w, "Lesson must be at least 1 hour", http.StatusBadRequest)
-		return
-	}
 
-	now := time.Now().In(facilityLoc)
-	if startTime.Before(now) {
-		http.Error(w, "start_time must be in the future", http.StatusBadRequest)
-		return
-	}
-	if facility.LessonMinNoticeHours > 0 {
-		earliest := now.Add(time.Duration(facility.LessonMinNoticeHours) * time.Hour)
-		if startTime.Before(earliest) {
-			http.Error(w, fmt.Sprintf("Lessons must be booked at least %d hours in advance", facility.LessonMinNoticeHours), http.StatusBadRequest)
-			return
-		}
-	}
-
-	memberRow, err := queries.GetUserByID(ctx, memberID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Member not found", http.StatusNotFound)
-			return
-		}
-		logger.Error().Err(err).Int64("member_id", memberID).Msg("Failed to load member")
-		http.Error(w, "Failed to load member", http.StatusInternalServerError)
-		return
-	}
-	if !memberRow.IsMember || strings.EqualFold(memberRow.Status, "deleted") {
-		http.Error(w, "Member not found", http.StatusNotFound)
-		return
-	}
-	if !memberRow.HomeFacilityID.Valid || memberRow.HomeFacilityID.Int64 != selectedFacilityID {
-		http.Error(w, "Member not found", http.StatusNotFound)
-		return
-	}
-
-	proRow, err := queries.GetStaffByID(ctx, proID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Pro not found", http.StatusNotFound)
-			return
-		}
-		logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to load pro")
-		http.Error(w, "Failed to load pro", http.StatusInternalServerError)
-		return
-	}
-	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != selectedFacilityID || strings.EqualFold(proRow.UserStatus, "deleted") {
-		http.Error(w, "Pro not found", http.StatusNotFound)
-		return
-	}
-
-	reservationTypeID, err := lookupReservationTypeID(ctx, queries, staffLessonReservationTypeName)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to resolve reservation type")
-		http.Error(w, "Reservation type not available", http.StatusInternalServerError)
-		return
-	}
-
-	var created dbgen.Reservation
-	err = store.RunInTx(ctx, func(txdb *appdb.DB) error {
-		qtx := txdb.Queries
-
-		if facility.MaxMemberReservations > 0 {
-			activeCount, err := qtx.CountActiveMemberReservations(ctx, dbgen.CountActiveMemberReservationsParams{
-				FacilityID:    selectedFacilityID,
-				PrimaryUserID: sql.NullInt64{Int64: memberID, Valid: true},
-			})
-			if err != nil {
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check reservation limits", Err: err}
-			}
-			if activeCount >= facility.MaxMemberReservations {
-				return apiutil.HandlerError{Status: http.StatusConflict, Message: fmt.Sprintf("Member has reached the maximum of %d active reservations", facility.MaxMemberReservations)}
-			}
-		}
-
-		slotMinutes := fmt.Sprintf("%d", int64(staffLessonMinDuration.Minutes()))
-		slots, err := qtx.GetProLessonSlots(ctx, dbgen.GetProLessonSlotsParams{
-			TargetDate:  startTime.Format("2006-01-02"),
-			FacilityID:  selectedFacilityID,
-			SlotMinutes: sql.NullString{String: slotMinutes, Valid: true},
-			ProID:       sql.NullInt64{Int64: proID, Valid: true},
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
-		}
-
-		available := false
-		for _, slot := range slots {
-			slotStart, err := parseLessonSlotTime(slot.StartTime, time.Local)
-			if err != nil {
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
-			}
-			slotEnd, err := parseLessonSlotTime(slot.EndTime, time.Local)
-			if err != nil {
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson availability", Err: err}
-			}
-			if slotStart.Equal(startTime) && slotEnd.Equal(endTime) {
-				available = true
-				break
-			}
-		}
-		if !available {
-			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Selected lesson time is no longer available", Err: errors.New("lesson slot unavailable")}
-		}
-
-		created, err = qtx.CreateReservation(ctx, dbgen.CreateReservationParams{
-			FacilityID:        selectedFacilityID,
-			ReservationTypeID: reservationTypeID,
-			RecurrenceRuleID:  sql.NullInt64{},
-			PrimaryUserID:     sql.NullInt64{Int64: memberID, Valid: true},
-			CreatedByUserID:   user.ID,
-			ProID:             sql.NullInt64{Int64: proID, Valid: true},
-			OpenPlayRuleID:    sql.NullInt64{},
-			StartTime:         startTime,
-			EndTime:           endTime,
-			IsOpenEvent:       false,
-			TeamsPerCourt:     sql.NullInt64{},
-			PeoplePerTeam:     sql.NullInt64{},
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to create lesson reservation", Err: err}
-		}
-
-		if err := qtx.AddParticipant(ctx, dbgen.AddParticipantParams{
-			ReservationID: created.ID,
-			UserID:        memberID,
-		}); err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add lesson participant", Err: err}
-		}
-		return nil
+	created, err := createStaffLessonReservation(ctx, staffLessonReservationInput{
+		FacilityID:      selectedFacilityID,
+		Facility:        facility,
+		FacilityLoc:     facilityLoc,
+		ProID:           proID,
+		MemberID:        memberID,
+		StartTime:       startTime,
+		EndTime:         endTime,
+		CreatedByUserID: user.ID,
 	})
 	if err != nil {
 		var herr apiutil.HandlerError
 		if errors.As(err, &herr) {
-			logger.Error().Err(herr.Err).Int64("facility_id", selectedFacilityID).Msg(herr.Message)
+			if herr.Err != nil {
+				logger.Error().Err(herr.Err).Int64("facility_id", selectedFacilityID).Msg(herr.Message)
+			}
 			http.Error(w, herr.Message, herr.Status)
 			return
 		}
@@ -439,6 +471,224 @@ func HandleStaffLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
 	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
 		logger.Error().Err(err).Int64("reservation_id", created.ID).Msg("Failed to write lesson reservation response")
+		return
+	}
+}
+
+// HandleStaffLessonCreate handles POST /api/v1/staff/lessons.
+func HandleStaffLessonCreate(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if queries == nil || store == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	var (
+		proID     int64
+		memberID  int64
+		startRaw  string
+		endRaw    string
+		parseErr  error
+	)
+
+	if apiutil.IsJSONRequest(r) {
+		var payload staffLessonCreateRequest
+		if err := apiutil.DecodeJSON(r, &payload); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		proID, parseErr = parseStaffLessonCreateID(payload.ProID, "pro_id")
+		if parseErr != nil {
+			http.Error(w, parseErr.Error(), http.StatusBadRequest)
+			return
+		}
+		memberID, parseErr = parseStaffLessonCreateID(payload.MemberID, "member_id")
+		if parseErr != nil {
+			http.Error(w, parseErr.Error(), http.StatusBadRequest)
+			return
+		}
+		startRaw = payload.StartTime
+		endRaw = payload.EndTime
+	} else {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			return
+		}
+		proID, parseErr = apiutil.ParseRequiredInt64Field(r.FormValue("pro_id"), "pro_id")
+		if parseErr != nil {
+			http.Error(w, parseErr.Error(), http.StatusBadRequest)
+			return
+		}
+		memberID, parseErr = apiutil.ParseRequiredInt64Field(r.FormValue("member_id"), "member_id")
+		if parseErr != nil {
+			http.Error(w, parseErr.Error(), http.StatusBadRequest)
+			return
+		}
+		startRaw = r.FormValue("start_time")
+		endRaw = r.FormValue("end_time")
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), staffQueryTimeout)
+	defer cancel()
+
+	proRow, err := queries.GetStaffByID(ctx, proID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Pro not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to load pro")
+		http.Error(w, "Failed to load pro", http.StatusInternalServerError)
+		return
+	}
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || strings.EqualFold(proRow.UserStatus, "deleted") {
+		http.Error(w, "Pro not found", http.StatusNotFound)
+		return
+	}
+	facilityID := proRow.HomeFacilityID.Int64
+
+	if user.HomeFacilityID != nil {
+		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+			return
+		}
+	}
+
+	facilityLoc := time.Local
+	facility, err := queries.GetFacilityByID(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
+		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
+		return
+	}
+	if facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr != nil {
+			logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+		} else {
+			facilityLoc = loadedLoc
+		}
+	}
+
+	startTime, err := parseStaffLessonTime(startRaw, "start_time", facilityLoc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	endTime, err := parseStaffLessonTime(endRaw, "end_time", facilityLoc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	created, err := createStaffLessonReservation(ctx, staffLessonReservationInput{
+		FacilityID:      facilityID,
+		Facility:        facility,
+		FacilityLoc:     facilityLoc,
+		ProID:           proID,
+		MemberID:        memberID,
+		StartTime:       startTime,
+		EndTime:         endTime,
+		CreatedByUserID: user.ID,
+		ProRow:          &proRow,
+	})
+	if err != nil {
+		var herr apiutil.HandlerError
+		if errors.As(err, &herr) {
+			if herr.Err != nil {
+				logger.Error().Err(herr.Err).Int64("facility_id", facilityID).Msg(herr.Message)
+			}
+			http.Error(w, herr.Message, herr.Status)
+			return
+		}
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to create lesson reservation")
+		http.Error(w, "Failed to create reservation", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
+	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
+		logger.Error().Err(err).Int64("reservation_id", created.ID).Msg("Failed to write lesson reservation response")
+		return
+	}
+}
+
+// HandleStaffMemberSearch handles GET /api/v1/staff/members/search.
+func HandleStaffMemberSearch(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if queries == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil || !user.IsStaff {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), staffQueryTimeout)
+	defer cancel()
+
+	facilityID, err := resolveStaffLessonFacility(ctx, r, user)
+	if err != nil {
+		if facilityErr, ok := err.(staffLessonFacilityError); ok {
+			http.Error(w, facilityErr.msg, facilityErr.status)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if user.HomeFacilityID != nil {
+		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+			return
+		}
+	}
+
+	searchTerm := strings.TrimSpace(r.URL.Query().Get("q"))
+	if searchTerm == "" {
+		if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"members": []reservationstempl.MemberOption{}}); err != nil {
+			logger.Error().Err(err).Msg("Failed to write empty member search response")
+		}
+		return
+	}
+
+	limit := parseMemberSearchLimit(r.URL.Query().Get("limit"))
+	rows, err := queries.ListMembers(ctx, dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{Int64: facilityID, Valid: true},
+		SearchTerm: sql.NullString{String: searchTerm, Valid: true},
+		Offset:     0,
+		Limit:      limit,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to search members")
+		http.Error(w, "Failed to search members", http.StatusInternalServerError)
+		return
+	}
+
+	members := reservationstempl.NewMemberOptions(rows)
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"members": members}); err != nil {
+		logger.Error().Err(err).Msg("Failed to write member search response")
 		return
 	}
 }
@@ -562,16 +812,6 @@ func optionalPrimaryUserID(r *http.Request) *int64 {
 	return &id
 }
 
-func filterMembersByFacility(rows []dbgen.ListMembersRow, facilityID int64) []dbgen.ListMembersRow {
-	filtered := make([]dbgen.ListMembersRow, 0, len(rows))
-	for _, member := range rows {
-		if member.HomeFacilityID.Valid && member.HomeFacilityID.Int64 == facilityID {
-			filtered = append(filtered, member)
-		}
-	}
-	return filtered
-}
-
 func parseLessonDate(r *http.Request) (time.Time, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get("date"))
 	if raw == "" {
@@ -667,4 +907,26 @@ func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string)
 		return 0, err
 	}
 	return resType.ID, nil
+}
+
+func parseStaffLessonCreateID(value int64, field string) (int64, error) {
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", field)
+	}
+	return value, nil
+}
+
+func parseMemberSearchLimit(raw string) int64 {
+	value := int64(25)
+	if raw == "" {
+		return value
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || parsed <= 0 {
+		return value
+	}
+	if parsed > 200 {
+		return 200
+	}
+	return parsed
 }

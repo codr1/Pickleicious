@@ -59,6 +59,7 @@ func HandleMembersPage(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch initial members list
 	members, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		Limit:      25, // Default limit
 		Offset:     0,  // This should be passed in...
 		SearchTerm: "", // Empty search string
@@ -114,6 +115,7 @@ func HandleMembersList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	members, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		Limit:      limit,
 		Offset:     offset,
 		SearchTerm: sql.NullString{String: "", Valid: false},
@@ -153,6 +155,7 @@ func HandleMemberSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	members, err := queries.ListMembers(r.Context(), dbgen.ListMembersParams{
+		FacilityID: sql.NullInt64{},
 		Limit:      limit,
 		Offset:     offset,
 		SearchTerm: sql.NullString{String: searchTerm, Valid: true},
