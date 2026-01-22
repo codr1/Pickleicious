@@ -434,7 +434,23 @@ func HandleStaffLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slots, err := buildLessonSlotOptions(ctx, selectedFacilityID, proID, lessonDate)
+	facilityLoc := time.Local
+	facility, err := queries.GetFacilityByID(ctx, selectedFacilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", selectedFacilityID).Msg("Failed to load facility")
+		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
+		return
+	}
+	if facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr != nil {
+			logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+		} else {
+			facilityLoc = loadedLoc
+		}
+	}
+
+	slots, err := buildLessonSlotOptions(ctx, selectedFacilityID, proID, lessonDate, facilityLoc)
 	if err != nil {
 		logger.Error().Err(err).Int64("pro_id", proID).Msg("Failed to load lesson slots")
 		http.Error(w, "Failed to load lesson slots", http.StatusInternalServerError)
@@ -923,7 +939,10 @@ func parseLessonDate(r *http.Request) (time.Time, error) {
 	return parsed, nil
 }
 
-func buildLessonSlotOptions(ctx context.Context, facilityID, proID int64, lessonDate time.Time) ([]reservationstempl.StaffLessonSlotOption, error) {
+func buildLessonSlotOptions(ctx context.Context, facilityID, proID int64, lessonDate time.Time, facilityLoc *time.Location) ([]reservationstempl.StaffLessonSlotOption, error) {
+	if facilityLoc == nil {
+		facilityLoc = time.Local
+	}
 	slotMinutes := fmt.Sprintf("%d", int64(time.Hour.Minutes()))
 	rows, err := queries.GetProLessonSlots(ctx, dbgen.GetProLessonSlotsParams{
 		TargetDate:  lessonDate.Format("2006-01-02"),
@@ -937,11 +956,11 @@ func buildLessonSlotOptions(ctx context.Context, facilityID, proID int64, lesson
 
 	slots := make([]reservationstempl.StaffLessonSlotOption, 0, len(rows))
 	for _, row := range rows {
-		startTime, err := parseLessonSlotTime(row.StartTime, time.Local)
+		startTime, err := parseLessonSlotTime(row.StartTime, facilityLoc)
 		if err != nil {
 			return nil, err
 		}
-		endTime, err := parseLessonSlotTime(row.EndTime, time.Local)
+		endTime, err := parseLessonSlotTime(row.EndTime, facilityLoc)
 		if err != nil {
 			return nil, err
 		}
