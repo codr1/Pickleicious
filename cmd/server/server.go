@@ -289,6 +289,15 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		http.MethodGet:  staff.HandleStaffList,
 		http.MethodPost: staff.HandleCreateStaff,
 	}))
+	mux.HandleFunc("/api/v1/staff/lessons/booking/new", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: staff.HandleStaffLessonBookingFormNew,
+	}))
+	mux.HandleFunc("/api/v1/staff/lessons/booking/slots", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: staff.HandleStaffLessonBookingSlots,
+	}))
+	mux.HandleFunc("/api/v1/staff/lessons/booking", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: staff.HandleStaffLessonBookingCreate,
+	}))
 	mux.HandleFunc("/api/v1/staff/new", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

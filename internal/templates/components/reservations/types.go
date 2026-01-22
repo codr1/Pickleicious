@@ -58,6 +58,41 @@ type MemberOption struct {
 	Label string
 }
 
+type FacilityOption struct {
+	ID   int64
+	Name string
+}
+
+type ProOption struct {
+	ID   int64
+	Name string
+}
+
+type StaffLessonBookingFormData struct {
+	Facilities           []FacilityOption
+	Pros                 []ProOption
+	Members              []MemberOption
+	SelectedFacilityID   int64
+	SelectedProID        int64
+	DateValue            string
+	ShowFacilitySelector bool
+}
+
+type StaffLessonSlotOption struct {
+	StartTime string
+	EndTime   string
+	Label     string
+}
+
+type StaffLessonSlotsData struct {
+	FacilityID    int64
+	ProID         int64
+	ProName       string
+	DateValue     string
+	PrimaryUserID *int64
+	Slots         []StaffLessonSlotOption
+}
+
 func NewCourtOptions(rows []dbgen.Court) []CourtOption {
 	options := make([]CourtOption, 0, len(rows))
 	for _, court := range rows {
@@ -90,4 +125,31 @@ func NewMemberOptions(rows []dbgen.ListMembersRow) []MemberOption {
 		options = append(options, MemberOption{ID: member.ID, Label: label})
 	}
 	return options
+}
+
+func NewFacilityOptions(rows []dbgen.Facility) []FacilityOption {
+	options := make([]FacilityOption, 0, len(rows))
+	for _, facility := range rows {
+		options = append(options, FacilityOption{ID: facility.ID, Name: facility.Name})
+	}
+	return options
+}
+
+func NewProOptions(rows []dbgen.ListProsByFacilityRow) []ProOption {
+	options := make([]ProOption, 0, len(rows))
+	for _, pro := range rows {
+		label := strings.TrimSpace(strings.Join([]string{pro.FirstName, pro.LastName}, " "))
+		if pro.Email.Valid {
+			label = fmt.Sprintf("%s - %s", label, pro.Email.String)
+		}
+		options = append(options, ProOption{ID: pro.ID, Name: label})
+	}
+	return options
+}
+
+func defaultStaffLessonEndTimeValue(slots []StaffLessonSlotOption) string {
+	if len(slots) == 0 {
+		return ""
+	}
+	return slots[0].EndTime
 }
