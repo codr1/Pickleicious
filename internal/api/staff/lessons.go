@@ -27,6 +27,10 @@ const (
 	staffLessonMinDuration         = time.Hour
 )
 
+func isActiveStaffStatus(status string) bool {
+	return strings.EqualFold(status, "active")
+}
+
 type staffLessonCreateRequest struct {
 	ProID     int64  `json:"pro_id"`
 	MemberID  int64  `json:"member_id"`
@@ -94,7 +98,7 @@ func createStaffLessonReservation(ctx context.Context, input staffLessonReservat
 		}
 		proRow = &row
 	}
-	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != input.FacilityID || strings.EqualFold(proRow.UserStatus, "deleted") {
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != input.FacilityID || !isActiveStaffStatus(proRow.UserStatus) {
 		return dbgen.Reservation{}, apiutil.HandlerError{Status: http.StatusNotFound, Message: "Pro not found"}
 	}
 
@@ -331,7 +335,7 @@ func HandleStaffProScheduleView(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pro not found", http.StatusNotFound)
 		return
 	}
-	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != facilityID || strings.EqualFold(proRow.UserStatus, "deleted") {
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != facilityID || !isActiveStaffStatus(proRow.UserStatus) {
 		http.Error(w, "Pro not found", http.StatusNotFound)
 		return
 	}
@@ -423,7 +427,7 @@ func HandleStaffLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pro not found", http.StatusNotFound)
 		return
 	}
-	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != selectedFacilityID || strings.EqualFold(proRow.UserStatus, "deleted") {
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || proRow.HomeFacilityID.Int64 != selectedFacilityID || !isActiveStaffStatus(proRow.UserStatus) {
 		http.Error(w, "Pro not found", http.StatusNotFound)
 		return
 	}
@@ -668,7 +672,7 @@ func HandleStaffLessonCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load pro", http.StatusInternalServerError)
 		return
 	}
-	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || strings.EqualFold(proRow.UserStatus, "deleted") {
+	if !strings.EqualFold(proRow.Role, "pro") || !proRow.HomeFacilityID.Valid || !isActiveStaffStatus(proRow.UserStatus) {
 		http.Error(w, "Pro not found", http.StatusNotFound)
 		return
 	}

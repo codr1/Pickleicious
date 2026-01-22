@@ -288,7 +288,8 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 
 	staffRows, err := q.ListStaff(ctx)
 	if err != nil {
-		return calendarData, err
+		log.Ctx(ctx).Warn().Err(err).Msg("Failed to load staff list for calendar")
+		staffRows = nil
 	}
 	staffByUserID := make(map[int64]struct{}, len(staffRows))
 	for _, staff := range staffRows {
