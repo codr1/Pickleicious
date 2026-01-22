@@ -281,6 +281,15 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 		return calendarData, err
 	}
 
+	staffRows, err := q.ListStaff(ctx)
+	if err != nil {
+		return calendarData, err
+	}
+	staffByUserID := make(map[int64]struct{}, len(staffRows))
+	for _, staff := range staffRows {
+		staffByUserID[staff.UserID] = struct{}{}
+	}
+
 	typeByID := make(map[int64]dbgen.ReservationType, len(reservationTypes))
 	for _, resType := range reservationTypes {
 		typeByID[resType.ID] = resType
@@ -303,14 +312,16 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 			typeColor = strings.TrimSpace(resType.Color.String)
 		}
 
+		_, createdByStaff := staffByUserID[reservation.CreatedByUserID]
 		for _, courtNumber := range courtsByReservation[reservation.ID] {
 			calendarData.Reservations = append(calendarData.Reservations, courts.CalendarReservation{
-				ID:          reservation.ID,
-				CourtNumber: courtNumber,
-				StartTime:   reservation.StartTime,
-				EndTime:     reservation.EndTime,
-				TypeName:    typeName,
-				TypeColor:   typeColor,
+				ID:             reservation.ID,
+				CourtNumber:    courtNumber,
+				StartTime:      reservation.StartTime,
+				EndTime:        reservation.EndTime,
+				TypeName:       typeName,
+				TypeColor:      typeColor,
+				CreatedByStaff: createdByStaff,
 			})
 		}
 	}

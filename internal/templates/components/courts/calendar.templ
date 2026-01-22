@@ -35,6 +35,7 @@ type CalendarReservation struct {
 	EndTime     time.Time
 	TypeName    string
 	TypeColor   string
+	CreatedByStaff bool
 }
 
 templ Calendar(data CalendarData) {
@@ -118,7 +119,12 @@ templ Calendar(data CalendarData) {
 											style={ fmt.Sprintf("%s background-color: %s;", reservationBlockStyle(reservation, data.DisplayDate), reservationColor(reservation.TypeColor)) }
 											hx-get={ fmt.Sprintf("/api/v1/reservations/%d/edit", reservation.ID) }
 											hx-target="#modal">
-											{ reservation.TypeName }
+											<span class="inline-flex items-center gap-1">
+												<span>{ reservation.TypeName }</span>
+												if reservation.CreatedByStaff {
+													<span class="rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Staff</span>
+												}
+											</span>
 										</div>
 									}
 								</div>
