@@ -76,6 +76,10 @@ func UserFromContext(ctx context.Context) *AuthUser {
 	return user
 }
 
+func IsStaff(user *AuthUser) bool {
+	return user != nil && user.IsStaff
+}
+
 func CanManageStaff(requesterStaff, targetStaff StaffAccess) bool {
 	if !strings.EqualFold(requesterStaff.Role, "admin") && !strings.EqualFold(requesterStaff.Role, "manager") {
 		return false

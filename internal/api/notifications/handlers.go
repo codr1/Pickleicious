@@ -56,7 +56,7 @@ func HandleNotificationCount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -94,7 +94,7 @@ func HandleNotificationsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -136,7 +136,7 @@ func HandleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

@@ -194,7 +194,7 @@ func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -295,7 +295,7 @@ func HandleStaffProScheduleView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -387,7 +387,7 @@ func HandleStaffLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -480,7 +480,7 @@ func HandleStaffLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -634,7 +634,7 @@ func HandleStaffLessonCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -739,7 +739,7 @@ func HandleStaffMemberSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

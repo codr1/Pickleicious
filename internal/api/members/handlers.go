@@ -455,7 +455,7 @@ func HandleMemberVisits(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

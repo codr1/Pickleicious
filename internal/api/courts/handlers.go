@@ -55,7 +55,7 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	var activeTheme *models.Theme
 	displayDate := calendarDateFromRequest(r)
 	user := authz.UserFromContext(r.Context())
-	isStaff := user != nil && user.IsStaff
+	isStaff := authz.IsStaff(user)
 	calendarData := courts.CalendarData{DisplayDate: displayDate, IsStaff: isStaff}
 	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
@@ -117,7 +117,7 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := authz.UserFromContext(r.Context())
-	calendarData.IsStaff = user != nil && user.IsStaff
+	calendarData.IsStaff = authz.IsStaff(user)
 
 	component := courts.Calendar(calendarData)
 	component.Render(r.Context(), w)

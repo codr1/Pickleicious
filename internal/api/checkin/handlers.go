@@ -101,7 +101,7 @@ func HandleCheckinPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -154,7 +154,7 @@ func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -243,7 +243,7 @@ func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -441,7 +441,7 @@ func HandleCheckinActivityUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := authz.UserFromContext(r.Context())
-	if user == nil || !user.IsStaff {
+	if !authz.IsStaff(user) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
