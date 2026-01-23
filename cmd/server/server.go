@@ -26,6 +26,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/staff"
 	"github.com/codr1/Pickleicious/internal/api/themes"
+	"github.com/codr1/Pickleicious/internal/api/waitlist"
 	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
@@ -74,6 +75,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
 	cancellationpolicy.InitHandlers(database.Queries)
+	waitlist.InitHandlers(database)
 
 	staff.InitHandlers(database)
 
@@ -166,6 +168,13 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/notifications/{id}/read", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: notifications.HandleMarkAsRead,
+	}))
+	mux.HandleFunc("/api/v1/waitlist", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  waitlist.HandleWaitlistList,
+		http.MethodPost: waitlist.HandleWaitlistJoin,
+	}))
+	mux.HandleFunc("/api/v1/waitlist/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodDelete: waitlist.HandleWaitlistLeave,
 	}))
 
 	// Auth routes (unified for staff and members)
@@ -303,6 +312,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/staff/lessons", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: staff.HandleStaffLessonCreate,
+	}))
+	mux.HandleFunc("/api/v1/staff/waitlist", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: waitlist.HandleStaffWaitlistView,
 	}))
 	mux.HandleFunc("/api/v1/staff/members/search", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: staff.HandleStaffMemberSearch,
