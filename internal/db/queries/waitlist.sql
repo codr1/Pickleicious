@@ -91,6 +91,41 @@ FROM waitlists
 WHERE user_id = @user_id
 ORDER BY created_at DESC;
 
+-- name: ListWaitlistsByUserAndFacility :many
+SELECT
+    id,
+    facility_id,
+    user_id,
+    target_court_id,
+    target_date,
+    target_start_time,
+    target_end_time,
+    position,
+    status,
+    created_at,
+    updated_at
+FROM waitlists
+WHERE user_id = @user_id
+  AND facility_id = @facility_id
+ORDER BY created_at DESC;
+
+-- name: ListWaitlistsByFacility :many
+SELECT
+    id,
+    facility_id,
+    user_id,
+    target_court_id,
+    target_date,
+    target_start_time,
+    target_end_time,
+    position,
+    status,
+    created_at,
+    updated_at
+FROM waitlists
+WHERE facility_id = @facility_id
+ORDER BY target_date, target_start_time, position;
+
 -- name: UpdateWaitlistStatus :one
 UPDATE waitlists
 SET status = @status,
