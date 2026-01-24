@@ -57,6 +57,7 @@ type waitlistJoinRequest struct {
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
 	if database == nil {
+		log.Warn().Msg("waitlist.InitHandlers called with nil database")
 		return
 	}
 	queriesOnce.Do(func() {
@@ -175,50 +176,60 @@ func HandleWaitlistJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var created dbgen.Waitlist
-	if err := database.RunInTx(ctx, func(txDB *appdb.DB) error {
-		existing, err := txDB.Queries.ListWaitlistsForSlot(ctx, dbgen.ListWaitlistsForSlotParams{
-			FacilityID:      facilityID,
-			TargetDate:      targetDate,
-			TargetStartTime: targetStartTime,
-			TargetEndTime:   targetEndTime,
-			TargetCourtID:   targetCourtParam,
-		})
-		if err != nil {
-			return fmt.Errorf("list waitlists: %w", err)
-		}
-		for _, entry := range existing {
-			if entry.UserID == user.ID && entry.Status != waitlistStatusExpired && entry.Status != waitlistStatusFulfilled {
-				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already on waitlist for this slot"}
+	const maxInsertAttempts = 3
+	for attempt := 1; attempt <= maxInsertAttempts; attempt++ {
+		err = database.RunInTx(ctx, func(txDB *appdb.DB) error {
+			existing, err := txDB.Queries.ListWaitlistsForSlot(ctx, dbgen.ListWaitlistsForSlotParams{
+				FacilityID:      facilityID,
+				TargetDate:      targetDate,
+				TargetStartTime: targetStartTime,
+				TargetEndTime:   targetEndTime,
+				TargetCourtID:   targetCourtParam,
+			})
+			if err != nil {
+				return fmt.Errorf("list waitlists: %w", err)
 			}
-		}
+			for _, entry := range existing {
+				if entry.UserID == user.ID && entry.Status != waitlistStatusExpired && entry.Status != waitlistStatusFulfilled {
+					return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already on waitlist for this slot"}
+				}
+			}
 
-		maxWaitlistSize, err := loadMaxWaitlistSize(ctx, txDB.Queries, facilityID)
-		if err != nil {
-			return fmt.Errorf("load waitlist config: %w", err)
-		}
-		if maxWaitlistSize > 0 && int64(len(existing)) >= maxWaitlistSize {
-			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Waitlist is full for this slot"}
-		}
+			maxWaitlistSize, err := loadMaxWaitlistSize(ctx, txDB.Queries, facilityID)
+			if err != nil {
+				return fmt.Errorf("load waitlist config: %w", err)
+			}
+			if maxWaitlistSize > 0 && int64(len(existing)) >= maxWaitlistSize {
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Waitlist is full for this slot"}
+			}
 
-		position := int64(len(existing) + 1)
-		created, err = txDB.Queries.CreateWaitlistEntry(ctx, dbgen.CreateWaitlistEntryParams{
-			FacilityID:      facilityID,
-			UserID:          user.ID,
-			TargetCourtID:   targetCourtID,
-			TargetDate:      targetDate,
-			TargetStartTime: targetStartTime,
-			TargetEndTime:   targetEndTime,
-			Position:        position,
-			Status:          waitlistStatusPending,
+			created, err = txDB.Queries.CreateWaitlistEntry(ctx, dbgen.CreateWaitlistEntryParams{
+				FacilityID:      facilityID,
+				UserID:          user.ID,
+				TargetCourtID:   targetCourtID,
+				TargetDate:      targetDate,
+				TargetStartTime: targetStartTime,
+				TargetEndTime:   targetEndTime,
+				Status:          waitlistStatusPending,
+			})
+			if err != nil {
+				return fmt.Errorf("create waitlist entry: %w", err)
+			}
+			return nil
 		})
-		if err != nil {
-			return fmt.Errorf("create waitlist entry: %w", err)
+		if err == nil {
+			break
 		}
-		return nil
-	}); err != nil {
 		var handlerErr apiutil.HandlerError
 		if errors.As(err, &handlerErr) {
 			http.Error(w, handlerErr.Message, handlerErr.Status)
+			return
+		}
+		if apiutil.IsSQLiteUniqueViolation(err) {
+			if attempt < maxInsertAttempts {
+				continue
+			}
+			http.Error(w, "Waitlist updated, please try again", http.StatusConflict)
 			return
 		}
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to create waitlist entry")
@@ -554,7 +565,7 @@ func parseWaitlistCourtID(courtID *int64) (sql.NullInt64, error) {
 func parseNonNegativeInt64Field(raw string, field string) (int64, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return 0, fmt.Errorf("%s is required", field)
+		return 0, nil
 	}
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value < 0 {

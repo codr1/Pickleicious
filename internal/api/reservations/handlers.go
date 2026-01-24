@@ -1166,6 +1166,7 @@ func notifyWaitlistedMembers(ctx context.Context, database *appdb.DB, reservatio
 	}
 
 	targetDate, targetStartTime, targetEndTime := reservationWaitlistSlot(reservation)
+	now := time.Now()
 	return database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -1182,7 +1183,7 @@ func notifyWaitlistedMembers(ctx context.Context, database *appdb.DB, reservatio
 			return err
 		}
 
-		return createWaitlistNotifications(ctx, qtx, waitlists, config)
+		return createWaitlistNotifications(ctx, qtx, waitlists, config, now)
 	})
 }
 
@@ -1270,7 +1271,7 @@ func loadWaitlistNotificationConfig(ctx context.Context, q *dbgen.Queries, facil
 	return config, nil
 }
 
-func createWaitlistNotifications(ctx context.Context, q *dbgen.Queries, waitlists []dbgen.Waitlist, config dbgen.WaitlistConfig) error {
+func createWaitlistNotifications(ctx context.Context, q *dbgen.Queries, waitlists []dbgen.Waitlist, config dbgen.WaitlistConfig, now time.Time) error {
 	mode := strings.ToLower(strings.TrimSpace(config.NotificationMode))
 	if mode == "" {
 		mode = waitlistNotificationBroadcast
@@ -1294,7 +1295,7 @@ func createWaitlistNotifications(ctx context.Context, q *dbgen.Queries, waitlist
 		if expiryMinutes <= 0 {
 			expiryMinutes = defaultWaitlistOfferExpiryMinutes
 		}
-		expiresAt := time.Now().Add(time.Duration(expiryMinutes) * time.Minute)
+		expiresAt := now.Add(time.Duration(expiryMinutes) * time.Minute)
 
 		_, err := q.CreateWaitlistOffer(ctx, dbgen.CreateWaitlistOfferParams{
 			WaitlistID: selected.ID,
@@ -1307,7 +1308,7 @@ func createWaitlistNotifications(ctx context.Context, q *dbgen.Queries, waitlist
 		if expiryMinutes <= 0 {
 			expiryMinutes = defaultWaitlistOfferExpiryMinutes
 		}
-		expiresAt := time.Now().Add(time.Duration(expiryMinutes) * time.Minute)
+		expiresAt := now.Add(time.Duration(expiryMinutes) * time.Minute)
 
 		for _, entry := range waitlists {
 			if _, err := q.UpdateWaitlistStatus(ctx, dbgen.UpdateWaitlistStatusParams{
