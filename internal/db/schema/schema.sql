@@ -397,10 +397,14 @@ CREATE TABLE waitlist_offers (
 
 CREATE INDEX idx_waitlists_facility_id ON waitlists(facility_id);
 CREATE INDEX idx_waitlists_slot ON waitlists(facility_id, target_date, target_start_time, target_end_time);
+CREATE UNIQUE INDEX idx_waitlists_slot_position_unique
+    ON waitlists(facility_id, target_date, target_start_time, target_end_time, COALESCE(target_court_id, -1), position);
 CREATE INDEX idx_waitlists_user_id ON waitlists(user_id);
 CREATE INDEX idx_waitlists_target_date ON waitlists(target_date);
 CREATE INDEX idx_waitlists_status ON waitlists(status);
 CREATE INDEX idx_waitlist_offers_waitlist_id ON waitlist_offers(waitlist_id);
+CREATE INDEX idx_waitlist_offers_status ON waitlist_offers(status);
+CREATE INDEX idx_waitlist_offers_expires_at ON waitlist_offers(expires_at);
 
 ------ RESERVATION CANCELLATIONS ------
 CREATE TABLE reservation_cancellations (

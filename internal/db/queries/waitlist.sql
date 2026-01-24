@@ -9,16 +9,24 @@ INSERT INTO waitlists (
     target_end_time,
     position,
     status
-) VALUES (
+) SELECT
     @facility_id,
     @user_id,
     @target_court_id,
     @target_date,
     @target_start_time,
     @target_end_time,
-    @position,
+    COALESCE(MAX(position), 0) + 1,
     @status
-)
+FROM waitlists
+WHERE facility_id = @facility_id
+  AND target_date = @target_date
+  AND target_start_time = @target_start_time
+  AND target_end_time = @target_end_time
+  AND (
+      target_court_id = @target_court_id
+      OR (@target_court_id IS NULL AND target_court_id IS NULL)
+  )
 RETURNING
     id,
     facility_id,

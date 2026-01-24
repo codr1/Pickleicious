@@ -29,6 +29,8 @@ func (e WaitlistEntry) StatusLabel() string {
 	switch status {
 	case "pending":
 		return "Pending"
+	case "notified":
+		return "Notified"
 	case "expired":
 		return "Expired"
 	case "fulfilled":
