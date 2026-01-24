@@ -34,6 +34,9 @@ func ExpireWaitlistOffers(ctx context.Context, database *db.DB, now time.Time) e
 
 	logger := log.Ctx(ctx)
 	for _, row := range rows {
+		var advancedOfferID int64
+		var advanced bool
+
 		err := database.RunInTx(ctx, func(txdb *db.DB) error {
 			if _, err := txdb.Queries.ExpireOffer(ctx, dbgen.ExpireOfferParams{
 				ID:         row.OfferID,
@@ -67,6 +70,9 @@ func ExpireWaitlistOffers(ctx context.Context, database *db.DB, now time.Time) e
 				return fmt.Errorf("advance waitlist offer: %w", err)
 			}
 
+			advanced = true
+			advancedOfferID = nextOffer.ID
+
 			if _, err := txdb.Queries.UpdateWaitlistStatus(ctx, dbgen.UpdateWaitlistStatusParams{
 				ID:         nextOffer.WaitlistID,
 				FacilityID: row.FacilityID,
@@ -82,7 +88,16 @@ func ExpireWaitlistOffers(ctx context.Context, database *db.DB, now time.Time) e
 				Int64("waitlist_id", row.WaitlistID).
 				Int64("offer_id", row.OfferID).
 				Msg("Failed to expire waitlist offer")
+			continue
 		}
+
+		event := logger.Info().
+			Int64("waitlist_id", row.WaitlistID).
+			Int64("offer_id", row.OfferID)
+		if advanced {
+			event.Int64("next_offer_id", advancedOfferID)
+		}
+		event.Msg("Expired waitlist offer")
 	}
 
 	return nil
