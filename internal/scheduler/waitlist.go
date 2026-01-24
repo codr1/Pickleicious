@@ -34,6 +34,7 @@ func ExpireWaitlistOffers(ctx context.Context, database *db.DB, now time.Time) e
 
 	logger := log.Ctx(ctx)
 	for _, row := range rows {
+		// Captured for post-transaction logging (tx closure sets these for the success log below).
 		var advancedOfferID int64
 		var advanced bool
 
