@@ -27,6 +27,8 @@ const (
 	staffLessonMinDuration         = time.Hour
 )
 
+// isActiveStaffStatus reports whether the provided status string represents an active staff status.
+// Comparison is case-insensitive.
 func isActiveStaffStatus(status string) bool {
 	return strings.EqualFold(status, "active")
 }
@@ -50,6 +52,14 @@ type staffLessonReservationInput struct {
 	ProRow          *dbgen.GetStaffByIDRow
 }
 
+// createStaffLessonReservation creates a staff lesson reservation for a member with a specified pro and time range.
+// 
+// It validates the requested start/end times (end after start, minimum duration of one hour, start in the future,
+// and facility minimum notice), verifies the member and pro exist, are active, and belong to the facility, enforces
+// per-facility maximum active member reservations, and ensures the requested pro lesson slot is still available.
+// The reservation and participant record are created inside a database transaction.
+// If input.FacilityLoc is nil, the local time zone is used.
+// Returns the created reservation on success or an apiutil.HandlerError on validation, lookup, availability, or persistence failures.
 func createStaffLessonReservation(ctx context.Context, input staffLessonReservationInput) (dbgen.Reservation, error) {
 	if input.FacilityLoc == nil {
 		input.FacilityLoc = time.Local
@@ -187,7 +197,9 @@ func createStaffLessonReservation(ctx context.Context, input staffLessonReservat
 	return created, nil
 }
 
-// HandleStaffLessonBookingFormNew handles GET /api/v1/staff/lessons/booking/new.
+// HandleStaffLessonBookingFormNew renders the staff lesson booking form for a selected facility and pro.
+// 
+// It resolves the facility to use (honoring a staff user's HomeFacilityID or the `facility_id` query parameter), enforces facility access, loads pros and member lists for that facility, and renders the StaffLessonBookingForm component with facilities, pros, members, selected facility/pro, and date. The handler writes appropriate HTTP error responses for unauthorized access, missing or invalid facility selection, and failures loading facilities, pros, or members.
 func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -283,7 +295,9 @@ func HandleStaffLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleStaffProScheduleView handles GET /api/v1/staff/lessons/schedule.
+// HandleStaffProScheduleView handles GET /api/v1/staff/lessons/schedule requests for staff to view a pro's upcoming lesson schedule.
+// It validates staff authorization and facility access, resolves the facility and pro, loads the facility timezone and future sessions for the pro, and renders the ProScheduleView HTML component.
+// On failure it writes an appropriate HTTP error response.
 func HandleStaffProScheduleView(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -380,7 +394,13 @@ func HandleStaffProScheduleView(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleStaffLessonBookingSlots handles GET /api/v1/staff/lessons/booking/slots.
+// HandleStaffLessonBookingSlots serves the staff lesson slot picker for a pro on a given date.
+//
+// HandleStaffLessonBookingSlots validates initialization and staff authorization, resolves the
+// effective facility and pro (ensuring the pro is active and belongs to the facility), parses the
+// requested lesson date, loads the facility timezone, builds available lesson slot options for the
+// pro/date, and renders the StaffLessonSlotPicker component. On failure it writes an appropriate
+// HTTP error response.
 func HandleStaffLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -479,7 +499,12 @@ func HandleStaffLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleStaffLessonBookingCreate handles POST /api/v1/staff/lessons/booking.
+// HandleStaffLessonBookingCreate handles POST /api/v1/staff/lessons/booking requests to create a staff-initiated lesson reservation.
+// 
+// It validates staff authorization and facility access, parses and validates required form fields (facility_id, pro_id,
+// primary_user_id, start_time, end_time) using the facility's timezone, delegates reservation creation to createStaffLessonReservation,
+// and writes the created reservation as JSON with HTTP 201. On success it also sets an HX-Trigger header to refresh the client calendar.
+// Errors are converted to appropriate HTTP status responses.
 func HandleStaffLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -743,7 +768,12 @@ func HandleStaffLessonCreate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleStaffMemberSearch handles GET /api/v1/staff/members/search.
+// HandleStaffMemberSearch handles staff member lookup for the GET /api/v1/staff/members/search endpoint.
+// It requires the caller to be authenticated as staff and enforces facility access rules.
+// Query parameters:
+//   - q: search term; if empty, returns an empty members array.
+//   - limit: optional integer cap on results (defaults and maximum enforced server-side).
+// Responds with a JSON object containing a "members" array of member options and appropriate HTTP error codes for authorization or validation failures.
 func HandleStaffMemberSearch(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -811,6 +841,8 @@ func HandleStaffMemberSearch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// dateValueFromRequest returns a YYYY-MM-DD date string extracted from the request's "date" query parameter.
+// If the parameter is absent or cannot be parsed using the local time zone, it returns today's date in the local time zone.
 func dateValueFromRequest(r *http.Request) string {
 	now := time.Now()
 	dateValue := strings.TrimSpace(r.URL.Query().Get("date"))
@@ -823,6 +855,9 @@ func dateValueFromRequest(r *http.Request) string {
 	return now.Format("2006-01-02")
 }
 
+// selectedProIDFromRequest selects the pro ID specified by the "pro_id" query parameter if it matches one of the provided pros.
+// If the query parameter is missing, invalid, or does not match any pro, it returns the first pro's ID when any pros are provided,
+// otherwise it returns 0.
 func selectedProIDFromRequest(r *http.Request, pros []reservationstempl.ProOption) int64 {
 	raw := strings.TrimSpace(r.URL.Query().Get("pro_id"))
 	if raw != "" {
@@ -840,6 +875,7 @@ func selectedProIDFromRequest(r *http.Request, pros []reservationstempl.ProOptio
 	return 0
 }
 
+// facilityAllowed reports whether the given facility ID is present in the slice of facilities.
 func facilityAllowed(facilities []dbgen.Facility, facilityID int64) bool {
 	for _, facility := range facilities {
 		if facility.ID == facilityID {
@@ -858,6 +894,10 @@ func (e staffLessonFacilityError) Error() string {
 	return e.msg
 }
 
+// resolveStaffLessonFacility determines the facility ID to use for the request and enforces facility access rules for the staff user.
+// If the user has no HomeFacilityID, it requires a valid `facility_id` query parameter and ensures the facility exists and is allowed.
+// If the user has a HomeFacilityID, it requires `facility_id` to match the user's home facility.
+// Returns the resolved facility ID, or a staffLessonFacilityError with an HTTP status and message on validation or lookup failure.
 func resolveStaffLessonFacility(ctx context.Context, r *http.Request, user *authz.AuthUser) (int64, error) {
 	facilityID, hasFacility := request.ParseFacilityID(r.URL.Query().Get("facility_id"))
 	if user.HomeFacilityID == nil {
@@ -882,6 +922,12 @@ func resolveStaffLessonFacility(ctx context.Context, r *http.Request, user *auth
 	return facilityID, nil
 }
 
+// resolveStaffLessonFacilityValue determines the facility ID for a staff lesson request based on the
+// provided raw facility value and the user's HomeFacilityID. If the user has no HomeFacilityID, the raw
+// value must contain a valid, allowed facility_id and facilities are loaded to validate it. If the user
+// has a HomeFacilityID, the raw facility_id must be present and equal to the user's HomeFacilityID.
+// On success it returns the resolved facility ID; on failure it returns a staffLessonFacilityError carrying
+// an appropriate HTTP status and message.
 func resolveStaffLessonFacilityValue(ctx context.Context, user *authz.AuthUser, raw string) (int64, error) {
 	facilityID, hasFacility := request.ParseFacilityID(raw)
 	if user.HomeFacilityID == nil {
@@ -906,6 +952,8 @@ func resolveStaffLessonFacilityValue(ctx context.Context, user *authz.AuthUser, 
 	return facilityID, nil
 }
 
+// requiredProID parses the "pro_id" query parameter and returns it as a positive int64.
+// It returns an error if the parameter is missing, not an integer, or not greater than zero.
 func requiredProID(r *http.Request) (int64, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get("pro_id"))
 	if raw == "" {
@@ -918,6 +966,7 @@ func requiredProID(r *http.Request) (int64, error) {
 	return id, nil
 }
 
+// optionalPrimaryUserID parses the "primary_user_id" query parameter and returns a pointer to its int64 value if it is present and greater than zero, or nil otherwise.
 func optionalPrimaryUserID(r *http.Request) *int64 {
 	raw := strings.TrimSpace(r.URL.Query().Get("primary_user_id"))
 	if raw == "" {
@@ -930,6 +979,10 @@ func optionalPrimaryUserID(r *http.Request) *int64 {
 	return &id
 }
 
+// parseLessonDate parses the "date" query parameter as YYYY-MM-DD in the local time zone
+// and returns that date at 00:00 local time. If the parameter is missing or empty, it
+// returns today's date at 00:00 local time. It returns an error with the message
+// "date must be in YYYY-MM-DD format" when the provided value cannot be parsed.
 func parseLessonDate(r *http.Request) (time.Time, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get("date"))
 	if raw == "" {
@@ -943,6 +996,9 @@ func parseLessonDate(r *http.Request) (time.Time, error) {
 	return parsed, nil
 }
 
+// buildLessonSlotOptions builds available lesson slot options for a pro on a given date at a facility using the provided location.
+// It queries persisted pro lesson slots and returns a slice of StaffLessonSlotOption with formatted `StartTime`, `EndTime`, and a human-readable `Label`.
+// If `facilityLoc` is nil, the local time zone is used. Returns an error if the query fails or if any slot time cannot be parsed.
 func buildLessonSlotOptions(ctx context.Context, facilityID, proID int64, lessonDate time.Time, facilityLoc *time.Location) ([]reservationstempl.StaffLessonSlotOption, error) {
 	if facilityLoc == nil {
 		facilityLoc = time.Local
@@ -977,6 +1033,9 @@ func buildLessonSlotOptions(ctx context.Context, facilityID, proID int64, lesson
 	return slots, nil
 }
 
+// parseLessonSlotTime parses a slot time value and returns it positioned in loc.
+// It accepts a time.Time (converted to loc), a []byte or string (parsed using supported slot time formats),
+// or any other value via fmt.Sprint. It returns an error for a nil value or when parsing fails.
 func parseLessonSlotTime(value interface{}, loc *time.Location) (time.Time, error) {
 	switch typed := value.(type) {
 	case time.Time:
@@ -993,6 +1052,9 @@ func parseLessonSlotTime(value interface{}, loc *time.Location) (time.Time, erro
 	}
 }
 
+// parseLessonSlotString parses a slot time string `raw` in the given location `loc` using supported
+// layouts ("2006-01-02 15:04:05" and "2006-01-02 15:04") and returns the corresponding time.Time.
+// It returns an error if `raw` is empty or does not match any supported layout.
 func parseLessonSlotString(raw string, loc *time.Location) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1007,6 +1069,8 @@ func parseLessonSlotString(raw string, loc *time.Location) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid slot time")
 }
 
+// parseStaffLessonTime parses raw using the staff lesson time layout ("2006-01-02 15:04") in loc and returns the resulting time.
+// It returns an error if raw is empty (reports "<field> is required") or if parsing fails (reports "<field> must be in YYYY-MM-DD HH:MM format").
 func parseStaffLessonTime(raw string, field string, loc *time.Location) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1019,6 +1083,8 @@ func parseStaffLessonTime(raw string, field string, loc *time.Location) (time.Ti
 	return parsed, nil
 }
 
+// lookupReservationTypeID retrieves the ID for a reservation type with the given name.
+// It returns the reservation type's ID, or an error if no such type exists or the lookup fails; when not found the error message indicates the missing name.
 func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string) (int64, error) {
 	resType, err := q.GetReservationTypeByName(ctx, name)
 	if err != nil {
@@ -1030,6 +1096,8 @@ func lookupReservationTypeID(ctx context.Context, q *dbgen.Queries, name string)
 	return resType.ID, nil
 }
 
+// parseStaffLessonCreateID validates that the provided ID is greater than zero.
+// It returns the same ID when valid, or an error stating "<field> must be a positive integer" when the value is not positive.
 func parseStaffLessonCreateID(value int64, field string) (int64, error) {
 	if value <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", field)
@@ -1037,6 +1105,8 @@ func parseStaffLessonCreateID(value int64, field string) (int64, error) {
 	return value, nil
 }
 
+// parseMemberSearchLimit parses a string limit for member search results and clamps it to the allowed range.
+// It returns the parsed integer constrained to 1 through 200; empty or invalid input yields the default 25.
 func parseMemberSearchLimit(raw string) int64 {
 	value := int64(25)
 	if raw == "" {

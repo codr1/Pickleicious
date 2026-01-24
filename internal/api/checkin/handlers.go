@@ -89,7 +89,14 @@ func loadQueries() *dbgen.Queries {
 	return queries
 }
 
-// /checkin
+// HandleCheckinPage serves the staff check-in page for a facility.
+//
+// It verifies the caller is a staff user and that a valid `facility_id` query
+// parameter is present and accessible. The handler loads the facility's active
+// theme and today's arrivals, renders the check-in layout, and writes the
+// resulting HTML to the response. On error it writes an appropriate HTTP error
+// status (e.g., 400 for missing parameters, 401 for unauthorized, 500 for
+// internal failures).
 func HandleCheckinPage(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -142,7 +149,12 @@ func HandleCheckinPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// /api/v1/checkin/search
+// HandleCheckinSearch handles HTTP requests to search for members eligible for check-in within a specific facility.
+// 
+// It requires a `facility_id` query parameter and accepts an optional `q` search term plus `limit` and `offset` for pagination.
+// If `q` is empty, the handler returns an empty members list (renders an HTMX HTML fragment when the request is HTMX, otherwise returns an empty JSON list).
+// For a non-empty `q`, it returns matching members scoped to the facility (renders an HTMX HTML fragment for HTMX requests, otherwise returns JSON).
+// The handler enforces staff authorization; it responds with 400 if `facility_id` is missing, 401 for unauthorized access, and 500 on internal query or rendering errors.
 func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -231,7 +243,15 @@ func HandleCheckinSearch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// /api/v1/checkin
+// HandleCheckin processes a member check-in request for a facility.
+//
+// It validates the request and facility access, enforces waiver and membership checks
+// (unless Override is true), creates a facility visit record, and returns the result.
+// On validation errors the handler responds with 400, on unauthorized access with 401,
+// and when the member is not found with 404. Membership or waiver blocks produce a
+// blocked response (409). A foreign-key violation for a related reservation returns 400.
+// On success the handler returns the created visit with HTTP 201; for HTMX requests it
+// renders an HTML success component instead of JSON.
 func HandleCheckin(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -429,7 +449,13 @@ func respondCheckinBlocked(w http.ResponseWriter, response checkinBlockResponse)
 	}
 }
 
-// /api/v1/checkin/activity
+// HandleCheckinActivityUpdate updates the activity type and optional related reservation for an existing facility visit.
+//
+// HandleCheckinActivityUpdate validates the request and staff authorization, enforces facility access, updates the visit's
+// activity and related reservation, and returns the updated visit. For standard requests it responds with the updated visit
+// as JSON (HTTP 200). For HTMX requests it renders an updated HTML fragment reflecting the member's visit, activities, and
+// arrivals (HTTP 200). It responds with HTTP 400 for validation errors or foreign-key failures, HTTP 401 if the caller is not
+// authorized staff, HTTP 404 if the visit or member is not found, and HTTP 500 for internal server errors.
 func HandleCheckinActivityUpdate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 

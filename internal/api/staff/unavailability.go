@@ -204,6 +204,8 @@ func HandleDeleteProUnavailability(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// requireProStaff authorizes the HTTP request as a "pro" staff user and returns the corresponding staff database row on success.
+// On failure it writes an appropriate HTTP error to the response (401 if the requester is not staff; 403 if no staff record exists or the staff role is not "pro"; 500 if an internal error occurs) and returns the zero-value staff row and false.
 func requireProStaff(w http.ResponseWriter, r *http.Request, ctx context.Context) (dbgen.GetStaffByUserIDRow, bool) {
 	logger := log.Ctx(r.Context())
 	user := authz.UserFromContext(r.Context())

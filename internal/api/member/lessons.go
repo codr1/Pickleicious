@@ -321,7 +321,13 @@ func HandleProAvailability(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleLessonBookingCreate handles POST /member/lessons for member lesson booking.
+// HandleLessonBookingCreate creates a lesson reservation for the current member from POST /member/lessons.
+// 
+// It validates the form input and booking rules (facility timezone, booking window, minimum duration, minimum notice,
+// and maximum active reservations), verifies the requested pro and that the requested slot is still available,
+// creates a reservation (setting CreatedByUserID to the requesting user) and adds the requester as a participant,
+// then responds with the created reservation as JSON. On validation or business-rule failures it writes the
+// appropriate HTTP error status (400/403/404/409), and on internal failures it returns 500.
 func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 

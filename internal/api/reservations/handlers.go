@@ -49,7 +49,12 @@ func InitHandlers(database *appdb.DB) {
 	})
 }
 
-// POST /api/v1/reservations
+// HandleReservationCreate creates a new reservation from the incoming POST /api/v1/reservations request.
+// 
+// It validates and normalizes the request, enforces facility access and authentication, verifies facility
+// and court availability, and persists the reservation along with its courts and participants.
+// On success it triggers a courts calendar refresh and responds with the created reservation (HTTP 201).
+// Client errors produce appropriate 4xx responses; server or persistence failures produce 5xx responses.
 func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -233,7 +238,13 @@ func HandleReservationsList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /api/v1/events/booking/new
+// HandleEventBookingFormNew renders the new event booking HTML form for a facility.
+//
+// HandleEventBookingFormNew requires a facility ID from the booking request and uses optional
+// "hour" and "date" query parameters to determine the form's start and end times. It loads courts,
+// reservation types, and up to 50 members for selection, then writes an HTML response with the
+// rendered booking form. Responds with HTTP 400 if the facility ID is missing or invalid, and with
+// HTTP 500 on failures loading data or rendering the template.
 func HandleEventBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
@@ -323,7 +334,11 @@ func HandleEventBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /api/v1/reservations/{id}/edit
+// HandleReservationEdit renders the reservation edit HTML form for the reservation identified in the request.
+//
+// It loads the reservation by ID, enforces facility access, gathers related data (courts, reservation types,
+// and members), and renders a pre-populated booking form. On success writes an HTML response with status 200;
+// on error it writes an appropriate HTTP error status (e.g., 400 for invalid ID, 404 if not found, 500 for server errors).
 func HandleReservationEdit(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
