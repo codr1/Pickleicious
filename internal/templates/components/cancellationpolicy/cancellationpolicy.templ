@@ -3,7 +3,7 @@ package cancellationpolicy
 
 import "fmt"
 
-templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reservationTypes []ReservationTypeOption) {
+templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reservationTypes []ReservationTypeOption, filterOptions []ReservationTypeFilterOption, activeReservationTypeID *int64) {
 	<div class="space-y-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<div>
@@ -13,6 +13,7 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reserva
 			<span class="text-xs text-muted-foreground">Facility ID {fmt.Sprintf("%d", facilityID)}</span>
 		</div>
 		<div id="cancellation-policy-feedback" class="text-sm"></div>
+		@CancellationPolicyFilters(facilityID, filterOptions, activeReservationTypeID)
 
 		<section class="rounded-lg border border-border bg-background shadow-sm">
 			<div class="border-b border-border px-4 py-3">
@@ -24,6 +25,7 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reserva
 				hx-post="/api/v1/cancellation-policy/tiers"
 				hx-target="#cancellation-policy-list"
 				hx-swap="innerHTML"
+				hx-include="#cancellation-policy-filters"
 				hx-on::after-request="if(event.detail.xhr.status===200){event.target.reset(); const feedback=document.getElementById('cancellation-policy-feedback'); if(feedback){feedback.textContent=''; feedback.className='text-sm';}}"
 				hx-on::response-error="const feedback=document.getElementById('cancellation-policy-feedback'); if(!feedback){return;} feedback.textContent=event.detail.xhr.responseText; feedback.className='rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800';">
 				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)} />
@@ -62,7 +64,7 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reserva
 						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
 						<option value="">Default (all types)</option>
 						for _, reservationType := range reservationTypes {
-							<option value={fmt.Sprintf("%d", reservationType.ID)}>{reservationType.Name}</option>
+							<option value={fmt.Sprintf("%d", reservationType.ID)} if activeReservationTypeID != nil && *activeReservationTypeID == reservationType.ID { selected }>{reservationType.Name}</option>
 						}
 					</select>
 				</div>
@@ -82,29 +84,75 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reserva
 				<div class="text-right">Actions</div>
 			</div>
 			<div id="cancellation-policy-list" class="divide-y divide-border">
-				@CancellationPolicyList(facilityID, tiers)
+				@CancellationPolicyList(facilityID, tiers, activeReservationTypeID)
 			</div>
 		</section>
 	</div>
 }
 
-templ CancellationPolicyList(facilityID int64, tiers []PolicyTierData) {
+templ CancellationPolicyFilters(facilityID int64, filterOptions []ReservationTypeFilterOption, activeReservationTypeID *int64) {
+	<div
+		id="cancellation-policy-filters"
+		class="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-background px-4 py-3 text-sm">
+		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)} />
+		<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filter</span>
+		<label class="flex items-center gap-2 text-foreground">
+			<input
+				type="radio"
+				id="filter-reservation-type-all"
+				name="filter_reservation_type_id"
+				value=""
+				class="h-4 w-4 border-border text-blue-600 focus:ring-blue-500"
+				hx-get="/api/v1/cancellation-policy/tiers"
+				hx-target="#cancellation-policy-list"
+				hx-swap="innerHTML"
+				hx-include="#cancellation-policy-filters"
+				if activeReservationTypeID == nil { checked }
+			/>
+			<span>All Types</span>
+		</label>
+		for _, option := range filterOptions {
+			<label class="flex items-center gap-2 text-foreground">
+				<input
+					type="radio"
+					id={fmt.Sprintf("filter-reservation-type-%d", option.ID)}
+					name="filter_reservation_type_id"
+					value={fmt.Sprintf("%d", option.ID)}
+					class="h-4 w-4 border-border text-blue-600 focus:ring-blue-500"
+					hx-get="/api/v1/cancellation-policy/tiers"
+					hx-target="#cancellation-policy-list"
+					hx-swap="innerHTML"
+					hx-include="#cancellation-policy-filters"
+					if activeReservationTypeID != nil && *activeReservationTypeID == option.ID { checked }
+				/>
+				<span>{option.Label}</span>
+			</label>
+		}
+	</div>
+}
+
+templ CancellationPolicyList(facilityID int64, tiers []PolicyTierData, activeReservationTypeID *int64) {
 	if len(tiers) == 0 {
-		<div class="px-4 py-4 text-sm text-muted-foreground">No cancellation policy tiers yet.</div>
+		if activeReservationTypeID == nil {
+			<div class="px-4 py-4 text-sm text-muted-foreground">No cancellation policy tiers yet.</div>
+		} else {
+			<div class="px-4 py-4 text-sm text-amber-700">N/A (uses default).</div>
+		}
 	} else {
 		for _, tier := range tiers {
-			@PolicyTierRow(facilityID, tier)
+			@PolicyTierRow(facilityID, tier, activeReservationTypeID)
 		}
 	}
 }
 
-templ PolicyTierRow(facilityID int64, tier PolicyTierData) {
+templ PolicyTierRow(facilityID int64, tier PolicyTierData, activeReservationTypeID *int64) {
 	<form
 		class="grid gap-4 px-4 py-3 md:grid-cols-[200px_180px_180px_minmax(160px,1fr)]"
 		hx-put={fmt.Sprintf("/api/v1/cancellation-policy/tiers/%d", tier.ID)}
 		hx-trigger="change from:input[name='min_hours_before'] delay:300ms, change from:input[name='refund_percentage'] delay:300ms"
 		hx-target="#cancellation-policy-list"
 		hx-swap="innerHTML"
+		hx-include="#cancellation-policy-filters"
 		hx-on::after-request="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} if(event.detail.xhr.status===200){indicator.textContent='Saved'; indicator.classList.remove('text-red-600'); indicator.classList.add('text-emerald-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},1200);}"
 		hx-on::response-error="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} indicator.textContent='Error'; indicator.classList.remove('text-emerald-600'); indicator.classList.add('text-red-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},2000);">
 		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)} />
@@ -148,7 +196,12 @@ templ PolicyTierRow(facilityID int64, tier PolicyTierData) {
 			<button
 				type="button"
 				class="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
-				hx-delete={fmt.Sprintf("/api/v1/cancellation-policy/tiers/%d?facility_id=%d", tier.ID, facilityID)}
+				hx-delete={func() string {
+					if activeReservationTypeID == nil {
+						return fmt.Sprintf("/api/v1/cancellation-policy/tiers/%d?facility_id=%d", tier.ID, facilityID)
+					}
+					return fmt.Sprintf("/api/v1/cancellation-policy/tiers/%d?facility_id=%d&reservation_type_id=%d", tier.ID, facilityID, *activeReservationTypeID)
+				}()}
 				hx-target="#cancellation-policy-list"
 				hx-swap="innerHTML"
 				hx-confirm="Delete this refund tier?">

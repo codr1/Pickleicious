@@ -30,6 +30,7 @@ SELECT
     updated_at
 FROM cancellation_policy_tiers
 WHERE facility_id = @facility_id
+  AND (@reservation_type_id IS NULL OR reservation_type_id = @reservation_type_id)
 ORDER BY
     reservation_type_id IS NULL,
     reservation_type_id,

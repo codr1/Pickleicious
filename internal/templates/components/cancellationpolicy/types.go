@@ -12,3 +12,8 @@ type ReservationTypeOption struct {
 	ID   int64
 	Name string
 }
+
+type ReservationTypeFilterOption struct {
+	ID    int64
+	Label string
+}

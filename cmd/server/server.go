@@ -460,6 +460,7 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Cancellation policy API
 	mux.HandleFunc("/api/v1/cancellation-policy/tiers", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  cancellationpolicy.HandleCancellationPolicyTierList,
 		http.MethodPost: cancellationpolicy.HandleCancellationPolicyTierCreate,
 	}))
 	mux.HandleFunc("/api/v1/cancellation-policy/tiers/{id}", methodHandler(map[string]http.HandlerFunc{
