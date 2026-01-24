@@ -90,6 +90,9 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	if err := registerOpenPlayEnforcementJob(config, database, openplayEngine); err != nil {
 		return nil, fmt.Errorf("register open play enforcement job: %w", err)
 	}
+	if err := scheduler.RegisterWaitlistJobs(database); err != nil {
+		return nil, fmt.Errorf("register waitlist jobs: %w", err)
+	}
 
 	// Register routes
 	registerRoutes(router, database)
@@ -172,6 +175,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/waitlist", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  waitlist.HandleWaitlistList,
 		http.MethodPost: waitlist.HandleWaitlistJoin,
+	}))
+	mux.HandleFunc("/api/v1/waitlist/config", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: waitlist.HandleWaitlistConfigUpdate,
 	}))
 	mux.HandleFunc("/api/v1/waitlist/{id}", methodHandler(map[string]http.HandlerFunc{
 		http.MethodDelete: waitlist.HandleWaitlistLeave,

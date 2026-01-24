@@ -15,6 +15,14 @@ type ProScheduleViewData struct {
 	Sessions []dbgen.GetFutureProSessionsByStaffIDRow
 }
 
+type WaitlistConfigFormData struct {
+	FacilityID                int64
+	MaxWaitlistSize           int64
+	NotificationMode          string
+	OfferExpiryMinutes        int64
+	NotificationWindowMinutes int64
+}
+
 // NewStaff creates a Staff from ListStaffRow.
 func NewStaff(row dbgen.ListStaffRow) Staff {
 	return Staff{ListStaffRow: row}
