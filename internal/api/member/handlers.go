@@ -24,6 +24,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/models"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
+	waitlisttempl "github.com/codr1/Pickleicious/internal/templates/components/waitlist"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
 
@@ -279,6 +280,52 @@ func HandleMemberReservationsWidget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleMemberWaitlistList renders waitlist entries for members.
+func HandleMemberWaitlistList(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	if user.HomeFacilityID == nil {
+		http.Error(w, "Home facility is required", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
+	defer cancel()
+
+	rows, err := q.ListWaitlistsByUserAndFacility(ctx, dbgen.ListWaitlistsByUserAndFacilityParams{
+		UserID:     user.ID,
+		FacilityID: *user.HomeFacilityID,
+	})
+	if err != nil {
+		logger.Error().Err(err).Int64("member_id", user.ID).Msg("Failed to load waitlist entries")
+		http.Error(w, "Failed to load waitlist entries", http.StatusInternalServerError)
+		return
+	}
+
+	entries := buildWaitlistEntrySummaries(ctx, q, rows, logger)
+	component := waitlisttempl.WaitlistEntryList(waitlisttempl.WaitlistEntryListData{Entries: entries})
+	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render waitlist list", "Failed to render waitlist entries") {
+		return
+	}
+}
+
 // HandleMemberBookingFormNew handles GET /member/booking/new.
 func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -336,6 +383,7 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load available slots", http.StatusInternalServerError)
 		return
 	}
+	waitlistStartTime, waitlistEndTime := waitlistFallbackTimes(bookingDate, availableSlots)
 
 	component := membertempl.MemberBookingForm(membertempl.MemberBookingFormData{
 		FacilityID:            *user.HomeFacilityID,
@@ -343,6 +391,8 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		AvailableSlots:        availableSlots,
 		DatePicker:            membertempl.DatePickerData{Year: bookingDate.Year(), Month: int(bookingDate.Month()), Day: bookingDate.Day()},
 		MaxAdvanceBookingDays: maxAdvanceDays,
+		WaitlistStartTime:     waitlistStartTime,
+		WaitlistEndTime:       waitlistEndTime,
 	})
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render member booking form", "Failed to render booking form") {
 		return
@@ -393,12 +443,15 @@ func HandleMemberBookingSlots(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load available slots", http.StatusInternalServerError)
 		return
 	}
+	waitlistStartTime, waitlistEndTime := waitlistFallbackTimes(bookingDate, availableSlots)
 
 	component := membertempl.MemberBookingDateTime(membertempl.MemberBookingFormData{
 		FacilityID:            *user.HomeFacilityID,
 		AvailableSlots:        availableSlots,
 		DatePicker:            membertempl.DatePickerData{Year: bookingDate.Year(), Month: int(bookingDate.Month()), Day: bookingDate.Day()},
 		MaxAdvanceBookingDays: maxAdvanceDays,
+		WaitlistStartTime:     waitlistStartTime,
+		WaitlistEndTime:       waitlistEndTime,
 	})
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render booking slots", "Failed to render booking slots") {
 		return
@@ -1531,6 +1584,19 @@ func buildMemberBookingSlots(
 	return slots, nil
 }
 
+func waitlistFallbackTimes(baseDate time.Time, slots []membertempl.MemberBookingSlot) (time.Time, time.Time) {
+	if len(slots) > 0 {
+		return slots[0].StartTime, slots[0].EndTime
+	}
+	openTime, err := parseBookingTimeOfDay(memberBookingDefaultOpensAt, "opens_at")
+	if err != nil {
+		start := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), 9, 0, 0, 0, baseDate.Location())
+		return start, start.Add(memberBookingMinDuration)
+	}
+	start := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), openTime.Hour(), openTime.Minute(), 0, 0, baseDate.Location())
+	return start, start.Add(memberBookingMinDuration)
+}
+
 func parseBookingTimeOfDay(raw string, field string) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1572,6 +1638,98 @@ func parseMemberBookingTime(raw string, field string, loc *time.Location) (time.
 		return time.Time{}, fmt.Errorf("%s must be in YYYY-MM-DDTHH:MM format", field)
 	}
 	return parsed, nil
+}
+
+func buildWaitlistEntrySummaries(ctx context.Context, q *dbgen.Queries, rows []dbgen.Waitlist, logger *zerolog.Logger) []waitlisttempl.WaitlistEntry {
+	entries := make([]waitlisttempl.WaitlistEntry, 0, len(rows))
+	facilityNames := make(map[int64]string)
+	courtNames := make(map[int64]string)
+
+	for _, row := range rows {
+		facilityName, ok := facilityNames[row.FacilityID]
+		if !ok {
+			facility, err := q.GetFacilityByID(ctx, row.FacilityID)
+			if err != nil {
+				logger.Error().Err(err).Int64("facility_id", row.FacilityID).Msg("Failed to load facility for waitlist entry")
+			} else {
+				facilityName = facility.Name
+			}
+			if strings.TrimSpace(facilityName) == "" {
+				facilityName = fmt.Sprintf("Facility %d", row.FacilityID)
+			}
+			facilityNames[row.FacilityID] = facilityName
+		}
+
+		var courtName string
+		if row.TargetCourtID.Valid {
+			if cached, ok := courtNames[row.TargetCourtID.Int64]; ok {
+				courtName = cached
+			} else {
+				court, err := q.GetCourt(ctx, row.TargetCourtID.Int64)
+				if err != nil {
+					logger.Error().Err(err).Int64("court_id", row.TargetCourtID.Int64).Msg("Failed to load court for waitlist entry")
+				} else {
+					courtName = court.Name
+				}
+				courtNames[row.TargetCourtID.Int64] = courtName
+			}
+		}
+
+		startTime, err := waitlistDateTime(row.TargetDate, row.TargetStartTime)
+		if err != nil {
+			logger.Error().Err(err).Int64("waitlist_id", row.ID).Msg("Failed to parse waitlist start time")
+			startTime = row.TargetDate
+		}
+		endTime, err := waitlistDateTime(row.TargetDate, row.TargetEndTime)
+		if err != nil {
+			logger.Error().Err(err).Int64("waitlist_id", row.ID).Msg("Failed to parse waitlist end time")
+			endTime = row.TargetDate
+		}
+
+		entries = append(entries, waitlisttempl.WaitlistEntry{
+			ID:           row.ID,
+			FacilityID:   row.FacilityID,
+			FacilityName: facilityName,
+			CourtName:    courtName,
+			StartTime:    startTime,
+			EndTime:      endTime,
+			Position:     row.Position,
+			Status:       row.Status,
+		})
+	}
+
+	return entries
+}
+
+func waitlistDateTime(targetDate time.Time, value interface{}) (time.Time, error) {
+	raw := strings.TrimSpace(waitlistTimeValue(value))
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("waitlist time is required")
+	}
+	layouts := []string{"15:04:05", "15:04"}
+	for _, layout := range layouts {
+		parsed, err := time.ParseInLocation(layout, raw, targetDate.Location())
+		if err == nil {
+			return time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), parsed.Hour(), parsed.Minute(), parsed.Second(), 0, targetDate.Location()), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("waitlist time must be in HH:MM or HH:MM:SS format")
+}
+
+func waitlistTimeValue(value interface{}) string {
+	switch typed := value.(type) {
+	case time.Time:
+		return typed.Format("15:04:05")
+	case []byte:
+		return string(typed)
+	case string:
+		return typed
+	default:
+		if value == nil {
+			return ""
+		}
+		return fmt.Sprint(value)
+	}
 }
 
 func parseMemberCourtID(r *http.Request) (int64, error) {
