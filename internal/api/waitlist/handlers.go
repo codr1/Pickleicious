@@ -169,11 +169,9 @@ func HandleWaitlistJoin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var targetCourtParam interface{}
+	targetCourtParam := sql.NullInt64{}
 	if targetCourtID.Valid {
 		targetCourtParam = targetCourtID
-	} else {
-		targetCourtParam = sql.NullInt64{}
 	}
 
 	var created dbgen.Waitlist

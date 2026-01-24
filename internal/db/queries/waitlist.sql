@@ -69,7 +69,32 @@ WHERE facility_id = @facility_id
   AND target_start_time = @target_start_time
   AND target_end_time = @target_end_time
   AND (
-      (@target_court_id IS NOT NULL AND (target_court_id = @target_court_id OR target_court_id IS NULL))
+      target_court_id = @target_court_id
+      OR (@target_court_id IS NULL AND target_court_id IS NULL)
+  )
+ORDER BY position;
+
+-- name: ListMatchingPendingWaitlistsForCancelledSlot :many
+SELECT
+    id,
+    facility_id,
+    user_id,
+    target_court_id,
+    target_date,
+    target_start_time,
+    target_end_time,
+    position,
+    status,
+    created_at,
+    updated_at
+FROM waitlists
+WHERE facility_id = @facility_id
+  AND target_date = @target_date
+  AND target_start_time = @target_start_time
+  AND target_end_time = @target_end_time
+  AND status = 'pending'
+  AND (
+      target_court_id = @target_court_id
       OR (@target_court_id IS NULL AND target_court_id IS NULL)
   )
 ORDER BY position;
