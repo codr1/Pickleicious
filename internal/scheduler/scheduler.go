@@ -1,13 +1,18 @@
 package scheduler
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-co-op/gocron/v2"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
+	"github.com/codr1/Pickleicious/internal/db"
 )
 
 var (
@@ -144,4 +149,57 @@ func (s *Service) AddJob(name, cronExpr string, task func()) (gocron.Job, error)
 	}
 	jobLogger.Info().Msg("Scheduler job registered")
 	return job, nil
+}
+
+// RegisterWaitlistJobs registers scheduled waitlist maintenance tasks.
+func RegisterWaitlistJobs(database *db.DB) error {
+	if database == nil {
+		return fmt.Errorf("waitlist jobs require database")
+	}
+
+	expireJobName := "waitlist_offer_expiry"
+	expireCronExpr := "* * * * *"
+	expireLogger := log.With().
+		Str("component", "waitlist_offer_expiry_job").
+		Str("job_name", expireJobName).
+		Str("cron", expireCronExpr).
+		Logger()
+
+	_, err := AddJob(expireJobName, expireCronExpr, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		ctx = expireLogger.WithContext(ctx)
+
+		if err := ExpireWaitlistOffers(ctx, database, time.Now()); err != nil {
+			expireLogger.Error().Err(err).Msg("Waitlist offer expiry run failed")
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("add waitlist offer expiry job: %w", err)
+	}
+	expireLogger.Info().Msg("Waitlist offer expiry job registered")
+
+	cleanupJobName := "waitlist_cleanup"
+	cleanupCronExpr := "0 * * * *"
+	cleanupLogger := log.With().
+		Str("component", "waitlist_cleanup_job").
+		Str("job_name", cleanupJobName).
+		Str("cron", cleanupCronExpr).
+		Logger()
+
+	_, err = AddJob(cleanupJobName, cleanupCronExpr, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		ctx = cleanupLogger.WithContext(ctx)
+
+		if err := CleanupPastWaitlists(ctx, database, time.Now()); err != nil {
+			cleanupLogger.Error().Err(err).Msg("Waitlist cleanup run failed")
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("add waitlist cleanup job: %w", err)
+	}
+	cleanupLogger.Info().Msg("Waitlist cleanup job registered")
+
+	return nil
 }

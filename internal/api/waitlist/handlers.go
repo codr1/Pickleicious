@@ -389,6 +389,86 @@ func HandleStaffWaitlistView(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// POST /api/v1/waitlist/config
+func HandleWaitlistConfigUpdate(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if !authz.IsStaff(user) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := apiutil.ParseRequiredInt64Field(r.FormValue("facility_id"), "facility_id")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	maxWaitlistSize, err := parseNonNegativeInt64Field(r.FormValue("max_waitlist_size"), "max_waitlist_size")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	notificationMode := strings.ToLower(strings.TrimSpace(r.FormValue("notification_mode")))
+	if notificationMode == "" {
+		notificationMode = "broadcast"
+	}
+	switch notificationMode {
+	case "broadcast", "sequential":
+	default:
+		http.Error(w, "notification_mode must be broadcast or sequential", http.StatusBadRequest)
+		return
+	}
+
+	offerExpiryMinutes, err := parseNonNegativeInt64Field(r.FormValue("offer_expiry_minutes"), "offer_expiry_minutes")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	notificationWindowMinutes, err := parseNonNegativeInt64Field(r.FormValue("notification_window_minutes"), "notification_window_minutes")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), waitlistQueryTimeout)
+	defer cancel()
+
+	_, err = q.UpsertWaitlistConfig(ctx, dbgen.UpsertWaitlistConfigParams{
+		FacilityID:                facilityID,
+		MaxWaitlistSize:           maxWaitlistSize,
+		NotificationMode:          notificationMode,
+		OfferExpiryMinutes:        offerExpiryMinutes,
+		NotificationWindowMinutes: notificationWindowMinutes,
+	})
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to update waitlist config")
+		http.Error(w, "Failed to update waitlist configuration", http.StatusInternalServerError)
+		return
+	}
+
+	apiutil.WriteHTMLFeedback(w, http.StatusOK, "Waitlist configuration updated.")
+}
+
 func decodeWaitlistJoinRequest(r *http.Request) (waitlistJoinRequest, error) {
 	if apiutil.IsJSONRequest(r) {
 		var req waitlistJoinRequest
@@ -469,6 +549,18 @@ func parseWaitlistCourtID(courtID *int64) (sql.NullInt64, error) {
 		return sql.NullInt64{}, fmt.Errorf("court_id must be a positive integer")
 	}
 	return sql.NullInt64{Int64: *courtID, Valid: true}, nil
+}
+
+func parseNonNegativeInt64Field(raw string, field string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", field)
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", field)
+	}
+	return value, nil
 }
 
 func sameWaitlistDate(startTime, endTime time.Time) bool {

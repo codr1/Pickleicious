@@ -175,6 +175,10 @@ DELETE FROM waitlists
 WHERE id = @id
   AND facility_id = @facility_id;
 
+-- name: DeletePastWaitlistEntries :execrows
+DELETE FROM waitlists
+WHERE datetime(target_date || ' ' || target_end_time) < @comparison_time;
+
 -- name: GetWaitlistConfig :one
 SELECT
     id,
@@ -266,6 +270,55 @@ UPDATE waitlist_offers
 SET status = 'accepted'
 WHERE id = @id
   AND waitlist_id = @waitlist_id
+RETURNING
+    id,
+    waitlist_id,
+    offered_at,
+    expires_at,
+    status;
+
+-- name: ListExpiredOffers :many
+SELECT
+    wo.id AS offer_id,
+    wo.waitlist_id,
+    w.facility_id,
+    wc.offer_expiry_minutes
+FROM waitlist_offers wo
+JOIN waitlists w ON w.id = wo.waitlist_id
+JOIN waitlist_config wc ON wc.facility_id = w.facility_id
+WHERE wo.status = 'pending'
+  AND wo.expires_at < @comparison_time
+  AND w.status = 'notified'
+  AND wc.notification_mode = 'sequential'
+ORDER BY wo.expires_at;
+
+-- name: AdvanceWaitlistOffer :one
+INSERT INTO waitlist_offers (waitlist_id, expires_at, status)
+SELECT w.id, @expires_at, 'pending'
+FROM waitlists w
+JOIN waitlists c ON c.id = @waitlist_id
+WHERE w.facility_id = c.facility_id
+  AND w.target_date = c.target_date
+  AND w.target_start_time = c.target_start_time
+  AND w.target_end_time = c.target_end_time
+  AND (
+      w.target_court_id = c.target_court_id
+      OR (w.target_court_id IS NULL AND c.target_court_id IS NULL)
+  )
+  AND w.position = (
+      SELECT MIN(w2.position)
+      FROM waitlists w2
+      WHERE w2.facility_id = c.facility_id
+        AND w2.target_date = c.target_date
+        AND w2.target_start_time = c.target_start_time
+        AND w2.target_end_time = c.target_end_time
+        AND (
+            w2.target_court_id = c.target_court_id
+            OR (w2.target_court_id IS NULL AND c.target_court_id IS NULL)
+        )
+        AND w2.position > c.position
+        AND w2.status = 'pending'
+  )
 RETURNING
     id,
     waitlist_id,
