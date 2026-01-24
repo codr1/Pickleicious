@@ -379,6 +379,7 @@ CREATE INDEX idx_reservations_created_by_user_id ON reservations(created_by_user
 CREATE TABLE cancellation_policy_tiers (
     id INTEGER PRIMARY KEY,
     facility_id INTEGER NOT NULL,
+    reservation_type_id INTEGER,
     min_hours_before INTEGER NOT NULL,
     refund_percentage INTEGER NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -386,10 +387,16 @@ CREATE TABLE cancellation_policy_tiers (
     CHECK (min_hours_before >= 0),
     CHECK (refund_percentage >= 0 AND refund_percentage <= 100),
     FOREIGN KEY (facility_id) REFERENCES facilities(id),
-    UNIQUE (facility_id, min_hours_before)
+    FOREIGN KEY (reservation_type_id) REFERENCES reservation_types(id)
 );
 
 CREATE INDEX idx_cancellation_policy_tiers_facility_id ON cancellation_policy_tiers(facility_id);
+CREATE UNIQUE INDEX uniq_cancellation_policy_tiers_default
+    ON cancellation_policy_tiers(facility_id, min_hours_before)
+    WHERE reservation_type_id IS NULL;
+CREATE UNIQUE INDEX uniq_cancellation_policy_tiers_type
+    ON cancellation_policy_tiers(facility_id, reservation_type_id, min_hours_before)
+    WHERE reservation_type_id IS NOT NULL;
 
 ------ FACILITY VISITS ------
 CREATE TABLE facility_visits (

@@ -1,16 +1,19 @@
 -- name: CreateCancellationPolicyTier :one
 INSERT INTO cancellation_policy_tiers (
     facility_id,
+    reservation_type_id,
     min_hours_before,
     refund_percentage
 ) VALUES (
     @facility_id,
+    @reservation_type_id,
     @min_hours_before,
     @refund_percentage
 )
 RETURNING
     id,
     facility_id,
+    reservation_type_id,
     min_hours_before,
     refund_percentage,
     created_at,
@@ -20,18 +23,23 @@ RETURNING
 SELECT
     id,
     facility_id,
+    reservation_type_id,
     min_hours_before,
     refund_percentage,
     created_at,
     updated_at
 FROM cancellation_policy_tiers
 WHERE facility_id = @facility_id
-ORDER BY min_hours_before DESC;
+ORDER BY
+    reservation_type_id IS NULL,
+    reservation_type_id,
+    min_hours_before DESC;
 
 -- name: GetCancellationPolicyTier :one
 SELECT
     id,
     facility_id,
+    reservation_type_id,
     min_hours_before,
     refund_percentage,
     created_at,
@@ -43,6 +51,7 @@ WHERE id = @id
 -- name: UpdateCancellationPolicyTier :one
 UPDATE cancellation_policy_tiers
 SET min_hours_before = @min_hours_before,
+    reservation_type_id = @reservation_type_id,
     refund_percentage = @refund_percentage,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id
@@ -50,6 +59,7 @@ WHERE id = @id
 RETURNING
     id,
     facility_id,
+    reservation_type_id,
     min_hours_before,
     refund_percentage,
     created_at,
@@ -64,14 +74,22 @@ WHERE id = @id
 SELECT
     id,
     facility_id,
+    reservation_type_id,
     min_hours_before,
     refund_percentage,
     created_at,
     updated_at
-FROM cancellation_policy_tiers
-WHERE facility_id = @facility_id
-  AND min_hours_before <= @hours_until_reservation
-ORDER BY min_hours_before DESC
+FROM cancellation_policy_tiers cpt
+WHERE cpt.facility_id = @facility_id
+  AND cpt.min_hours_before <= @hours_until_reservation
+  AND (
+    cpt.reservation_type_id = @reservation_type_id
+    OR cpt.reservation_type_id IS NULL
+  )
+-- Prefer type-specific tiers when available for the same hours window; fall back to defaults.
+ORDER BY
+    CASE WHEN cpt.reservation_type_id IS NULL THEN 1 ELSE 0 END,
+    cpt.min_hours_before DESC
 LIMIT 1;
 
 -- name: LogCancellation :one

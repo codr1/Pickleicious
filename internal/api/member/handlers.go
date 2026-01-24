@@ -670,7 +670,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		}
 		facilityID := reservation.FacilityID
 		hoursUntilReservation := hoursUntilReservationStart(reservation.StartTime, now)
-		refundPercentage, err = applicableRefundPercentage(ctx, qtx, facilityID, hoursUntilReservation)
+		refundPercentage, err = apiutil.ApplicableRefundPercentage(ctx, qtx, facilityID, hoursUntilReservation, &reservation.ReservationTypeID)
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
 		}
@@ -715,7 +715,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 					}
 					return cancellationPenaltyError{Penalty: penalty}
 				}
-				previousRefundPercentage, err := applicableRefundPercentage(ctx, qtx, facilityID, previousHours)
+				previousRefundPercentage, err := apiutil.ApplicableRefundPercentage(ctx, qtx, facilityID, previousHours, &reservation.ReservationTypeID)
 				if err != nil {
 					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load cancellation policy", Err: err}
 				}
@@ -1185,20 +1185,6 @@ func hoursUntilReservationStart(start time.Time, now time.Time) int64 {
 	return hours
 }
 
-func applicableRefundPercentage(ctx context.Context, q *dbgen.Queries, facilityID int64, hoursUntilReservation int64) (int64, error) {
-	tier, err := q.GetApplicableCancellationTier(ctx, dbgen.GetApplicableCancellationTierParams{
-		FacilityID:            facilityID,
-		HoursUntilReservation: hoursUntilReservation,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 100, nil
-		}
-		return 0, err
-	}
-	return tier.RefundPercentage, nil
-}
-
 func requestCancellationConfirm(r *http.Request) bool {
 	rawConfirm := strings.TrimSpace(r.URL.Query().Get("confirm"))
 	if rawConfirm == "" {
@@ -1342,7 +1328,7 @@ func buildReservationListData(
 	for i := range summaries {
 		if summaries[i].StartTime.After(now) {
 			hoursUntilReservation := hoursUntilReservationStart(summaries[i].StartTime, now)
-			refundPercentage, err := applicableRefundPercentage(ctx, q, summaries[i].FacilityID, hoursUntilReservation)
+			refundPercentage, err := apiutil.ApplicableRefundPercentage(ctx, q, summaries[i].FacilityID, hoursUntilReservation, &summaries[i].ReservationTypeID)
 			if err != nil {
 				logger.Error().Err(err).Int64("facility_id", summaries[i].FacilityID).Msg("Failed to load cancellation policy refund percentage")
 				refundPercentage = 100

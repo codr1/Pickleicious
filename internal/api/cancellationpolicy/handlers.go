@@ -35,9 +35,10 @@ var (
 )
 
 type cancellationPolicyTierRequest struct {
-	FacilityID       *int64 `json:"facilityId"`
-	MinHoursBefore   int64  `json:"minHoursBefore"`
-	RefundPercentage int64  `json:"refundPercentage"`
+	FacilityID        *int64 `json:"facilityId"`
+	ReservationTypeID *int64 `json:"reservationTypeId"`
+	MinHoursBefore    int64  `json:"minHoursBefore"`
+	RefundPercentage  int64  `json:"refundPercentage"`
 }
 
 // InitHandlers must be called during server startup before handling requests.
@@ -80,6 +81,11 @@ func HandleCancellationPolicyPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
 		return
 	}
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
+		reservationTypes = nil
+	}
 
 	activeTheme, err := models.GetActiveTheme(ctx, q, facilityID)
 	if err != nil {
@@ -88,7 +94,11 @@ func HandleCancellationPolicyPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionType := authz.SessionTypeFromContext(r.Context())
-	page := layouts.Base(cancellationpolicytempl.CancellationPolicyLayout(facilityID, cancellationPolicyTierData(tiers)), activeTheme, sessionType)
+	page := layouts.Base(cancellationpolicytempl.CancellationPolicyLayout(
+		facilityID,
+		cancellationPolicyTierData(tiers, reservationTypeNameMap(reservationTypes)),
+		reservationTypeOptions(reservationTypes),
+	), activeTheme, sessionType)
 	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render cancellation policy page", "Failed to render page") {
 		return
 	}
@@ -129,17 +139,18 @@ func HandleCancellationPolicyTierCreate(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	tier, err := q.CreateCancellationPolicyTier(ctx, dbgen.CreateCancellationPolicyTierParams{
-		FacilityID:       facilityID,
-		MinHoursBefore:   req.MinHoursBefore,
-		RefundPercentage: req.RefundPercentage,
+		FacilityID:        facilityID,
+		ReservationTypeID: apiutil.ToNullInt64(req.ReservationTypeID),
+		MinHoursBefore:    req.MinHoursBefore,
+		RefundPercentage:  req.RefundPercentage,
 	})
 	if err != nil {
 		if apiutil.IsSQLiteUniqueViolation(err) {
-			http.Error(w, "A tier with that minimum hours value already exists", http.StatusConflict)
+			http.Error(w, "A tier with this configuration already exists", http.StatusConflict)
 			return
 		}
 		if apiutil.IsSQLiteForeignKeyViolation(err) {
-			http.Error(w, "Facility not found", http.StatusNotFound)
+			http.Error(w, "Facility or reservation type not found", http.StatusNotFound)
 			return
 		}
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to create cancellation policy tier")
@@ -160,7 +171,12 @@ func HandleCancellationPolicyTierCreate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
 		return
 	}
-	renderCancellationPolicyList(r.Context(), w, facilityID, tiers)
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
+		reservationTypes = nil
+	}
+	renderCancellationPolicyList(r.Context(), w, facilityID, tiers, reservationTypeNameMap(reservationTypes))
 }
 
 // PUT /api/v1/cancellation-policy/tiers/{id}
@@ -204,14 +220,19 @@ func HandleCancellationPolicyTierUpdate(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	tier, err := q.UpdateCancellationPolicyTier(ctx, dbgen.UpdateCancellationPolicyTierParams{
-		ID:               tierID,
-		FacilityID:       facilityID,
-		MinHoursBefore:   req.MinHoursBefore,
-		RefundPercentage: req.RefundPercentage,
+		ID:                tierID,
+		FacilityID:        facilityID,
+		ReservationTypeID: apiutil.ToNullInt64(req.ReservationTypeID),
+		MinHoursBefore:    req.MinHoursBefore,
+		RefundPercentage:  req.RefundPercentage,
 	})
 	if err != nil {
 		if apiutil.IsSQLiteUniqueViolation(err) {
-			http.Error(w, "A tier with that minimum hours value already exists", http.StatusConflict)
+			http.Error(w, "A tier with this configuration already exists", http.StatusConflict)
+			return
+		}
+		if apiutil.IsSQLiteForeignKeyViolation(err) {
+			http.Error(w, "Facility or reservation type not found", http.StatusNotFound)
 			return
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -236,7 +257,12 @@ func HandleCancellationPolicyTierUpdate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
 		return
 	}
-	renderCancellationPolicyList(r.Context(), w, facilityID, tiers)
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
+		reservationTypes = nil
+	}
+	renderCancellationPolicyList(r.Context(), w, facilityID, tiers, reservationTypeNameMap(reservationTypes))
 }
 
 // DELETE /api/v1/cancellation-policy/tiers/{id}
@@ -296,30 +322,74 @@ func HandleCancellationPolicyTierDelete(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
 		return
 	}
-	renderCancellationPolicyList(r.Context(), w, facilityID, tiers)
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
+		reservationTypes = nil
+	}
+	renderCancellationPolicyList(r.Context(), w, facilityID, tiers, reservationTypeNameMap(reservationTypes))
 }
 
-func renderCancellationPolicyList(ctx context.Context, w http.ResponseWriter, facilityID int64, tiers []dbgen.CancellationPolicyTier) {
-	component := cancellationPolicyListComponent(facilityID, tiers)
+func renderCancellationPolicyList(ctx context.Context, w http.ResponseWriter, facilityID int64, tiers []dbgen.CancellationPolicyTier, reservationTypeNames map[int64]string) {
+	component := cancellationPolicyListComponent(facilityID, tiers, reservationTypeNames)
 	if !apiutil.RenderHTMLComponent(ctx, w, component, nil, "Failed to render cancellation policy list", "Failed to render cancellation policy list") {
 		return
 	}
 }
 
-func cancellationPolicyListComponent(facilityID int64, tiers []dbgen.CancellationPolicyTier) templ.Component {
-	return cancellationpolicytempl.CancellationPolicyList(facilityID, cancellationPolicyTierData(tiers))
+func cancellationPolicyListComponent(facilityID int64, tiers []dbgen.CancellationPolicyTier, reservationTypeNames map[int64]string) templ.Component {
+	return cancellationpolicytempl.CancellationPolicyList(facilityID, cancellationPolicyTierData(tiers, reservationTypeNames))
 }
 
-func cancellationPolicyTierData(tiers []dbgen.CancellationPolicyTier) []cancellationpolicytempl.PolicyTierData {
+func cancellationPolicyTierData(tiers []dbgen.CancellationPolicyTier, reservationTypeNames map[int64]string) []cancellationpolicytempl.PolicyTierData {
 	data := make([]cancellationpolicytempl.PolicyTierData, 0, len(tiers))
 	for _, tier := range tiers {
+		var reservationTypeID *int64
+		var reservationTypeName *string
+		if tier.ReservationTypeID.Valid {
+			value := tier.ReservationTypeID.Int64
+			reservationTypeID = &value
+			if reservationTypeNames != nil {
+				if name, ok := reservationTypeNames[value]; ok {
+					valueName := name
+					reservationTypeName = &valueName
+				}
+			}
+		}
 		data = append(data, cancellationpolicytempl.PolicyTierData{
-			ID:               tier.ID,
-			MinHoursBefore:   tier.MinHoursBefore,
-			RefundPercentage: tier.RefundPercentage,
+			ID:                  tier.ID,
+			MinHoursBefore:      tier.MinHoursBefore,
+			RefundPercentage:    tier.RefundPercentage,
+			ReservationTypeID:   reservationTypeID,
+			ReservationTypeName: reservationTypeName,
 		})
 	}
 	return data
+}
+
+func reservationTypeNameMap(reservationTypes []dbgen.ReservationType) map[int64]string {
+	if len(reservationTypes) == 0 {
+		return nil
+	}
+	names := make(map[int64]string, len(reservationTypes))
+	for _, reservationType := range reservationTypes {
+		names[reservationType.ID] = reservationType.Name
+	}
+	return names
+}
+
+func reservationTypeOptions(reservationTypes []dbgen.ReservationType) []cancellationpolicytempl.ReservationTypeOption {
+	if len(reservationTypes) == 0 {
+		return nil
+	}
+	options := make([]cancellationpolicytempl.ReservationTypeOption, 0, len(reservationTypes))
+	for _, reservationType := range reservationTypes {
+		options = append(options, cancellationpolicytempl.ReservationTypeOption{
+			ID:   reservationType.ID,
+			Name: reservationType.Name,
+		})
+	}
+	return options
 }
 
 func validateCancellationPolicyTierRequest(req cancellationPolicyTierRequest) error {
@@ -328,6 +398,9 @@ func validateCancellationPolicyTierRequest(req cancellationPolicyTierRequest) er
 	}
 	if req.RefundPercentage < 0 || req.RefundPercentage > 100 {
 		return fmt.Errorf("refund_percentage must be between 0 and 100")
+	}
+	if req.ReservationTypeID != nil && *req.ReservationTypeID <= 0 {
+		return fmt.Errorf("reservation_type_id must be a positive integer")
 	}
 	return nil
 }
@@ -350,6 +423,11 @@ func decodeCancellationPolicyTierRequest(r *http.Request) (cancellationPolicyTie
 		return cancellationPolicyTierRequest{}, err
 	}
 
+	reservationTypeID, err := apiutil.ParseOptionalInt64Field(apiutil.FirstNonEmpty(r.FormValue("reservation_type_id"), r.FormValue("reservationTypeId")), "reservation_type_id")
+	if err != nil {
+		return cancellationPolicyTierRequest{}, err
+	}
+
 	minHoursBefore, err := parseNonNegativeInt64Field(apiutil.FirstNonEmpty(r.FormValue("min_hours_before"), r.FormValue("minHoursBefore")), "min_hours_before")
 	if err != nil {
 		return cancellationPolicyTierRequest{}, err
@@ -361,9 +439,10 @@ func decodeCancellationPolicyTierRequest(r *http.Request) (cancellationPolicyTie
 	}
 
 	return cancellationPolicyTierRequest{
-		FacilityID:       facilityID,
-		MinHoursBefore:   minHoursBefore,
-		RefundPercentage: refundPercentage,
+		FacilityID:        facilityID,
+		ReservationTypeID: reservationTypeID,
+		MinHoursBefore:    minHoursBefore,
+		RefundPercentage:  refundPercentage,
 	}, nil
 }
 

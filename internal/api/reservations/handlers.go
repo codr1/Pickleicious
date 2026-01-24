@@ -130,16 +130,16 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 		created, err = qtx.CreateReservation(ctx, dbgen.CreateReservationParams{
 			FacilityID:        facilityID,
 			ReservationTypeID: req.ReservationTypeID,
-			RecurrenceRuleID:  toNullInt64(req.RecurrenceRuleID),
-			PrimaryUserID:     toNullInt64(req.PrimaryUserID),
+			RecurrenceRuleID:  apiutil.ToNullInt64(req.RecurrenceRuleID),
+			PrimaryUserID:     apiutil.ToNullInt64(req.PrimaryUserID),
 			CreatedByUserID:   user.ID,
-			ProID:             toNullInt64(req.ProID),
-			OpenPlayRuleID:    toNullInt64(req.OpenPlayRuleID),
+			ProID:             apiutil.ToNullInt64(req.ProID),
+			OpenPlayRuleID:    apiutil.ToNullInt64(req.OpenPlayRuleID),
 			StartTime:         startTime,
 			EndTime:           endTime,
 			IsOpenEvent:       req.IsOpenEvent,
-			TeamsPerCourt:     toNullInt64(req.TeamsPerCourt),
-			PeoplePerTeam:     toNullInt64(req.PeoplePerTeam),
+			TeamsPerCourt:     apiutil.ToNullInt64(req.TeamsPerCourt),
+			PeoplePerTeam:     apiutil.ToNullInt64(req.PeoplePerTeam),
 		})
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to create reservation", Err: err}
@@ -535,15 +535,15 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 			ID:                reservationID,
 			FacilityID:        facilityID,
 			ReservationTypeID: req.ReservationTypeID,
-			RecurrenceRuleID:  toNullInt64(req.RecurrenceRuleID),
-			PrimaryUserID:     toNullInt64(req.PrimaryUserID),
-			ProID:             toNullInt64(req.ProID),
-			OpenPlayRuleID:    toNullInt64(req.OpenPlayRuleID),
+			RecurrenceRuleID:  apiutil.ToNullInt64(req.RecurrenceRuleID),
+			PrimaryUserID:     apiutil.ToNullInt64(req.PrimaryUserID),
+			ProID:             apiutil.ToNullInt64(req.ProID),
+			OpenPlayRuleID:    apiutil.ToNullInt64(req.OpenPlayRuleID),
 			StartTime:         startTime,
 			EndTime:           endTime,
 			IsOpenEvent:       req.IsOpenEvent,
-			TeamsPerCourt:     toNullInt64(req.TeamsPerCourt),
-			PeoplePerTeam:     toNullInt64(req.PeoplePerTeam),
+			TeamsPerCourt:     apiutil.ToNullInt64(req.TeamsPerCourt),
+			PeoplePerTeam:     apiutil.ToNullInt64(req.PeoplePerTeam),
 		})
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to update reservation", Err: err}
@@ -701,7 +701,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	hoursUntilReservation := hoursUntilReservationStart(reservation.StartTime, now)
-	policyRefundPercentage, err := applicableRefundPercentage(ctx, q, facilityID, hoursUntilReservation)
+	policyRefundPercentage, err := apiutil.ApplicableRefundPercentage(ctx, q, facilityID, hoursUntilReservation, &reservation.ReservationTypeID)
 	if err != nil {
 		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load cancellation policy")
 		http.Error(w, "Failed to load cancellation policy", http.StatusInternalServerError)
@@ -1194,20 +1194,6 @@ func hoursUntilReservationStart(start time.Time, now time.Time) int64 {
 	return hours
 }
 
-func applicableRefundPercentage(ctx context.Context, q *dbgen.Queries, facilityID int64, hoursUntilReservation int64) (int64, error) {
-	tier, err := q.GetApplicableCancellationTier(ctx, dbgen.GetApplicableCancellationTierParams{
-		FacilityID:            facilityID,
-		HoursUntilReservation: hoursUntilReservation,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 100, nil
-		}
-		return 0, err
-	}
-	return tier.RefundPercentage, nil
-}
-
 func facilityIDFromRequest(r *http.Request) (int64, error) {
 	value := strings.TrimSpace(r.URL.Query().Get("facility_id"))
 	if value == "" {
@@ -1245,13 +1231,6 @@ func facilityExists(ctx context.Context, q *dbgen.Queries, facilityID int64) (bo
 		return false, err
 	}
 	return count > 0, nil
-}
-
-func toNullInt64(value *int64) sql.NullInt64 {
-	if value == nil {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Int64: *value, Valid: true}
 }
 
 func loadQueries() *dbgen.Queries {

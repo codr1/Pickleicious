@@ -3,7 +3,7 @@ package cancellationpolicy
 
 import "fmt"
 
-templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData) {
+templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reservationTypes []ReservationTypeOption) {
 	<div class="space-y-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<div>
@@ -20,7 +20,7 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData) {
 				<p class="mt-1 text-sm text-muted-foreground">Higher minimum hours should offer higher refunds.</p>
 			</div>
 			<form
-				class="grid gap-4 px-4 py-4 md:grid-cols-[1fr_1fr_auto]"
+				class="grid gap-4 px-4 py-4 md:grid-cols-[1fr_1fr_1fr_auto]"
 				hx-post="/api/v1/cancellation-policy/tiers"
 				hx-target="#cancellation-policy-list"
 				hx-swap="innerHTML"
@@ -54,6 +54,18 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData) {
 						required
 					/>
 				</div>
+				<div>
+					<label for="reservation_type_id" class="block text-sm font-medium text-foreground">Reservation type (optional)</label>
+					<select
+						id="reservation_type_id"
+						name="reservation_type_id"
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+						<option value="">Default (all types)</option>
+						for _, reservationType := range reservationTypes {
+							<option value={fmt.Sprintf("%d", reservationType.ID)}>{reservationType.Name}</option>
+						}
+					</select>
+				</div>
 				<div class="flex items-end">
 					<button type="submit" class="w-full rounded-md border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
 						Add tier
@@ -63,9 +75,10 @@ templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData) {
 		</section>
 
 		<section class="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
-			<div class="hidden grid-cols-[200px_180px_minmax(160px,1fr)] border-b border-border bg-muted px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+			<div class="hidden grid-cols-[200px_180px_180px_minmax(160px,1fr)] border-b border-border bg-muted px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
 				<div>Minimum Hours</div>
 				<div>Refund %</div>
+				<div>Applies To</div>
 				<div class="text-right">Actions</div>
 			</div>
 			<div id="cancellation-policy-list" class="divide-y divide-border">
@@ -87,7 +100,7 @@ templ CancellationPolicyList(facilityID int64, tiers []PolicyTierData) {
 
 templ PolicyTierRow(facilityID int64, tier PolicyTierData) {
 	<form
-		class="grid gap-4 px-4 py-3 md:grid-cols-[200px_180px_minmax(160px,1fr)]"
+		class="grid gap-4 px-4 py-3 md:grid-cols-[200px_180px_180px_minmax(160px,1fr)]"
 		hx-put={fmt.Sprintf("/api/v1/cancellation-policy/tiers/%d", tier.ID)}
 		hx-trigger="change from:input[name='min_hours_before'] delay:300ms, change from:input[name='refund_percentage'] delay:300ms"
 		hx-target="#cancellation-policy-list"
@@ -95,6 +108,7 @@ templ PolicyTierRow(facilityID int64, tier PolicyTierData) {
 		hx-on::after-request="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} if(event.detail.xhr.status===200){indicator.textContent='Saved'; indicator.classList.remove('text-red-600'); indicator.classList.add('text-emerald-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},1200);}"
 		hx-on::response-error="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} indicator.textContent='Error'; indicator.classList.remove('text-emerald-600'); indicator.classList.add('text-red-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},2000);">
 		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)} />
+		<input type="hidden" name="reservation_type_id" value={func() string { if tier.ReservationTypeID == nil { return "" }; return fmt.Sprintf("%d", *tier.ReservationTypeID) }()} />
 		<div>
 			<label class="sr-only" for={fmt.Sprintf("min_hours_before_%d", tier.ID)}>Minimum hours before start</label>
 			<input
@@ -119,6 +133,15 @@ templ PolicyTierRow(facilityID int64, tier PolicyTierData) {
 				value={fmt.Sprintf("%d", tier.RefundPercentage)}
 				class="block w-full rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
 			/>
+		</div>
+		<div class="flex items-center text-sm text-muted-foreground">
+			if tier.ReservationTypeID == nil {
+				<span>Default</span>
+			} else if tier.ReservationTypeName != nil {
+				<span>{*tier.ReservationTypeName}</span>
+			} else {
+				<span>{fmt.Sprintf("Type %d", *tier.ReservationTypeID)}</span>
+			}
 		</div>
 		<div class="flex items-center justify-end">
 			<span class="mr-3 text-xs text-emerald-600 opacity-0 transition-opacity duration-300" data-save-indicator>Saved</span>
