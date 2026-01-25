@@ -284,8 +284,16 @@ Organization (corporate entity)
 |-------|---------|
 | open_play_rules | Configuration for open play sessions |
 | open_play_sessions | Individual open play session instances |
-| staff_notifications | Staff notification storage |
+| staff_notifications | Staff notification storage (includes lesson_cancelled type with target_staff_id) |
 | audit_log | Audit trail for automated decisions |
+
+### Waitlist System
+
+| Table | Purpose |
+|-------|---------|
+| waitlist_config | Per-facility waitlist settings (max size, notification mode, offer expiry) |
+| waitlists | Waitlist entries tracking slot interest |
+| waitlist_offers | Time-limited offers to waitlisted members when slots become available |
 
 ### Key Constraints
 
@@ -620,8 +628,9 @@ Each tier specifies:
 |-------|-------------|
 | min_hours_before | Minimum hours before reservation start for this tier to apply |
 | refund_percentage | Refund percentage (0-100) when this tier matches |
+| reservation_type_id | Optional: Apply tier only to specific reservation type (e.g., PRO_SESSION, GAME) |
 
-Tiers are ordered by `min_hours_before` descending. The first matching tier (where hours until reservation >= min_hours_before) determines the refund.
+Tiers are ordered by `min_hours_before` descending. The system first looks for a tier matching the specific reservation type, then falls back to default (NULL type) tiers if no type-specific tier applies.
 
 ### Example Configuration
 
@@ -639,7 +648,8 @@ If no policy tiers are configured for a facility, 100% refund applies at any tim
 
 Staff access the cancellation policy page at `/admin/cancellation-policy?facility_id=X`. The interface displays:
 
-- Form to add new tiers (min hours, refund percentage)
+- Reservation type filter dropdown (Court Reservations/GAME, Lessons/PRO_SESSION)
+- Form to add new tiers (min hours, refund percentage, optional reservation type)
 - List of existing tiers with inline editing
 - Auto-save on field changes with 300ms debounce
 - Delete confirmation for each tier
@@ -648,8 +658,9 @@ Staff access the cancellation policy page at `/admin/cancellation-policy?facilit
 
 | Field | Rule |
 |-------|------|
-| min_hours_before | Must be >= 0, unique per facility |
+| min_hours_before | Must be >= 0, unique per facility + reservation_type combination |
 | refund_percentage | Must be 0-100 |
+| reservation_type_id | Must reference valid reservation type if provided |
 
 ### Cancellation Logging
 
@@ -758,6 +769,101 @@ When a session is cancelled or courts are reallocated, staff receive in-app noti
 - "Evening Open Play scaled from 2 to 3 courts - 22 participants"
 
 This allows staff to inform affected members and adjust operations.
+
+---
+
+## Waitlist System
+
+When courts are fully booked, members can join a waitlist to be notified if a slot becomes available. The waitlist system handles automatic notifications when reservations are cancelled.
+
+### Waitlist Entry
+
+Members join a waitlist for a specific time slot:
+
+| Field | Description |
+|-------|-------------|
+| facility_id | Facility where slot is desired |
+| target_date | Date of the desired slot |
+| target_start_time | Start time (HH:MM:SS format) |
+| target_end_time | End time (HH:MM:SS format) |
+| target_court_id | Optional: Specific court preference (NULL = any court) |
+| position | Queue position (auto-assigned, incrementing per slot) |
+| status | pending, notified, expired, fulfilled |
+
+### Waitlist Configuration
+
+Each facility can configure waitlist behavior:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| max_waitlist_size | 0 (unlimited) | Maximum entries per slot |
+| notification_mode | broadcast | How to notify waitlisted members |
+| offer_expiry_minutes | 30 | How long a slot offer remains valid |
+| notification_window_minutes | 0 (unlimited) | Only notify if slot starts within this window |
+
+### Notification Modes
+
+| Mode | Behavior |
+|------|----------|
+| broadcast | All waitlisted members for the slot are notified simultaneously |
+| sequential | Members are notified one at a time in queue order; next member notified only after previous offer expires |
+
+### Waitlist Offers
+
+When a reservation is cancelled, the system creates offers for waitlisted members:
+
+1. Matches waitlist entries by facility, date, and time range
+2. Includes entries targeting any court (NULL) and the specific cancelled court(s)
+3. Respects notification_window_minutes (if configured, only notifies if slot starts within window)
+4. Creates `waitlist_offers` records with expiration time
+5. Updates waitlist entry status to 'notified'
+
+### Offer Lifecycle
+
+| Status | Description |
+|--------|-------------|
+| pending | Offer created, awaiting member action |
+| accepted | Member booked the slot |
+| expired | Offer timed out without action |
+
+For sequential mode, when an offer expires:
+1. Current waitlist entry marked as 'expired'
+2. Next member in queue receives new offer
+3. Process continues until slot is filled or waitlist exhausted
+
+### Scheduled Jobs
+
+The waitlist system runs two scheduled jobs:
+
+| Job | Interval | Purpose |
+|-----|----------|---------|
+| Expire Offers | 1 minute | Expires pending offers past their expiry time, advances sequential queues |
+| Cleanup Past | 1 hour | Removes waitlist entries for past time slots |
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/waitlist` | List member's waitlist entries at facility |
+| POST | `/api/v1/waitlist` | Join waitlist for a slot |
+| DELETE | `/api/v1/waitlist/{id}` | Leave waitlist |
+| POST | `/api/v1/waitlist/config` | Update facility waitlist configuration (staff) |
+| GET | `/api/v1/staff/waitlist` | View all waitlist entries for facility (staff) |
+| GET | `/member/waitlist` | Member portal waitlist view |
+
+### Member Portal Integration
+
+Members can view their waitlist entries from the portal. The booking form offers waitlist signup when no slots are available for the selected date.
+
+### Constraints
+
+| Rule | Enforcement |
+|------|-------------|
+| One entry per slot | Cannot join same slot twice (unique constraint) |
+| Future slots only | Cannot waitlist for past times |
+| Same-day times | Start and end must be on the same date |
+| End after start | End time must be after start time |
+| Facility access | Member must have access to the facility |
 
 ---
 
@@ -1252,9 +1358,21 @@ Authorization failures are logged with facility_id and user_id.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/admin/cancellation-policy` | Cancellation policy admin page |
+| GET | `/api/v1/cancellation-policy/tiers` | List policy tiers (supports reservation_type_id filter) |
 | POST | `/api/v1/cancellation-policy/tiers` | Create policy tier |
 | PUT | `/api/v1/cancellation-policy/tiers/{id}` | Update policy tier |
 | DELETE | `/api/v1/cancellation-policy/tiers/{id}` | Delete policy tier |
+
+### Waitlist
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/waitlist` | List member's waitlist entries at facility |
+| POST | `/api/v1/waitlist` | Join waitlist for a slot |
+| DELETE | `/api/v1/waitlist/{id}` | Leave waitlist |
+| POST | `/api/v1/waitlist/config` | Update facility waitlist configuration (staff) |
+| GET | `/api/v1/staff/waitlist` | View all waitlist entries for facility (staff) |
+| GET | `/member/waitlist` | Member portal waitlist entries |
 
 ### Check-in
 
@@ -1270,6 +1388,7 @@ Authorization failures are logged with facility_id and user_id.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/staff` | Staff management page |
+| GET | `/staff/notifications/{id}` | Staff notification detail page |
 | GET | `/api/v1/staff` | List staff (filterable by facility_id, role, search) |
 | GET | `/api/v1/staff/new` | New staff form |
 | GET | `/api/v1/staff/{id}` | Staff detail |
@@ -1581,7 +1700,8 @@ pickleicious/
 │   │   ├── operatinghours/  # Operating hours management
 │   │   ├── reservations/    # Reservation CRUD
 │   │   ├── staff/           # Staff management
-│   │   └── themes/          # Theme management
+│   │   ├── themes/          # Theme management
+│   │   └── waitlist/        # Waitlist management
 │   ├── config/              # Configuration loading
 │   ├── db/
 │   │   ├── migrations/      # SQL migration files
@@ -1600,7 +1720,8 @@ pickleicious/
 │   │       ├── notifications/   # Notification panel and badge
 │   │       ├── operatinghours/  # Operating hours UI
 │   │       ├── reservations/    # Booking form components
-│   │       └── staff/           # Staff management UI
+│   │       ├── staff/           # Staff management UI
+│   │       └── waitlist/        # Waitlist UI components
 │   └── testutil/            # Test helpers
 ├── tests/
 │   └── smoke/               # Smoke tests
@@ -1966,6 +2087,16 @@ Clicking a notification marks it as read via PUT request and refreshes the panel
 | scale_up | Blue | "Evening Open Play scaled from 2 to 3 courts" |
 | scale_down | Yellow | "Morning Open Play scaled from 4 to 2 courts" |
 | cancelled | Red | "Morning Open Play cancelled - only 2 signups (min: 4)" |
+| lesson_cancelled | Orange | "Lesson cancelled: John Smith (2024-01-15 10:00 - 11:00)" |
+
+### Lesson Cancellation Notifications
+
+When a member cancels a PRO_SESSION (lesson) reservation, the system notifies the assigned pro:
+
+- Notification includes member name, date, and time
+- Only triggers for member-initiated cancellations (not staff cancellations)
+- Uses `target_staff_id` to route notification to specific pro
+- Pros see these in their notification panel filtered by their staff ID
 
 ### Facility Scoping
 
@@ -2009,7 +2140,9 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Member Portal | Complete | Self-service portal, court booking, lesson booking, reservation cancellation |
 | Pro Unavailability | Complete | Pros can block time, affects lesson availability |
 | Check-in Flow | Complete | Search, check-in, activity selection, arrivals list, visit history |
-| Cancellation Policies | Complete | Per-facility refund tiers, policy application, staff fee waiver, cancellation logging |
+| Cancellation Policies | Complete | Per-facility refund tiers, reservation type-specific policies, staff fee waiver, cancellation logging |
+| Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
+| Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
 
 ### Partial Implementation
 
@@ -2054,4 +2187,5 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | **Open Play** | Drop-in session with rotation rules |
 | **Theme** | Color scheme for facility branding |
 | **Waiver** | Liability agreement required for play |
+| **Waitlist** | Queue for members awaiting slot availability |
 | **Soft Delete** | Mark as deleted but preserve history |

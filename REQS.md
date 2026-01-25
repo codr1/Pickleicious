@@ -652,7 +652,6 @@ This section documents features that are standard in competing pickleball/sports
 |---------|----------|---------|
 | Booking Confirmation | Email, SMS | Reservation details, court, time |
 | 24-Hour Reminder | Email, SMS, Push | Upcoming reservation reminder |
-<!-- BEGIN WIP: STORY-0034 -->| Waitlist Promotion | Email, SMS | Spot opened, action required |<!-- END WIP -->
 | Payment Receipt | Email | Transaction confirmation |
 | Membership Renewal | Email | Upcoming renewal reminder |
 | Waiver Expiration | Email | Waiver renewal needed |
@@ -677,29 +676,7 @@ This section documents features that are standard in competing pickleball/sports
 
 ### 9.3 Waitlist Management
 
-<!-- BEGIN WIP: STORY-0034 -->
-**Core Waitlist Features:**
 
-| Feature | Description |
-|---------|-------------|
-| Auto-Waitlist | Automatically offer waitlist when court is full |
-| Position Tracking | Show member their place in queue |
-| Fair Notification | Simultaneous notification to all waitlisted |
-| First-Come-First-Served | First to accept gets the slot |
-| Expiring Offers | Time limit to accept (e.g., 15 minutes) |
-| Auto-Decline | Remove from waitlist if not accepted in time |
-<!-- END WIP -->
-
-<!-- BEGIN WIP: STORY-0034 -->
-**Configuration Options:**
-
-| Setting | Description |
-|---------|-------------|
-| Max Waitlist Size | Limit waitlist length per slot |
-| Notification Window | How long before slot to notify |
-| Member Priority | VIP members get first notification |
-
-<!-- END WIP -->
 
 ### 9.4 Cancellation Policies & No-Show Management
 
@@ -1032,7 +1009,6 @@ A self-service marketplace where members discover and book coaches directly, red
 |---------|-------------|
 | League Sign-Up | Register for leagues/tournaments |
 | Lesson Booking | Schedule with pros |
-<!-- BEGIN WIP: STORY-0034 -->| Waitlist Management | Join/leave waitlists |<!-- END WIP -->
 | Guest Booking | Reserve for guests |
 | Message Center | View communications |
 
