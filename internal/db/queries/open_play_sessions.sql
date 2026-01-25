@@ -276,22 +276,13 @@ INSERT INTO staff_notifications (
     related_reservation_id,
     target_staff_id
 )
-SELECT
-    r.facility_id,
+VALUES (
+    @facility_id,
     'lesson_cancelled',
-    printf(
-        'Lesson cancelled: %s with %s (%s - %s)',
-        COALESCE(NULLIF(TRIM(COALESCE(mu.first_name, '') || ' ' || COALESCE(mu.last_name, '')), ''), 'Member'),
-        COALESCE(NULLIF(TRIM(COALESCE(ps.first_name, '') || ' ' || COALESCE(ps.last_name, '')), ''), 'Pro'),
-        strftime('%Y-%m-%d %H:%M', r.start_time),
-        strftime('%Y-%m-%d %H:%M', r.end_time)
-    ),
-    r.id,
-    r.pro_id
-FROM reservations r
-LEFT JOIN users mu ON mu.id = r.primary_user_id
-LEFT JOIN staff ps ON ps.id = r.pro_id
-WHERE r.id = @reservation_id
+    @message,
+    @related_reservation_id,
+    @target_staff_id
+)
 RETURNING id, facility_id, notification_type, message, related_session_id,
     related_reservation_id, target_staff_id, read, created_at, updated_at;
 

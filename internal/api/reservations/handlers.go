@@ -768,6 +768,46 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log cancellation", Err: err}
 		}
 
+		reservationTypeName, err := qtx.GetReservationTypeNameByReservationID(ctx, reservationID)
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation type", Err: err}
+		}
+		// Only notify pros for member-initiated lesson cancellations.
+		if reservationTypeName == "PRO_SESSION" && !user.IsStaff {
+			if !reservation.ProID.Valid {
+				logger.Error().Int64("reservation_id", reservationID).Msg("Missing pro for lesson cancellation notification")
+			} else {
+				member, err := qtx.GetMemberByID(ctx, user.ID)
+				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load member details", Err: err}
+				}
+				memberName := ""
+				if err == nil {
+					memberName = strings.TrimSpace(fmt.Sprintf("%s %s", member.FirstName, member.LastName))
+				}
+				if memberName == "" {
+					memberName = "Member"
+				}
+				message := fmt.Sprintf(
+					"Lesson cancelled: %s (%s - %s)",
+					memberName,
+					reservation.StartTime.Format(timeLayoutDatetimeMinute),
+					reservation.EndTime.Format(timeLayoutDatetimeMinute),
+				)
+				if _, err := qtx.CreateLessonCancelledNotification(ctx, dbgen.CreateLessonCancelledNotificationParams{
+					FacilityID: facilityID,
+					Message:    message,
+					RelatedReservationID: sql.NullInt64{
+						Int64: reservationID,
+						Valid: true,
+					},
+					TargetStaffID: reservation.ProID,
+				}); err != nil {
+					logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to notify pro about lesson cancellation")
+				}
+			}
+		}
+
 		courts, err := qtx.ListReservationCourts(ctx, reservationID)
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
