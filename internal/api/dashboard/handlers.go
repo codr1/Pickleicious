@@ -240,6 +240,7 @@ func buildDashboardData(ctx context.Context, q *dbgen.Queries, facilityID int64,
 	reservationTypes, err := q.ListReservationTypes(ctx)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to load reservation types")
+		return dashboardtempl.DashboardData{}, err
 	}
 	typeNameByID := make(map[int64]string, len(reservationTypes))
 	for _, reservationType := range reservationTypes {
