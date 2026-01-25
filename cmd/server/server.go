@@ -26,6 +26,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/staff"
 	"github.com/codr1/Pickleicious/internal/api/themes"
+	"github.com/codr1/Pickleicious/internal/api/visitpacks"
 	"github.com/codr1/Pickleicious/internal/api/waitlist"
 	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
@@ -75,6 +76,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
 	cancellationpolicy.InitHandlers(database.Queries)
+	visitpacks.InitHandlers(database.Queries)
 	waitlist.InitHandlers(database)
 
 	staff.InitHandlers(database)
@@ -466,6 +468,19 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/facilities/{id}/theme", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: themes.HandleFacilityThemeSet,
+	}))
+
+	// Visit pack admin page
+	mux.HandleFunc("/admin/visit-packs", visitpacks.HandleVisitPackTypesPage)
+
+	// Visit pack API
+	mux.HandleFunc("/api/v1/visit-pack-types", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  visitpacks.HandleVisitPackTypesList,
+		http.MethodPost: visitpacks.HandleVisitPackTypeCreate,
+	}))
+	mux.HandleFunc("/api/v1/visit-pack-types/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut:    visitpacks.HandleVisitPackTypeUpdate,
+		http.MethodDelete: visitpacks.HandleVisitPackTypeDeactivate,
 	}))
 
 	// Operating hours admin page
