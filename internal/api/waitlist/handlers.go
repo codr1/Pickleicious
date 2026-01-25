@@ -189,8 +189,13 @@ func HandleWaitlistJoin(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return fmt.Errorf("list waitlists: %w", err)
 			}
+			activeCount := int64(0)
 			for _, entry := range existing {
-				if entry.UserID == user.ID && entry.Status != waitlistStatusExpired && entry.Status != waitlistStatusFulfilled {
+				if entry.Status == waitlistStatusExpired || entry.Status == waitlistStatusFulfilled {
+					continue
+				}
+				activeCount++
+				if entry.UserID == user.ID {
 					return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already on waitlist for this slot"}
 				}
 			}
@@ -199,7 +204,7 @@ func HandleWaitlistJoin(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return fmt.Errorf("load waitlist config: %w", err)
 			}
-			if maxWaitlistSize > 0 && int64(len(existing)) >= maxWaitlistSize {
+			if maxWaitlistSize > 0 && activeCount >= maxWaitlistSize {
 				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Waitlist is full for this slot"}
 			}
 

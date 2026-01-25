@@ -403,6 +403,9 @@ CREATE INDEX idx_waitlists_user_id ON waitlists(user_id);
 CREATE INDEX idx_waitlists_target_date ON waitlists(target_date);
 CREATE INDEX idx_waitlists_status ON waitlists(status);
 CREATE INDEX idx_waitlist_offers_waitlist_id ON waitlist_offers(waitlist_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlists_unique_active_user_slot
+    ON waitlists(facility_id, target_date, target_start_time, target_end_time, COALESCE(target_court_id, -1), user_id)
+    WHERE status IN ('pending', 'notified');
 CREATE INDEX idx_waitlist_offers_status ON waitlist_offers(status);
 CREATE INDEX idx_waitlist_offers_expires_at ON waitlist_offers(expires_at);
 
