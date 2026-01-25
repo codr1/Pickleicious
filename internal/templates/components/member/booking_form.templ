@@ -62,6 +62,23 @@ templ MemberBookingForm(data MemberBookingFormData) {
 						}
 					</select>
 				</div>
+				if len(data.VisitPacks) > 0 {
+					<div>
+						<label for="visit_pack_id" class="block text-sm font-medium text-foreground">Apply a visit pack</label>
+						<select
+							id="visit_pack_id"
+							name="visit_pack_id"
+							class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground">
+							<option value="">No visit pack</option>
+							for _, pack := range data.VisitPacks {
+								<option value={fmt.Sprintf("%d", pack.ID)}>
+									{fmt.Sprintf("Pack #%d · %d visits left · Expires %s", pack.ID, pack.VisitsRemaining, pack.ExpiresAt.Format("Jan 2, 2006"))}
+								</option>
+							}
+						</select>
+						<p class="mt-1 text-xs text-muted-foreground">Select a visit pack to cover this reservation.</p>
+					</div>
+				}
 				<div class="flex justify-end pt-2">
 					<button
 						type="submit"
