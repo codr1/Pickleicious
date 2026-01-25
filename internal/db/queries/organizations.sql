@@ -15,3 +15,8 @@ SELECT id, name, slug, status, created_at, updated_at
 FROM organizations
 WHERE status = 'active'
 ORDER BY name;
+
+-- name: GetOrganizationCrossFacilitySetting :one
+SELECT cross_facility_visit_packs
+FROM organizations
+WHERE id = @id;
