@@ -1,6 +1,7 @@
 package waitlist
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -61,4 +62,20 @@ func (d WaitlistJoinButtonData) ButtonLabel() string {
 		return "Join waitlist"
 	}
 	return d.Label
+}
+
+func (d WaitlistJoinButtonData) HXVals() string {
+	var builder strings.Builder
+	builder.WriteString(`{"facility_id":`)
+	builder.WriteString(strconv.FormatInt(d.FacilityID, 10))
+	if d.CourtID != nil {
+		builder.WriteString(`,"court_id":`)
+		builder.WriteString(strconv.FormatInt(*d.CourtID, 10))
+	}
+	builder.WriteString(`,"start_time":"`)
+	builder.WriteString(d.StartTime.Format("2006-01-02T15:04"))
+	builder.WriteString(`","end_time":"`)
+	builder.WriteString(d.EndTime.Format("2006-01-02T15:04"))
+	builder.WriteString(`"}`)
+	return builder.String()
 }

@@ -42,11 +42,11 @@ templ WaitlistConfigForm(data WaitlistConfigFormData) {
 						type="number"
 						id="offer_expiry_minutes"
 						name="offer_expiry_minutes"
-						min="1"
+						min="0"
 						placeholder="30"
 						value={func() string {
 							if data.OfferExpiryMinutes <= 0 {
-								return ""
+								return "0"
 							}
 							return fmt.Sprintf("%d", data.OfferExpiryMinutes)
 						}()}
