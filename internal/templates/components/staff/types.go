@@ -15,6 +15,16 @@ type ProScheduleViewData struct {
 	Sessions []dbgen.GetFutureProSessionsByStaffIDRow
 }
 
+type NotificationDetailData struct {
+	Notification dbgen.StaffNotification
+	MemberName   string
+	MemberEmail  string
+	MemberPhone  string
+	LessonDate   string
+	LessonTime   string
+	CourtLabel   string
+}
+
 // NewStaff creates a Staff from ListStaffRow.
 func NewStaff(row dbgen.ListStaffRow) Staff {
 	return Staff{ListStaffRow: row}

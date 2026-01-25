@@ -39,31 +39,47 @@ templ NotificationsPanel(notifications []Notification) {
 
 templ NotificationListItem(notification Notification) {
 	<li>
-		<button
-			type="button"
-			class={templ.Classes(
-				"flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-muted",
-				templ.KV("opacity-70", notification.Read),
-			)}
-			hx-put={fmt.Sprintf("/api/v1/notifications/%d/read?facility_id=%d", notification.ID, notification.FacilityID)}
-			hx-target="#notifications-panel"
-			hx-swap="innerHTML"
-		>
-			<div>
-				<p class="text-sm font-medium text-foreground">{notification.Message}</p>
-				<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-					<span class={"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold " + notification.BadgeClass()}>{notification.TypeLabel()}</span>
-					<span>{notification.Timestamp()}</span>
-					if notification.Read {
-						<span class="text-muted-foreground">Read</span>
-					} else {
-						<span class="text-emerald-600">New</span>
-					}
-				</div>
-			</div>
-			if !notification.Read {
-				<span class="mt-1 inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-			}
-		</button>
+		if notification.NotificationType == "lesson_cancelled" {
+			<a
+				href={fmt.Sprintf("/staff/notifications/%d", notification.ID)}
+				class={templ.Classes(
+					"flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-muted",
+					templ.KV("opacity-70", notification.Read),
+				)}
+			>
+				@NotificationListItemBody(notification)
+			</a>
+		} else {
+			<button
+				type="button"
+				class={templ.Classes(
+					"flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition hover:bg-muted",
+					templ.KV("opacity-70", notification.Read),
+				)}
+				hx-put={fmt.Sprintf("/api/v1/notifications/%d/read?facility_id=%d", notification.ID, notification.FacilityID)}
+				hx-target="#notifications-panel"
+				hx-swap="innerHTML"
+			>
+				@NotificationListItemBody(notification)
+			</button>
+		}
 	</li>
+}
+
+templ NotificationListItemBody(notification Notification) {
+	<div>
+		<p class="text-sm font-medium text-foreground">{notification.Message}</p>
+		<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+			<span class={"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold " + notification.BadgeClass()}>{notification.TypeLabel()}</span>
+			<span>{notification.Timestamp()}</span>
+			if notification.Read {
+				<span class="text-muted-foreground">Read</span>
+			} else {
+				<span class="text-emerald-600">New</span>
+			}
+		</div>
+	</div>
+	if !notification.Read {
+		<span class="mt-1 inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+	}
 }
