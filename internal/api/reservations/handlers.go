@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,10 +33,20 @@ var (
 )
 
 const (
-	reservationQueryTimeout  = 5 * time.Second
-	minReservationDuration   = time.Hour
-	timeLayoutDatetimeLocal  = "2006-01-02T15:04"
-	timeLayoutDatetimeMinute = "2006-01-02 15:04"
+	reservationQueryTimeout           = 5 * time.Second
+	waitlistNotificationTimeout       = 5 * time.Second
+	minReservationDuration            = time.Hour
+	timeLayoutDatetimeLocal           = "2006-01-02T15:04"
+	timeLayoutDatetimeMinute          = "2006-01-02 15:04"
+	waitlistTimeLayout                = "15:04:05"
+	defaultWaitlistOfferExpiryMinutes = int64(30)
+)
+
+const (
+	waitlistNotificationBroadcast  = "broadcast"
+	waitlistNotificationSequential = "sequential"
+	waitlistOfferStatusPending     = "pending"
+	waitlistStatusNotified         = "notified"
 )
 
 // InitHandlers must be called during server startup before handling requests.
@@ -743,6 +754,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		feeWaived = true
 	}
 
+	var reservationCourts []dbgen.ListReservationCourtsRow
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -814,6 +826,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
 		}
+		reservationCourts = courts
 		for _, court := range courts {
 			if err := qtx.RemoveReservationCourt(ctx, dbgen.RemoveReservationCourtParams{
 				ReservationID: reservationID,
@@ -849,6 +862,13 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to delete reservation")
 		http.Error(w, "Failed to delete reservation", http.StatusInternalServerError)
 		return
+	}
+
+	notifyCtx, notifyCancel := context.WithTimeout(context.Background(), waitlistNotificationTimeout)
+	defer notifyCancel()
+
+	if err := notifyWaitlistedMembers(notifyCtx, database, reservation, reservationCourts); err != nil {
+		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to notify waitlisted members")
 	}
 
 	w.Header().Set("HX-Trigger", "refreshCourtsCalendar")
@@ -1138,6 +1158,193 @@ func parseReservationTime(value, field string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, apiutil.FieldError{Field: field, Reason: "must be a valid datetime"}
+}
+
+func notifyWaitlistedMembers(ctx context.Context, database *appdb.DB, reservation dbgen.Reservation, courts []dbgen.ListReservationCourtsRow) error {
+	if database == nil {
+		return nil
+	}
+
+	targetDate, targetStartTime, targetEndTime := reservationWaitlistSlot(reservation)
+	now := time.Now()
+	return database.RunInTx(ctx, func(txdb *appdb.DB) error {
+		qtx := txdb.Queries
+
+		waitlists, err := listMatchingWaitlistsForCancelledSlot(ctx, qtx, reservation.FacilityID, targetDate, targetStartTime, targetEndTime, courts)
+		if err != nil {
+			return err
+		}
+		if len(waitlists) == 0 {
+			return nil
+		}
+
+		config, err := loadWaitlistNotificationConfig(ctx, qtx, reservation.FacilityID)
+		if err != nil {
+			return err
+		}
+
+		waitlists = filterWaitlistsByNotificationWindow(waitlists, reservation.StartTime, now, config.NotificationWindowMinutes)
+		if len(waitlists) == 0 {
+			return nil
+		}
+
+		return createWaitlistNotifications(ctx, qtx, waitlists, config, now)
+	})
+}
+
+func reservationWaitlistSlot(reservation dbgen.Reservation) (time.Time, string, string) {
+	startTime := reservation.StartTime
+	endTime := reservation.EndTime
+	targetDate := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
+	return targetDate, startTime.Format(waitlistTimeLayout), endTime.Format(waitlistTimeLayout)
+}
+
+func listMatchingWaitlistsForCancelledSlot(
+	ctx context.Context,
+	q *dbgen.Queries,
+	facilityID int64,
+	targetDate time.Time,
+	targetStartTime string,
+	targetEndTime string,
+	courts []dbgen.ListReservationCourtsRow,
+) ([]dbgen.Waitlist, error) {
+	waitlistsByID := make(map[int64]dbgen.Waitlist)
+
+	addEntries := func(targetCourtParam sql.NullInt64) error {
+		entries, err := q.ListMatchingPendingWaitlistsForCancelledSlot(ctx, dbgen.ListMatchingPendingWaitlistsForCancelledSlotParams{
+			FacilityID:      facilityID,
+			TargetDate:      targetDate,
+			TargetStartTime: targetStartTime,
+			TargetEndTime:   targetEndTime,
+			TargetCourtID:   targetCourtParam,
+		})
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			waitlistsByID[entry.ID] = entry
+		}
+		return nil
+	}
+
+	if len(courts) == 0 {
+		if err := addEntries(sql.NullInt64{}); err != nil {
+			return nil, err
+		}
+	} else {
+		for _, court := range courts {
+			if err := addEntries(sql.NullInt64{Int64: court.CourtID, Valid: true}); err != nil {
+				return nil, err
+			}
+		}
+		if err := addEntries(sql.NullInt64{}); err != nil {
+			return nil, err
+		}
+	}
+
+	waitlists := make([]dbgen.Waitlist, 0, len(waitlistsByID))
+	for _, entry := range waitlistsByID {
+		waitlists = append(waitlists, entry)
+	}
+	sort.Slice(waitlists, func(i, j int) bool {
+		if waitlists[i].Position != waitlists[j].Position {
+			return waitlists[i].Position < waitlists[j].Position
+		}
+		if !waitlists[i].CreatedAt.Equal(waitlists[j].CreatedAt) {
+			return waitlists[i].CreatedAt.Before(waitlists[j].CreatedAt)
+		}
+		return waitlists[i].ID < waitlists[j].ID
+	})
+
+	return waitlists, nil
+}
+
+func loadWaitlistNotificationConfig(ctx context.Context, q *dbgen.Queries, facilityID int64) (dbgen.WaitlistConfig, error) {
+	config, err := q.GetWaitlistConfig(ctx, facilityID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return dbgen.WaitlistConfig{
+				FacilityID:       facilityID,
+				NotificationMode: waitlistNotificationBroadcast,
+			}, nil
+		}
+		return dbgen.WaitlistConfig{}, err
+	}
+	if strings.TrimSpace(config.NotificationMode) == "" {
+		config.NotificationMode = waitlistNotificationBroadcast
+	}
+	return config, nil
+}
+
+func filterWaitlistsByNotificationWindow(waitlists []dbgen.Waitlist, slotStart time.Time, now time.Time, windowMinutes int64) []dbgen.Waitlist {
+	if windowMinutes <= 0 {
+		return waitlists
+	}
+	windowStart := now
+	windowEnd := now.Add(time.Duration(windowMinutes) * time.Minute)
+	if slotStart.Before(windowStart) || slotStart.After(windowEnd) {
+		return nil
+	}
+	return waitlists
+}
+
+func createWaitlistNotifications(ctx context.Context, q *dbgen.Queries, waitlists []dbgen.Waitlist, config dbgen.WaitlistConfig, now time.Time) error {
+	mode := strings.ToLower(strings.TrimSpace(config.NotificationMode))
+	if mode == "" {
+		mode = waitlistNotificationBroadcast
+	}
+
+	switch mode {
+	case waitlistNotificationSequential:
+		if len(waitlists) == 0 {
+			return nil
+		}
+		selected := waitlists[0]
+		if _, err := q.UpdateWaitlistStatus(ctx, dbgen.UpdateWaitlistStatusParams{
+			ID:         selected.ID,
+			FacilityID: selected.FacilityID,
+			Status:     waitlistStatusNotified,
+		}); err != nil {
+			return err
+		}
+
+		expiryMinutes := config.OfferExpiryMinutes
+		if expiryMinutes <= 0 {
+			expiryMinutes = defaultWaitlistOfferExpiryMinutes
+		}
+		expiresAt := now.Add(time.Duration(expiryMinutes) * time.Minute)
+
+		_, err := q.CreateWaitlistOffer(ctx, dbgen.CreateWaitlistOfferParams{
+			WaitlistID: selected.ID,
+			ExpiresAt:  expiresAt,
+			Status:     waitlistOfferStatusPending,
+		})
+		return err
+	default:
+		expiryMinutes := config.OfferExpiryMinutes
+		if expiryMinutes <= 0 {
+			expiryMinutes = defaultWaitlistOfferExpiryMinutes
+		}
+		expiresAt := now.Add(time.Duration(expiryMinutes) * time.Minute)
+
+		for _, entry := range waitlists {
+			if _, err := q.UpdateWaitlistStatus(ctx, dbgen.UpdateWaitlistStatusParams{
+				ID:         entry.ID,
+				FacilityID: entry.FacilityID,
+				Status:     waitlistStatusNotified,
+			}); err != nil {
+				return err
+			}
+			if _, err := q.CreateWaitlistOffer(ctx, dbgen.CreateWaitlistOfferParams{
+				WaitlistID: entry.ID,
+				ExpiresAt:  expiresAt,
+				Status:     waitlistOfferStatusPending,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 func parseCourtIDs(values []string) ([]int64, error) {

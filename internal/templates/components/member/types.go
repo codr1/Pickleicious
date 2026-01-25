@@ -179,6 +179,8 @@ type MemberBookingFormData struct {
 	AvailableSlots        []MemberBookingSlot
 	DatePicker            DatePickerData
 	MaxAdvanceBookingDays int64
+	WaitlistStartTime     time.Time
+	WaitlistEndTime       time.Time
 }
 
 type LessonBookingFormData struct {

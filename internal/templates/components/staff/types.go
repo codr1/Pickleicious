@@ -25,6 +25,16 @@ type NotificationDetailData struct {
 	CourtLabel   string
 }
 
+type WaitlistConfigFormData struct {
+	FacilityID                int64
+	MaxWaitlistSize           int64
+	NotificationMode          string
+	OfferExpiryMinutes        int64
+	NotificationWindowMinutes int64
+}
+
+const defaultWaitlistOfferExpiryMinutes int64 = 30
+
 // NewStaff creates a Staff from ListStaffRow.
 func NewStaff(row dbgen.ListStaffRow) Staff {
 	return Staff{ListStaffRow: row}

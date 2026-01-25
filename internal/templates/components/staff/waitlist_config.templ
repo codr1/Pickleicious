@@ -1,0 +1,75 @@
+package staff
+
+import (
+	"fmt"
+	"strings"
+)
+
+templ WaitlistConfigForm(data WaitlistConfigFormData) {
+	<section class="rounded-lg border border-border bg-background shadow-sm">
+		<div class="border-b border-border px-4 py-3">
+			<h3 class="text-lg font-semibold text-foreground">Waitlist Configuration</h3>
+			<p class="text-sm text-muted-foreground">Configure waitlist limits and notifications for this facility.</p>
+		</div>
+		<form class="space-y-4 px-4 py-4" hx-post="/api/v1/waitlist/config" hx-target="#waitlist-config-feedback" hx-swap="innerHTML">
+			<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)} />
+			<div class="grid gap-4 md:grid-cols-4">
+				<div>
+					<label for="max_waitlist_size" class="block text-sm font-medium text-foreground">Maximum waitlist size</label>
+					<input
+						type="number"
+						id="max_waitlist_size"
+						name="max_waitlist_size"
+						min="0"
+						placeholder="0"
+						value={fmt.Sprintf("%d", data.MaxWaitlistSize)}
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label for="notification_mode" class="block text-sm font-medium text-foreground">Notification mode</label>
+					<select
+						id="notification_mode"
+						name="notification_mode"
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+						<option value="broadcast" selected={strings.EqualFold(data.NotificationMode, "broadcast") || strings.TrimSpace(data.NotificationMode) == ""}>Broadcast</option>
+						<option value="sequential" selected={strings.EqualFold(data.NotificationMode, "sequential")}>Sequential</option>
+					</select>
+				</div>
+				<div>
+					<label for="offer_expiry_minutes" class="block text-sm font-medium text-foreground">Offer expiry (minutes)</label>
+					<input
+						type="number"
+						id="offer_expiry_minutes"
+						name="offer_expiry_minutes"
+						min="0"
+						placeholder="30"
+						value={func() string {
+							if data.OfferExpiryMinutes <= 0 {
+								return fmt.Sprintf("%d", defaultWaitlistOfferExpiryMinutes)
+							}
+							return fmt.Sprintf("%d", data.OfferExpiryMinutes)
+						}()}
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+					/>
+				</div>
+				<div>
+					<label for="notification_window_minutes" class="block text-sm font-medium text-foreground">Notification window (minutes)</label>
+					<input
+						type="number"
+						id="notification_window_minutes"
+						name="notification_window_minutes"
+						min="0"
+						placeholder="0"
+						value={fmt.Sprintf("%d", data.NotificationWindowMinutes)}
+						class="mt-1 block w-full rounded-md border border-border px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+					/>
+				</div>
+			</div>
+			<div class="flex justify-end">
+				<button type="submit" class="rounded-md border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Save waitlist settings</button>
+			</div>
+			<div id="waitlist-config-feedback" class="text-sm"></div>
+		</form>
+	</section>
+}

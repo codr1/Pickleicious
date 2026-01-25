@@ -26,6 +26,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/staff"
 	"github.com/codr1/Pickleicious/internal/api/themes"
+	"github.com/codr1/Pickleicious/internal/api/waitlist"
 	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
@@ -74,6 +75,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
 	cancellationpolicy.InitHandlers(database.Queries)
+	waitlist.InitHandlers(database)
 
 	staff.InitHandlers(database)
 
@@ -87,6 +89,9 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	}
 	if err := registerOpenPlayEnforcementJob(config, database, openplayEngine); err != nil {
 		return nil, fmt.Errorf("register open play enforcement job: %w", err)
+	}
+	if err := scheduler.RegisterWaitlistJobs(database); err != nil {
+		return nil, fmt.Errorf("register waitlist jobs: %w", err)
 	}
 
 	// Register routes
@@ -167,6 +172,16 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/notifications/{id}/read", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPut: notifications.HandleMarkAsRead,
 	}))
+	mux.HandleFunc("/api/v1/waitlist", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  waitlist.HandleWaitlistList,
+		http.MethodPost: waitlist.HandleWaitlistJoin,
+	}))
+	mux.HandleFunc("/api/v1/waitlist/config", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: waitlist.HandleWaitlistConfigUpdate,
+	}))
+	mux.HandleFunc("/api/v1/waitlist/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodDelete: waitlist.HandleWaitlistLeave,
+	}))
 
 	// Auth routes (unified for staff and members)
 	mux.HandleFunc("/login", auth.HandleLoginPage)
@@ -191,6 +206,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.Handle("/member/reservations", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  member.HandleMemberReservationsPartial,
 		http.MethodPost: member.HandleMemberBookingCreate,
+	}))))
+	mux.Handle("/member/waitlist", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: member.HandleMemberWaitlistList,
 	}))))
 	mux.Handle("/member/reservations/{id}", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodDelete: member.HandleMemberReservationCancel,
@@ -306,6 +324,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/staff/lessons", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: staff.HandleStaffLessonCreate,
+	}))
+	mux.HandleFunc("/api/v1/staff/waitlist", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: waitlist.HandleStaffWaitlistView,
 	}))
 	mux.HandleFunc("/api/v1/staff/members/search", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: staff.HandleStaffMemberSearch,

@@ -3,6 +3,8 @@ package member
 
 import (
 	"fmt"
+
+	"github.com/codr1/Pickleicious/internal/templates/components/waitlist"
 )
 
 templ MemberBookingForm(data MemberBookingFormData) {
@@ -115,24 +117,24 @@ templ MemberBookingDateTime(data MemberBookingFormData) {
 			</p>
 		</div>
 
-		@MemberBookingSlotSelect(data.AvailableSlots)
+		@MemberBookingSlotSelect(data)
 	</div>
 }
 
-templ MemberBookingSlotSelect(slots []MemberBookingSlot) {
+templ MemberBookingSlotSelect(data MemberBookingFormData) {
 	<div id="member-booking-slot-select">
 		<label for="member_time_slot" class="block text-sm font-medium text-foreground">Time slot</label>
 		<select
 			id="member_time_slot"
 			name="start_time"
 			required
-			disabled?={len(slots) == 0}
+			disabled?={len(data.AvailableSlots) == 0}
 			onchange="setMemberReservationEndTime(this)"
 			class="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground">
-			if len(slots) == 0 {
+			if len(data.AvailableSlots) == 0 {
 				<option value="">No slots available</option>
 			} else {
-				for _, slot := range slots {
+				for _, slot := range data.AvailableSlots {
 					<option
 						value={slot.StartTime.Format("2006-01-02T15:04")}
 						data-end-time={slot.EndTime.Format("2006-01-02T15:04")}>
@@ -149,8 +151,17 @@ templ MemberBookingSlotSelect(slots []MemberBookingSlot) {
 			type="hidden"
 			id="member_end_time"
 			name="end_time"
-			value={defaultEndTimeValue(slots)}/>
+			value={defaultEndTimeValue(data.AvailableSlots)}/>
 		<p class="mt-1 text-xs text-muted-foreground">Select a time slot for your reservation.</p>
+		if len(data.AvailableSlots) == 0 {
+			<div class="mt-4">
+				@waitlist.WaitlistJoinButton(waitlist.WaitlistJoinButtonData{
+					FacilityID: data.FacilityID,
+					StartTime:  data.WaitlistStartTime,
+					EndTime:    data.WaitlistEndTime,
+				})
+			</div>
+		}
 	</div>
 }
 

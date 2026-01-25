@@ -698,6 +698,7 @@ This section documents features that are standard in competing pickleball/sports
 | Max Waitlist Size | Limit waitlist length per slot |
 | Notification Window | How long before slot to notify |
 | Member Priority | VIP members get first notification |
+
 <!-- END WIP -->
 
 ### 9.4 Cancellation Policies & No-Show Management

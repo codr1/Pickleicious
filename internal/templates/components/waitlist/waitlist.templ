@@ -1,0 +1,67 @@
+// internal/templates/components/waitlist/waitlist.templ
+package waitlist
+
+import "fmt"
+
+templ WaitlistJoinButton(data WaitlistJoinButtonData) {
+	<div class="rounded-md border border-border bg-muted/50 p-4">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<p class="text-sm font-semibold text-foreground">Slot unavailable</p>
+				<p class="text-xs text-muted-foreground">Join the waitlist and we will notify you when this time opens.</p>
+			</div>
+			<button
+				type="button"
+				disabled?={data.Disabled}
+				hx-post="/api/v1/waitlist"
+				hx-swap="none"
+				hx-vals={data.HXVals()}
+				hx-on::after-request="if(event.detail.successful){htmx.trigger(document.body,'refreshMemberWaitlist');}"
+				class="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60">
+				{data.ButtonLabel()}
+			</button>
+		</div>
+	</div>
+}
+
+templ WaitlistEntryList(data WaitlistEntryListData) {
+	<div
+		id="member-waitlist-entries"
+		class="bg-background rounded-lg shadow-sm border border-border p-6"
+		hx-get="/member/waitlist"
+		hx-trigger="refreshMemberWaitlist from:body"
+		hx-swap="outerHTML">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+			<h2 class="text-xl font-bold text-foreground">Waitlist</h2>
+			<p class="text-sm text-muted-foreground">Track upcoming waitlisted slots.</p>
+		</div>
+		if len(data.Entries) == 0 {
+			<p class="mt-4 text-muted-foreground">You are not on any waitlists yet.</p>
+		} else {
+			<ul class="mt-6 divide-y divide-border">
+				for _, entry := range data.Entries {
+					<li class="py-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+						<div class="space-y-1">
+							<p class="text-foreground font-medium">
+								{entry.StartTime.Format("Jan 2, 2006 3:04 PM")} - {entry.EndTime.Format("3:04 PM")}
+							</p>
+							<p class="text-sm text-muted-foreground">{entry.FacilityName}</p>
+							<p class="text-sm text-muted-foreground">Court: {entry.CourtLabel()}</p>
+							<p class="text-xs text-muted-foreground">Position {fmt.Sprintf("%d", entry.Position)} • {entry.StatusLabel()}</p>
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100"
+								hx-delete={fmt.Sprintf("/api/v1/waitlist/%d?facility_id=%d", entry.ID, entry.FacilityID)}
+								hx-on::after-request="if(event.detail.successful){htmx.trigger(document.body,'refreshMemberWaitlist');}"
+								hx-swap="none">
+								Remove
+							</button>
+						</div>
+					</li>
+				}
+			</ul>
+		}
+	</div>
+}
