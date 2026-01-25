@@ -14,26 +14,73 @@ templ DashboardLayout(data DashboardData) {
 					<p class="mt-1 text-sm text-muted-foreground">Facility activity snapshot.</p>
 				}
 			</div>
-			<span class="text-xs text-muted-foreground">Facility ID {fmt.Sprintf("%d", data.FacilityID)}</span>
+			if data.FacilityID > 0 {
+				<span class="text-xs text-muted-foreground">Facility ID {fmt.Sprintf("%d", data.FacilityID)}</span>
+			} else {
+				<span class="text-xs text-muted-foreground">All Facilities</span>
+			}
 		</div>
 
 		<form
 			class="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-background p-4 shadow-sm"
-			hx-get={fmt.Sprintf("/api/v1/dashboard/metrics?facility_id=%d", data.FacilityID)}
+			hx-get="/api/v1/dashboard/metrics"
 			hx-target="#dashboard-metrics"
 			hx-swap="innerHTML"
 			hx-trigger="change delay:300ms, submit">
-			<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)} />
+			if data.ShowFacilitySelector {
+				<div>
+					<label for="dashboard-facility" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Facility</label>
+					<select
+						id="dashboard-facility"
+						name="facility_id"
+						class="mt-1 w-56 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+						<option value="0" selected?={data.FacilityID == 0}>All Facilities</option>
+						for _, facility := range data.Facilities {
+							<option value={fmt.Sprintf("%d", facility.ID)} selected?={facility.ID == data.FacilityID}>{facility.Name}</option>
+						}
+					</select>
+				</div>
+			} else {
+				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)} />
+			}
 			<div>
 				<label for="dashboard-date-range" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date Range</label>
-				<input
-					type="text"
+				<select
 					id="dashboard-date-range"
 					name="date_range"
-					value={data.DateRange}
-					placeholder="YYYY-MM-DD to YYYY-MM-DD"
 					class="mt-1 w-56 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
-				/>
+					hx-on:change="const isCustom = this.value === 'custom'; const container = document.getElementById('dashboard-custom-range'); if (container) { container.classList.toggle('hidden', !isCustom); const inputs = container.querySelectorAll('input'); inputs.forEach((input) => { input.disabled = !isCustom; }); }">
+					<option value="today" selected?={isDateRangePreset(data.DateRangePreset, "today")}>Today</option>
+					<option value="last_7_days" selected?={isDateRangePreset(data.DateRangePreset, "last_7_days")}>Last 7 days</option>
+					<option value="last_30_days" selected?={isDateRangePreset(data.DateRangePreset, "last_30_days")}>Last 30 days</option>
+					<option value="this_month" selected?={isDateRangePreset(data.DateRangePreset, "this_month")}>This month</option>
+					<option value="this_year" selected?={isDateRangePreset(data.DateRangePreset, "this_year")}>This year</option>
+					<option value="custom" selected?={isDateRangePreset(data.DateRangePreset, "custom")}>Custom range</option>
+				</select>
+				<div id="dashboard-custom-range" class={fmt.Sprintf("mt-3 flex flex-wrap items-end gap-3 %s", customRangeHiddenClass(data.DateRangePreset))}>
+					<div>
+						<label for="dashboard-start-date" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start</label>
+						<input
+							type="date"
+							id="dashboard-start-date"
+							name="start_date"
+							value={data.StartDate}
+							disabled?={!isDateRangePreset(data.DateRangePreset, "custom")}
+							class="mt-1 w-40 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+						/>
+					</div>
+					<div>
+						<label for="dashboard-end-date" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">End</label>
+						<input
+							type="date"
+							id="dashboard-end-date"
+							name="end_date"
+							value={data.EndDate}
+							disabled?={!isDateRangePreset(data.DateRangePreset, "custom")}
+							class="mt-1 w-40 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+						/>
+					</div>
+				</div>
 			</div>
 			<div>
 				<label for="dashboard-granularity" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Granularity</label>
@@ -41,9 +88,12 @@ templ DashboardLayout(data DashboardData) {
 					id="dashboard-granularity"
 					name="granularity"
 					class="mt-1 w-40 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
-					<option value="day" selected?={isGranularity(data.Granularity, "day")}>Day</option>
-					<option value="week" selected?={isGranularity(data.Granularity, "week")}>Week</option>
-					<option value="month" selected?={isGranularity(data.Granularity, "month")}>Month</option>
+					<option value="day" selected?={isGranularity(data.Granularity, "day")}>Daily</option>
+					<option value="week" selected?={isGranularity(data.Granularity, "week")}>Weekly</option>
+					<option value="month" selected?={isGranularity(data.Granularity, "month")}>Monthly</option>
+					<option value="annual" selected?={isGranularity(data.Granularity, "annual")}>Annual</option>
+					<option value="dow_month" selected?={isGranularity(data.Granularity, "dow_month")}>Day-of-week (month)</option>
+					<option value="dow_year" selected?={isGranularity(data.Granularity, "dow_year")}>Day-of-week (year)</option>
 				</select>
 			</div>
 			<button type="submit" class="h-10 rounded-md border border-blue-600 bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700">
@@ -59,4 +109,15 @@ templ DashboardLayout(data DashboardData) {
 
 func isGranularity(value string, expected string) bool {
 	return value == expected
+}
+
+func isDateRangePreset(value string, expected string) bool {
+	return value == expected
+}
+
+func customRangeHiddenClass(value string) string {
+	if value == "custom" {
+		return ""
+	}
+	return "hidden"
 }

@@ -32,7 +32,7 @@ templ DashboardMetrics(data DashboardData) {
 			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
 				<div class="flex items-center justify-between">
 					<h3 class="text-sm font-semibold text-foreground">Bookings by Type</h3>
-					<span class="text-xs text-muted-foreground">{data.Granularity}</span>
+					<span class="text-xs text-muted-foreground">{granularityLabel(data.Granularity)}</span>
 				</div>
 				<div class="mt-4 space-y-3">
 					if len(data.BookingsByType) == 0 {
@@ -84,4 +84,23 @@ func formatBookingType(booking BookingTypeCount) string {
 		return booking.TypeName
 	}
 	return fmt.Sprintf("Type %d", booking.TypeID)
+}
+
+func granularityLabel(value string) string {
+	switch value {
+	case "day":
+		return "Daily"
+	case "week":
+		return "Weekly"
+	case "month":
+		return "Monthly"
+	case "annual":
+		return "Annual"
+	case "dow_month":
+		return "Day-of-week (month)"
+	case "dow_year":
+		return "Day-of-week (year)"
+	default:
+		return value
+	}
 }

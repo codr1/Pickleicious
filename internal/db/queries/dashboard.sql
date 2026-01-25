@@ -2,7 +2,7 @@
 SELECT reservation_type_id,
     COUNT(*) AS reservation_count
 FROM reservations
-WHERE facility_id = @facility_id
+WHERE (@facility_id = 0 OR facility_id = @facility_id)
   AND start_time < @end_time
   AND end_time > @start_time
   AND NOT EXISTS (
@@ -16,7 +16,7 @@ ORDER BY reservation_type_id;
 -- name: CountCheckinsByFacilityInRange :one
 SELECT COUNT(*) AS checkins_count
 FROM facility_visits
-WHERE facility_id = @facility_id
+WHERE (@facility_id = 0 OR facility_id = @facility_id)
   AND check_in_time >= @start_time
   AND check_in_time < @end_time;
 
@@ -27,14 +27,14 @@ WITH cancellation_counts AS (
             AS total_refund_percentage
     FROM reservation_cancellations rc
     JOIN reservations r ON r.id = rc.reservation_id
-    WHERE r.facility_id = @facility_id
+    WHERE (@facility_id = 0 OR r.facility_id = @facility_id)
       AND rc.cancelled_at >= @start_time
       AND rc.cancelled_at < @end_time
 ),
 reservation_counts AS (
     SELECT COUNT(*) AS total_reservations
     FROM reservations r
-    WHERE r.facility_id = @facility_id
+    WHERE (@facility_id = 0 OR r.facility_id = @facility_id)
       AND r.start_time < @end_time
       AND r.end_time > @start_time
 )
@@ -59,25 +59,41 @@ WITH RECURSIVE date_range(day) AS (
     FROM date_range
     WHERE day < datetime(@end_time, '-1 day', 'start of day')
 ),
+facilities_scope AS (
+    SELECT id AS facility_id
+    FROM facilities
+    WHERE @facility_id = 0 OR id = @facility_id
+),
 court_count AS (
-    SELECT COUNT(*) AS total_courts
+    SELECT courts.facility_id,
+        COUNT(*) AS total_courts
     FROM courts
-    WHERE courts.facility_id = @facility_id
+    JOIN facilities_scope fs ON fs.facility_id = courts.facility_id
+    WHERE courts.facility_id = fs.facility_id
       AND status = 'active'
+    GROUP BY courts.facility_id
 ),
 hours_by_day AS (
-    SELECT (julianday('2000-01-01 ' || oh.closes_at)
+    SELECT oh.facility_id,
+        (julianday('2000-01-01 ' || oh.closes_at)
         - julianday('2000-01-01 ' || oh.opens_at)) * 24.0 AS open_hours
     FROM date_range dr
     JOIN operating_hours oh
-      ON oh.facility_id = @facility_id
+      ON oh.facility_id IN (SELECT facility_id FROM facilities_scope)
      AND oh.day_of_week = CAST(strftime('%w', dr.day) AS INTEGER)
 )
 SELECT CAST(
-        COALESCE((SELECT SUM(open_hours) FROM hours_by_day), CAST(0 AS REAL))
-        * court_count.total_courts AS REAL
+        COALESCE(
+            (
+                SELECT SUM(hours_by_day.open_hours * court_count.total_courts)
+                FROM hours_by_day
+                JOIN court_count ON court_count.facility_id = hours_by_day.facility_id
+            ),
+            CAST(0 AS REAL)
+        ) AS REAL
     ) AS available_court_hours
-FROM court_count;
+FROM facilities_scope
+LIMIT 1;
 
 -- name: GetBookedCourtHours :one
 WITH booked AS (
@@ -94,7 +110,7 @@ WITH booked AS (
         )) * 24.0 AS booked_hours
     FROM reservations r
     JOIN reservation_courts rc ON rc.reservation_id = r.id
-    WHERE r.facility_id = @facility_id
+    WHERE (@facility_id = 0 OR r.facility_id = @facility_id)
       AND r.start_time < @end_time
       AND r.end_time > @start_time
       AND NOT EXISTS (
@@ -113,7 +129,7 @@ SELECT CASE
     END AS reservation_status,
     COUNT(*) AS reservation_count
 FROM reservations r
-WHERE r.facility_id = @facility_id
+WHERE (@facility_id = 0 OR r.facility_id = @facility_id)
   AND r.start_time < @end_time
   AND r.end_time > @start_time
   AND NOT EXISTS (

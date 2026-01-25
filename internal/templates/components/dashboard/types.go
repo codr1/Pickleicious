@@ -13,14 +13,24 @@ type BookingTypeCount struct {
 	Count    int64
 }
 
+type FacilityOption struct {
+	ID   int64
+	Name string
+}
+
 type DashboardData struct {
-	FacilityID          int64
-	FacilityName        string
-	DateRange           string
-	UtilizationRate     float64
-	ScheduledCount      int64
-	BookingsByType      []BookingTypeCount
-	CancellationMetrics CancellationMetrics
-	CheckinCount        int64
-	Granularity         string
+	FacilityID           int64
+	FacilityName         string
+	DateRange            string
+	DateRangePreset      string
+	StartDate            string
+	EndDate              string
+	UtilizationRate      float64
+	ScheduledCount       int64
+	BookingsByType       []BookingTypeCount
+	CancellationMetrics  CancellationMetrics
+	CheckinCount         int64
+	Granularity          string
+	Facilities           []FacilityOption
+	ShowFacilitySelector bool
 }
