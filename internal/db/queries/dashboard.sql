@@ -57,7 +57,7 @@ WITH RECURSIVE date_range(day) AS (
     UNION ALL
     SELECT datetime(day, '+1 day')
     FROM date_range
-    WHERE day < datetime(@end_time, '-1 day', 'start of day')
+    WHERE day < datetime(@end_time, 'start of day')
 ),
 facilities_scope AS (
     SELECT id AS facility_id
@@ -124,7 +124,7 @@ FROM booked;
 
 -- name: CountScheduledVsCompletedReservations :many
 SELECT CASE
-        WHEN r.end_time < CURRENT_TIMESTAMP THEN 'completed'
+        WHEN r.end_time < @comparison_time THEN 'completed'
         ELSE 'scheduled'
     END AS reservation_status,
     COUNT(*) AS reservation_count
