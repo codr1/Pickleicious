@@ -428,6 +428,59 @@ func (q *Queries) ListActiveVisitPacksForUserByFacility(ctx context.Context, arg
 	return items, nil
 }
 
+const listActiveVisitPacksForUserByOrganization = `-- name: ListActiveVisitPacksForUserByOrganization :many
+SELECT vp.id, vp.pack_type_id, vp.user_id, vp.purchase_date, vp.expires_at,
+    vp.visits_remaining, vp.status, vp.created_at, vp.updated_at
+FROM visit_packs vp
+JOIN visit_pack_types vpt ON vpt.id = vp.pack_type_id
+JOIN facilities f ON f.id = vpt.facility_id
+WHERE vp.user_id = ?1
+  AND f.organization_id = ?2
+  AND vp.status = 'active'
+  AND vp.visits_remaining > 0
+  AND vp.expires_at > ?3
+ORDER BY vp.expires_at
+`
+
+type ListActiveVisitPacksForUserByOrganizationParams struct {
+	UserID         int64     `json:"userId"`
+	OrganizationID int64     `json:"organizationId"`
+	ComparisonTime time.Time `json:"comparisonTime"`
+}
+
+func (q *Queries) ListActiveVisitPacksForUserByOrganization(ctx context.Context, arg ListActiveVisitPacksForUserByOrganizationParams) ([]VisitPack, error) {
+	rows, err := q.query(ctx, q.listActiveVisitPacksForUserByOrganizationStmt, listActiveVisitPacksForUserByOrganization, arg.UserID, arg.OrganizationID, arg.ComparisonTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []VisitPack
+	for rows.Next() {
+		var i VisitPack
+		if err := rows.Scan(
+			&i.ID,
+			&i.PackTypeID,
+			&i.UserID,
+			&i.PurchaseDate,
+			&i.ExpiresAt,
+			&i.VisitsRemaining,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVisitPackTypes = `-- name: ListVisitPackTypes :many
 SELECT id, facility_id, name, price_cents, visit_count, valid_days, status,
     created_at, updated_at

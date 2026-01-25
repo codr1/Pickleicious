@@ -120,6 +120,19 @@ WHERE vp.user_id = @user_id
   AND vp.expires_at > @comparison_time
 ORDER BY vp.expires_at;
 
+-- name: ListActiveVisitPacksForUserByOrganization :many
+SELECT vp.id, vp.pack_type_id, vp.user_id, vp.purchase_date, vp.expires_at,
+    vp.visits_remaining, vp.status, vp.created_at, vp.updated_at
+FROM visit_packs vp
+JOIN visit_pack_types vpt ON vpt.id = vp.pack_type_id
+JOIN facilities f ON f.id = vpt.facility_id
+WHERE vp.user_id = @user_id
+  AND f.organization_id = @organization_id
+  AND vp.status = 'active'
+  AND vp.visits_remaining > 0
+  AND vp.expires_at > @comparison_time
+ORDER BY vp.expires_at;
+
 -- name: DecrementVisitPackVisit :one
 UPDATE visit_packs
 SET visits_remaining = visits_remaining - 1,

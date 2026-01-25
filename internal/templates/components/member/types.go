@@ -181,6 +181,13 @@ type MemberBookingFormData struct {
 	MaxAdvanceBookingDays int64
 	WaitlistStartTime     time.Time
 	WaitlistEndTime       time.Time
+	VisitPacks            []MemberVisitPackOption
+}
+
+type MemberVisitPackOption struct {
+	ID              int64
+	VisitsRemaining int64
+	ExpiresAt       time.Time
 }
 
 type LessonBookingFormData struct {

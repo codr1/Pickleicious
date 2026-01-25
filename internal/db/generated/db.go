@@ -327,6 +327,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listActiveVisitPacksForUserByFacilityStmt, err = db.PrepareContext(ctx, listActiveVisitPacksForUserByFacility); err != nil {
 		return nil, fmt.Errorf("error preparing query ListActiveVisitPacksForUserByFacility: %w", err)
 	}
+	if q.listActiveVisitPacksForUserByOrganizationStmt, err = db.PrepareContext(ctx, listActiveVisitPacksForUserByOrganization); err != nil {
+		return nil, fmt.Errorf("error preparing query ListActiveVisitPacksForUserByOrganization: %w", err)
+	}
 	if q.listAvailableCourtsStmt, err = db.PrepareContext(ctx, listAvailableCourts); err != nil {
 		return nil, fmt.Errorf("error preparing query ListAvailableCourts: %w", err)
 	}
@@ -1047,6 +1050,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listActiveVisitPacksForUserByFacilityStmt: %w", cerr)
 		}
 	}
+	if q.listActiveVisitPacksForUserByOrganizationStmt != nil {
+		if cerr := q.listActiveVisitPacksForUserByOrganizationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listActiveVisitPacksForUserByOrganizationStmt: %w", cerr)
+		}
+	}
 	if q.listAvailableCourtsStmt != nil {
 		if cerr := q.listAvailableCourtsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listAvailableCourtsStmt: %w", cerr)
@@ -1537,6 +1545,7 @@ type Queries struct {
 	isMemberOpenPlayParticipantStmt                  *sql.Stmt
 	listActiveVisitPacksForUserStmt                  *sql.Stmt
 	listActiveVisitPacksForUserByFacilityStmt        *sql.Stmt
+	listActiveVisitPacksForUserByOrganizationStmt    *sql.Stmt
 	listAvailableCourtsStmt                          *sql.Stmt
 	listCancellationPolicyTiersStmt                  *sql.Stmt
 	listCourtsStmt                                   *sql.Stmt
@@ -1714,6 +1723,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		isMemberOpenPlayParticipantStmt:                  q.isMemberOpenPlayParticipantStmt,
 		listActiveVisitPacksForUserStmt:                  q.listActiveVisitPacksForUserStmt,
 		listActiveVisitPacksForUserByFacilityStmt:        q.listActiveVisitPacksForUserByFacilityStmt,
+		listActiveVisitPacksForUserByOrganizationStmt:    q.listActiveVisitPacksForUserByOrganizationStmt,
 		listAvailableCourtsStmt:                          q.listAvailableCourtsStmt,
 		listCancellationPolicyTiersStmt:                  q.listCancellationPolicyTiersStmt,
 		listCourtsStmt:                                   q.listCourtsStmt,

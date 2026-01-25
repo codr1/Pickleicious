@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 )
 
@@ -26,9 +25,11 @@ type VisitPackRedemptionResult struct {
 	Redemption dbgen.VisitPackRedemption
 }
 
-func RedeemVisitPackVisit(ctx context.Context, database *appdb.DB, params RedeemVisitPackVisitParams) (VisitPackRedemptionResult, error) {
-	if database == nil {
-		return VisitPackRedemptionResult{}, fmt.Errorf("database is required")
+// RedeemVisitPackVisit redeems a visit pack visit using the provided querier.
+// Callers should pass a transactional querier when the redemption must be atomic with other writes.
+func RedeemVisitPackVisit(ctx context.Context, q dbgen.Querier, params RedeemVisitPackVisitParams) (VisitPackRedemptionResult, error) {
+	if q == nil {
+		return VisitPackRedemptionResult{}, fmt.Errorf("queries are required")
 	}
 	if params.VisitPackID <= 0 {
 		return VisitPackRedemptionResult{}, fmt.Errorf("visit_pack_id must be a positive integer")
@@ -45,71 +46,60 @@ func RedeemVisitPackVisit(ctx context.Context, database *appdb.DB, params Redeem
 		redeemedAt = time.Now()
 	}
 
-	var result VisitPackRedemptionResult
-	err := database.RunInTx(ctx, func(txdb *appdb.DB) error {
-		qtx := txdb.Queries
+	redemptionInfo, err := q.GetVisitPackRedemptionInfo(ctx, params.VisitPackID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return VisitPackRedemptionResult{}, ErrVisitPackUnavailable
+		}
+		return VisitPackRedemptionResult{}, err
+	}
 
-		redemptionInfo, err := qtx.GetVisitPackRedemptionInfo(ctx, params.VisitPackID)
+	if redemptionInfo.PackFacilityID != params.FacilityID {
+		redemptionFacility, err := q.GetFacilityByID(ctx, params.FacilityID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrVisitPackUnavailable
+				return VisitPackRedemptionResult{}, ErrVisitPackUnavailable
 			}
-			return err
+			return VisitPackRedemptionResult{}, err
+		}
+		if redemptionFacility.OrganizationID != redemptionInfo.OrganizationID {
+			return VisitPackRedemptionResult{}, ErrVisitPackUnavailable
 		}
 
-		if redemptionInfo.PackFacilityID != params.FacilityID {
-			redemptionFacility, err := qtx.GetFacilityByID(ctx, params.FacilityID)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return ErrVisitPackUnavailable
-				}
-				return err
-			}
-			if redemptionFacility.OrganizationID != redemptionInfo.OrganizationID {
-				return ErrVisitPackUnavailable
-			}
-
-			crossFacility, err := qtx.GetOrganizationCrossFacilitySetting(ctx, redemptionInfo.OrganizationID)
-			if err != nil {
-				return err
-			}
-			if !crossFacility {
-				return ErrVisitPackUnavailable
-			}
-		}
-
-		updated, err := qtx.DecrementVisitPackVisit(ctx, params.VisitPackID)
+		crossFacility, err := q.GetOrganizationCrossFacilitySetting(ctx, redemptionInfo.OrganizationID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return ErrVisitPackUnavailable
-			}
-			return err
+			return VisitPackRedemptionResult{}, err
 		}
+		if !crossFacility {
+			return VisitPackRedemptionResult{}, ErrVisitPackUnavailable
+		}
+	}
 
-		reservationID := sql.NullInt64{}
-		if params.ReservationID != nil {
-			reservationID = sql.NullInt64{Int64: *params.ReservationID, Valid: true}
+	updated, err := q.DecrementVisitPackVisit(ctx, params.VisitPackID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return VisitPackRedemptionResult{}, ErrVisitPackUnavailable
 		}
+		return VisitPackRedemptionResult{}, err
+	}
 
-		redemption, err := qtx.CreateVisitPackRedemption(ctx, dbgen.CreateVisitPackRedemptionParams{
-			VisitPackID:   params.VisitPackID,
-			FacilityID:    params.FacilityID,
-			RedeemedAt:    redeemedAt,
-			ReservationID: reservationID,
-		})
-		if err != nil {
-			return err
-		}
+	reservationID := sql.NullInt64{}
+	if params.ReservationID != nil {
+		reservationID = sql.NullInt64{Int64: *params.ReservationID, Valid: true}
+	}
 
-		result = VisitPackRedemptionResult{
-			VisitPack:  updated,
-			Redemption: redemption,
-		}
-		return nil
+	redemption, err := q.CreateVisitPackRedemption(ctx, dbgen.CreateVisitPackRedemptionParams{
+		VisitPackID:   params.VisitPackID,
+		FacilityID:    params.FacilityID,
+		RedeemedAt:    redeemedAt,
+		ReservationID: reservationID,
 	})
 	if err != nil {
 		return VisitPackRedemptionResult{}, err
 	}
 
-	return result, nil
+	return VisitPackRedemptionResult{
+		VisitPack:  updated,
+		Redemption: redemption,
+	}, nil
 }

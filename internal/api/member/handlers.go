@@ -357,6 +357,7 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 
 	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	facilityLoaded := err == nil
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
@@ -384,6 +385,20 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	waitlistStartTime, waitlistEndTime := waitlistFallbackTimes(bookingDate, availableSlots)
+	var visitPackOptions []membertempl.MemberVisitPackOption
+	if user.MembershipLevel <= 1 && facilityLoaded {
+		crossFacility, err := q.GetOrganizationCrossFacilitySetting(ctx, facility.OrganizationID)
+		if err != nil {
+			logger.Error().Err(err).Int64("organization_id", facility.OrganizationID).Msg("Failed to load visit pack settings")
+		} else {
+			visitPacks, err := listActiveVisitPacksForMemberBooking(ctx, q, user.ID, facility.ID, facility.OrganizationID, crossFacility, time.Now())
+			if err != nil {
+				logger.Error().Err(err).Int64("user_id", user.ID).Msg("Failed to load visit packs")
+			} else {
+				visitPackOptions = buildMemberVisitPackOptions(visitPacks)
+			}
+		}
+	}
 
 	component := membertempl.MemberBookingForm(membertempl.MemberBookingFormData{
 		FacilityID:            *user.HomeFacilityID,
@@ -393,6 +408,7 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 		MaxAdvanceBookingDays: maxAdvanceDays,
 		WaitlistStartTime:     waitlistStartTime,
 		WaitlistEndTime:       waitlistEndTime,
+		VisitPacks:            visitPackOptions,
 	})
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render member booking form", "Failed to render booking form") {
 		return
@@ -467,6 +483,36 @@ func (e reservationLimitError) Error() string {
 	return fmt.Sprintf("reservation limit reached (%d/%d)", e.currentCount, e.limit)
 }
 
+func listActiveVisitPacksForMemberBooking(ctx context.Context, q *dbgen.Queries, userID, facilityID, organizationID int64, crossFacility bool, comparisonTime time.Time) ([]dbgen.VisitPack, error) {
+	if crossFacility {
+		return q.ListActiveVisitPacksForUserByOrganization(ctx, dbgen.ListActiveVisitPacksForUserByOrganizationParams{
+			UserID:         userID,
+			OrganizationID: organizationID,
+			ComparisonTime: comparisonTime,
+		})
+	}
+	return q.ListActiveVisitPacksForUserByFacility(ctx, dbgen.ListActiveVisitPacksForUserByFacilityParams{
+		UserID:         userID,
+		FacilityID:     facilityID,
+		ComparisonTime: comparisonTime,
+	})
+}
+
+func buildMemberVisitPackOptions(visitPacks []dbgen.VisitPack) []membertempl.MemberVisitPackOption {
+	if len(visitPacks) == 0 {
+		return nil
+	}
+	options := make([]membertempl.MemberVisitPackOption, len(visitPacks))
+	for i, pack := range visitPacks {
+		options[i] = membertempl.MemberVisitPackOption{
+			ID:              pack.ID,
+			VisitsRemaining: pack.VisitsRemaining,
+			ExpiresAt:       pack.ExpiresAt,
+		}
+	}
+	return options
+}
+
 // HandleMemberBookingCreate handles POST /member/reservations for member booking.
 func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -506,10 +552,12 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
 	var maxMemberReservations int64
 	facilityLoc := time.Local
+	facilityLoaded := false
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
+		facilityLoaded = true
 		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
 		maxMemberReservations = facility.MaxMemberReservations
 		if facility.Timezone != "" {
@@ -520,6 +568,47 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 				facilityLoc = loadedLoc
 			}
 		}
+	}
+
+	visitPackID, visitPackSelected, err := parseOptionalPositiveInt64(r.FormValue("visit_pack_id"), "visit_pack_id")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var availableVisitPackIDs map[int64]struct{}
+	if user.MembershipLevel <= 1 {
+		if facilityLoaded {
+			crossFacility, err := q.GetOrganizationCrossFacilitySetting(ctx, facility.OrganizationID)
+			if err != nil {
+				logger.Error().Err(err).Int64("organization_id", facility.OrganizationID).Msg("Failed to load visit pack settings")
+				http.Error(w, "Failed to load visit packs", http.StatusInternalServerError)
+				return
+			}
+			visitPacks, err := listActiveVisitPacksForMemberBooking(ctx, q, user.ID, facility.ID, facility.OrganizationID, crossFacility, time.Now())
+			if err != nil {
+				logger.Error().Err(err).Int64("user_id", user.ID).Msg("Failed to load visit packs")
+				http.Error(w, "Failed to load visit packs", http.StatusInternalServerError)
+				return
+			}
+			availableVisitPackIDs = make(map[int64]struct{}, len(visitPacks))
+			for _, pack := range visitPacks {
+				availableVisitPackIDs[pack.ID] = struct{}{}
+			}
+		}
+		if visitPackSelected {
+			if !facilityLoaded || len(availableVisitPackIDs) == 0 {
+				http.Error(w, "Selected visit pack is not available", http.StatusBadRequest)
+				return
+			}
+			if _, ok := availableVisitPackIDs[visitPackID]; !ok {
+				http.Error(w, "Selected visit pack is not available", http.StatusBadRequest)
+				return
+			}
+		}
+	} else if visitPackSelected {
+		http.Error(w, "Visit packs are not available for your membership level", http.StatusBadRequest)
+		return
 	}
 
 	startTime, err := parseMemberBookingTime(r.FormValue("start_time"), "start_time", facilityLoc)
@@ -639,6 +728,20 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 			UserID:        user.ID,
 		}); err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add reservation participant", Err: err}
+		}
+
+		if visitPackSelected {
+			_, err := models.RedeemVisitPackVisit(ctx, qtx, models.RedeemVisitPackVisitParams{
+				VisitPackID:   visitPackID,
+				FacilityID:    *user.HomeFacilityID,
+				ReservationID: &created.ID,
+			})
+			if err != nil {
+				if errors.Is(err, models.ErrVisitPackUnavailable) {
+					return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Selected visit pack is not available", Err: err}
+				}
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to redeem visit pack", Err: err}
+			}
 		}
 
 		return nil
@@ -1735,6 +1838,18 @@ func parseMemberCourtID(r *http.Request) (int64, error) {
 		return 0, fmt.Errorf("court_ids must be a positive integer")
 	}
 	return id, nil
+}
+
+func parseOptionalPositiveInt64(value string, field string) (int64, bool, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, false, nil
+	}
+	id, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, false, fmt.Errorf("%s must be a positive integer", field)
+	}
+	return id, true, nil
 }
 
 func memberOpenPlaySessionIDFromRequest(r *http.Request) (int64, error) {

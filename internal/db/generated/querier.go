@@ -123,6 +123,7 @@ type Querier interface {
 	IsMemberOpenPlayParticipant(ctx context.Context, arg IsMemberOpenPlayParticipantParams) (int64, error)
 	ListActiveVisitPacksForUser(ctx context.Context, arg ListActiveVisitPacksForUserParams) ([]VisitPack, error)
 	ListActiveVisitPacksForUserByFacility(ctx context.Context, arg ListActiveVisitPacksForUserByFacilityParams) ([]VisitPack, error)
+	ListActiveVisitPacksForUserByOrganization(ctx context.Context, arg ListActiveVisitPacksForUserByOrganizationParams) ([]VisitPack, error)
 	ListAvailableCourts(ctx context.Context, arg ListAvailableCourtsParams) ([]ListAvailableCourtsRow, error)
 	ListCancellationPolicyTiers(ctx context.Context, arg ListCancellationPolicyTiersParams) ([]CancellationPolicyTier, error)
 	ListCourts(ctx context.Context, facilityID int64) ([]Court, error)
