@@ -30,6 +30,8 @@ func (n Notification) TypeLabel() string {
 		return "Scale down"
 	case "cancelled":
 		return "Cancelled"
+	case "lesson_cancelled":
+		return "Lesson Cancelled"
 	default:
 		return n.NotificationType
 	}
@@ -43,6 +45,8 @@ func (n Notification) BadgeClass() string {
 		return "bg-yellow-100 text-yellow-800"
 	case "cancelled":
 		return "bg-red-100 text-red-800"
+	case "lesson_cancelled":
+		return "bg-orange-100 text-orange-800"
 	default:
 		return "bg-muted text-muted-foreground"
 	}
