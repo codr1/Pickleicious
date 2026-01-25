@@ -278,6 +278,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Staff routes
 	mux.HandleFunc("/staff", staff.HandleStaffPage)
+	mux.HandleFunc("/staff/notifications/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: staff.HandleNotificationDetail,
+	}))
 	mux.HandleFunc("/staff/unavailability", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  staff.HandleListProUnavailability,
 		http.MethodPost: staff.HandleCreateProUnavailability,
@@ -460,6 +463,7 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Cancellation policy API
 	mux.HandleFunc("/api/v1/cancellation-policy/tiers", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  cancellationpolicy.HandleCancellationPolicyTierList,
 		http.MethodPost: cancellationpolicy.HandleCancellationPolicyTierCreate,
 	}))
 	mux.HandleFunc("/api/v1/cancellation-policy/tiers/{id}", methodHandler(map[string]http.HandlerFunc{

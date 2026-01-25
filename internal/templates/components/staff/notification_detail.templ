@@ -1,0 +1,40 @@
+// internal/templates/components/staff/notification_detail.templ
+package staff
+
+import "strings"
+
+templ NotificationDetail(data NotificationDetailData) {
+	<div class="max-w-3xl space-y-6">
+		<div>
+			<h2 class="text-2xl font-semibold text-foreground">Lesson cancelled</h2>
+			<p class="mt-1 text-sm text-muted-foreground">{data.Notification.Message}</p>
+		</div>
+
+		<section class="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+			<div class="border-b border-border px-4 py-3">
+				<h3 class="text-lg font-semibold text-foreground">Lesson details</h3>
+			</div>
+			<div class="grid gap-6 px-4 py-4 md:grid-cols-2">
+				<div class="space-y-2">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Member</p>
+					<p class="text-sm font-semibold text-foreground">{data.MemberName}</p>
+					<p class="text-sm text-muted-foreground">{detailValue(data.MemberEmail, "No email on file")}</p>
+					<p class="text-sm text-muted-foreground">{detailValue(data.MemberPhone, "No phone on file")}</p>
+				</div>
+				<div class="space-y-2">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lesson</p>
+					<p class="text-sm font-semibold text-foreground">{data.LessonDate}</p>
+					<p class="text-sm text-muted-foreground">{data.LessonTime}</p>
+					<p class="text-sm text-muted-foreground">{detailValue(data.CourtLabel, "Court TBD")}</p>
+				</div>
+			</div>
+		</section>
+	</div>
+}
+
+func detailValue(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}

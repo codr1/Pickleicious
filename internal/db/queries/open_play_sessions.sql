@@ -265,8 +265,26 @@ INSERT INTO staff_notifications (
     @message,
     @related_session_id
 )
-RETURNING id, facility_id, notification_type, message, related_session_id, read,
-    created_at, updated_at;
+RETURNING id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at;
+
+-- name: CreateLessonCancelledNotification :one
+INSERT INTO staff_notifications (
+    facility_id,
+    notification_type,
+    message,
+    related_reservation_id,
+    target_staff_id
+)
+VALUES (
+    @facility_id,
+    'lesson_cancelled',
+    @message,
+    @related_reservation_id,
+    @target_staff_id
+)
+RETURNING id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at;
 
 -- name: CountUnreadStaffNotifications :one
 SELECT COUNT(*)
@@ -275,21 +293,35 @@ WHERE (@facility_id IS NULL OR facility_id = @facility_id)
   AND read = 0;
 
 -- name: ListStaffNotifications :many
-SELECT id, facility_id, notification_type, message, related_session_id, read,
-    created_at, updated_at
+SELECT id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at
 FROM staff_notifications
 WHERE facility_id = @facility_id
 ORDER BY created_at DESC
 LIMIT @limit OFFSET @offset;
 
+-- name: ListStaffNotificationsForStaff :many
+SELECT id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at
+FROM staff_notifications
+WHERE target_staff_id = @target_staff_id
+ORDER BY created_at DESC
+LIMIT @limit OFFSET @offset;
+
 -- name: ListStaffNotificationsForFacilityOrCorporate :many
-SELECT id, facility_id, notification_type, message, related_session_id, read,
-    created_at, updated_at
+SELECT id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at
 FROM staff_notifications
 WHERE @facility_id IS NULL
    OR facility_id = @facility_id
 ORDER BY created_at DESC
 LIMIT @limit OFFSET @offset;
+
+-- name: GetStaffNotificationByID :one
+SELECT id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at
+FROM staff_notifications
+WHERE id = @id;
 
 -- name: MarkStaffNotificationAsRead :one
 UPDATE staff_notifications
@@ -297,5 +329,5 @@ SET read = 1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id
   AND facility_id = @facility_id
-RETURNING id, facility_id, notification_type, message, related_session_id, read,
-    created_at, updated_at;
+RETURNING id, facility_id, notification_type, message, related_session_id,
+    related_reservation_id, target_staff_id, read, created_at, updated_at;

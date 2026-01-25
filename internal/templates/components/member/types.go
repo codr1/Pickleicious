@@ -64,6 +64,7 @@ type ReservationSummary struct {
 	FacilityName        string
 	CourtName           string
 	ReservationTypeName string
+	ReservationTypeID   int64
 	ProFirstName        string
 	ProLastName         string
 	StartTime           time.Time
@@ -210,6 +211,7 @@ func NewReservationSummaries(rows []dbgen.ListReservationsByUserIDRow) []Reserva
 			FacilityName:        row.FacilityName,
 			CourtName:           courtName,
 			ReservationTypeName: reservationTypeName,
+			ReservationTypeID:   row.ReservationTypeID,
 			ProFirstName:        proFirstName,
 			ProLastName:         proLastName,
 			StartTime:           row.StartTime,

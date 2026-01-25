@@ -652,12 +652,13 @@ This section documents features that are standard in competing pickleball/sports
 |---------|----------|---------|
 | Booking Confirmation | Email, SMS | Reservation details, court, time |
 | 24-Hour Reminder | Email, SMS, Push | Upcoming reservation reminder |
-| Waitlist Promotion | Email, SMS | Spot opened, action required |
+<!-- BEGIN WIP: STORY-0034 -->| Waitlist Promotion | Email, SMS | Spot opened, action required |<!-- END WIP -->
 | Payment Receipt | Email | Transaction confirmation |
 | Membership Renewal | Email | Upcoming renewal reminder |
 | Waiver Expiration | Email | Waiver renewal needed |
 
 **Marketing & Engagement:**
+
 | Feature | Description |
 |---------|-------------|
 | Email Newsletters | Bulk email campaigns to members |
@@ -667,6 +668,7 @@ This section documents features that are standard in competing pickleball/sports
 | Event Announcements | Promote leagues, tournaments, clinics |
 
 **In-App Communication:**
+
 | Feature | Description |
 |---------|-------------|
 | Member-to-Member Messaging | Find partners for games (opt-in) |
@@ -675,7 +677,9 @@ This section documents features that are standard in competing pickleball/sports
 
 ### 9.3 Waitlist Management
 
+<!-- BEGIN WIP: STORY-0034 -->
 **Core Waitlist Features:**
+
 | Feature | Description |
 |---------|-------------|
 | Auto-Waitlist | Automatically offer waitlist when court is full |
@@ -684,13 +688,17 @@ This section documents features that are standard in competing pickleball/sports
 | First-Come-First-Served | First to accept gets the slot |
 | Expiring Offers | Time limit to accept (e.g., 15 minutes) |
 | Auto-Decline | Remove from waitlist if not accepted in time |
+<!-- END WIP -->
 
+<!-- BEGIN WIP: STORY-0034 -->
 **Configuration Options:**
+
 | Setting | Description |
 |---------|-------------|
 | Max Waitlist Size | Limit waitlist length per slot |
 | Notification Window | How long before slot to notify |
 | Member Priority | VIP members get first notification |
+<!-- END WIP -->
 
 ### 9.4 Cancellation Policies & No-Show Management
 
@@ -706,6 +714,7 @@ This section documents features that are standard in competing pickleball/sports
 ### 9.5 League & Tournament Management
 
 **League Features:**
+
 | Feature | Description |
 |---------|-------------|
 | League Creation | Name, format, schedule, rules |
@@ -769,6 +778,7 @@ This section documents features that are standard in competing pickleball/sports
 - `lesson_min_notice_hours` facility setting (default: 24 hours) - booking must be at least this far in advance
 - Lessons count toward max_member_reservations limit
 
+<!-- BEGIN WIP: STORY-0035 -->
 **Enhancement Needed: Lesson Cancellation Policy**
 
 The current implementation does not enforce cancellation notice requirements for lessons. While `lesson_min_notice_hours` controls how far in advance a lesson must be booked, there is no equivalent enforcement preventing last-minute cancellations.
@@ -785,6 +795,7 @@ The current implementation does not enforce cancellation notice requirements for
 | Dedicated lesson cancellation policy | Separate policy tier for PRO_SESSION reservations |
 | lesson_cancellation_notice_hours | Facility setting mirroring lesson_min_notice_hours for cancellations |
 | Pro notification | Notify pro when their lesson is cancelled |
+<!-- END WIP -->
 
 **Lesson Packages:**
 | Feature | Description |
@@ -1020,7 +1031,7 @@ A self-service marketplace where members discover and book coaches directly, red
 |---------|-------------|
 | League Sign-Up | Register for leagues/tournaments |
 | Lesson Booking | Schedule with pros |
-| Waitlist Management | Join/leave waitlists |
+<!-- BEGIN WIP: STORY-0034 -->| Waitlist Management | Join/leave waitlists |<!-- END WIP -->
 | Guest Booking | Reserve for guests |
 | Message Center | View communications |
 

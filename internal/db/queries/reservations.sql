@@ -45,6 +45,12 @@ SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
 FROM reservations
 WHERE id = @id;
 
+-- name: GetReservationTypeNameByReservationID :one
+SELECT rt.name
+FROM reservations r
+JOIN reservation_types rt ON rt.id = r.reservation_type_id
+WHERE r.id = @reservation_id;
+
 -- name: ListReservationsByDateRange :many
 SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
     primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
