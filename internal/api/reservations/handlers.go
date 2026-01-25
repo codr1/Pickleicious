@@ -1183,6 +1183,11 @@ func notifyWaitlistedMembers(ctx context.Context, database *appdb.DB, reservatio
 			return err
 		}
 
+		waitlists = filterWaitlistsByNotificationWindow(waitlists, reservation.StartTime, now, config.NotificationWindowMinutes)
+		if len(waitlists) == 0 {
+			return nil
+		}
+
 		return createWaitlistNotifications(ctx, qtx, waitlists, config, now)
 	})
 }
@@ -1269,6 +1274,18 @@ func loadWaitlistNotificationConfig(ctx context.Context, q *dbgen.Queries, facil
 		config.NotificationMode = waitlistNotificationBroadcast
 	}
 	return config, nil
+}
+
+func filterWaitlistsByNotificationWindow(waitlists []dbgen.Waitlist, slotStart time.Time, now time.Time, windowMinutes int64) []dbgen.Waitlist {
+	if windowMinutes <= 0 {
+		return waitlists
+	}
+	windowStart := now
+	windowEnd := now.Add(time.Duration(windowMinutes) * time.Minute)
+	if slotStart.Before(windowStart) || slotStart.After(windowEnd) {
+		return nil
+	}
+	return waitlists
 }
 
 func createWaitlistNotifications(ctx context.Context, q *dbgen.Queries, waitlists []dbgen.Waitlist, config dbgen.WaitlistConfig, now time.Time) error {

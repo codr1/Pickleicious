@@ -130,6 +130,10 @@ func HandleWaitlistJoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "start_time must be today or later", http.StatusBadRequest)
 		return
 	}
+	if targetDate.Equal(today) && startTime.Before(now) {
+		http.Error(w, "start_time must be in the future", http.StatusBadRequest)
+		return
+	}
 	targetStartTime := startTime.Format(waitlistTimeLayout)
 	targetEndTime := endTime.Format(waitlistTimeLayout)
 

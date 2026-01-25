@@ -109,11 +109,36 @@ func CleanupPastWaitlists(ctx context.Context, database *db.DB, now time.Time) e
 		return fmt.Errorf("waitlist cleanup requires database")
 	}
 
-	deleted, err := database.Queries.DeletePastWaitlistEntries(ctx, now)
+	facilities, err := database.Queries.ListFacilities(ctx)
 	if err != nil {
-		return fmt.Errorf("delete past waitlist entries: %w", err)
+		return fmt.Errorf("list facilities for waitlist cleanup: %w", err)
 	}
 
-	log.Ctx(ctx).Debug().Int64("deleted_waitlists", deleted).Msg("Cleaned up past waitlists")
+	logger := log.Ctx(ctx)
+	var deletedTotal int64
+	for _, facility := range facilities {
+		facilityLoc := time.Local
+		if facility.Timezone != "" {
+			loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+			if loadErr != nil {
+				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Int64("facility_id", facility.ID).Msg("Failed to load facility timezone for waitlist cleanup")
+			} else {
+				facilityLoc = loadedLoc
+			}
+		}
+
+		localNow := now.In(facilityLoc)
+		deleted, err := database.Queries.DeletePastWaitlistEntries(ctx, dbgen.DeletePastWaitlistEntriesParams{
+			FacilityID:     facility.ID,
+			ComparisonDate: localNow.Format("2006-01-02"),
+			ComparisonTime: localNow.Format("15:04:05"),
+		})
+		if err != nil {
+			return fmt.Errorf("delete past waitlist entries for facility %d: %w", facility.ID, err)
+		}
+		deletedTotal += deleted
+	}
+
+	logger.Debug().Int64("deleted_waitlists", deletedTotal).Msg("Cleaned up past waitlists")
 	return nil
 }

@@ -185,7 +185,11 @@ WHERE id = @id
 
 -- name: DeletePastWaitlistEntries :execrows
 DELETE FROM waitlists
-WHERE datetime(target_date || ' ' || target_end_time) < @comparison_time;
+WHERE facility_id = @facility_id
+  AND (
+    target_date < CAST(@comparison_date AS TEXT)
+    OR (target_date = CAST(@comparison_date AS TEXT) AND target_end_time < CAST(@comparison_time AS TEXT))
+  );
 
 -- name: GetWaitlistConfig :one
 SELECT

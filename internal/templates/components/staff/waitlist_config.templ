@@ -46,7 +46,7 @@ templ WaitlistConfigForm(data WaitlistConfigFormData) {
 						placeholder="30"
 						value={func() string {
 							if data.OfferExpiryMinutes <= 0 {
-								return "0"
+								return fmt.Sprintf("%d", defaultWaitlistOfferExpiryMinutes)
 							}
 							return fmt.Sprintf("%d", data.OfferExpiryMinutes)
 						}()}
