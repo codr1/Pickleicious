@@ -26,7 +26,7 @@ templ DashboardLayout(data DashboardData) {
 			hx-get="/api/v1/dashboard/metrics"
 			hx-target="#dashboard-metrics"
 			hx-swap="innerHTML"
-			hx-trigger="change delay:300ms, submit">
+			hx-trigger="submit">
 			if data.ShowFacilitySelector {
 				<div>
 					<label for="dashboard-facility" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Facility</label>
