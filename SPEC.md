@@ -295,6 +295,14 @@ Organization (corporate entity)
 | waitlists | Waitlist entries tracking slot interest |
 | waitlist_offers | Time-limited offers to waitlisted members when slots become available |
 
+### Visit Pack System
+
+| Table | Purpose |
+|-------|---------|
+| visit_pack_types | Pack definitions per facility (name, price, visit count, validity) |
+| visit_packs | Purchased packs owned by users (visits remaining, expiration) |
+| visit_pack_redemptions | Log of pack usage (links pack, facility, optional reservation) |
+
 ### Key Constraints
 
 - `organizations.slug` - UNIQUE
@@ -867,6 +875,75 @@ Members can view their waitlist entries from the portal. The booking form offers
 
 ---
 
+## Visit Packs
+
+Visit packs allow facilities to sell prepaid visit bundles to guests and low-tier members. A member purchases a pack (e.g., "10-Visit Pack") and redeems visits when booking courts.
+
+### Visit Pack Types
+
+Each facility defines visit pack types available for purchase:
+
+| Field | Description |
+|-------|-------------|
+| name | Display name (e.g., "10-Visit Pack") |
+| price_cents | Price in cents |
+| visit_count | Number of visits included |
+| valid_days | Days until expiration from purchase |
+| status | active or inactive |
+
+Staff create and manage pack types through the `/admin/visit-packs` admin page.
+
+### Visit Packs
+
+When a pack is sold, a visit_pack record is created:
+
+| Field | Description |
+|-------|-------------|
+| pack_type_id | Reference to the pack type |
+| user_id | Owner of the pack |
+| purchase_date | When the pack was purchased |
+| expires_at | Calculated from purchase_date + valid_days |
+| visits_remaining | Decrements on each redemption |
+| status | active, expired, or depleted |
+
+### Redemption Flow
+
+Visit packs are redeemed when guests/low-tier members book courts:
+
+1. Member with membership_level <= 1 opens booking form
+2. System loads member's active visit packs (not expired, visits_remaining > 0)
+3. Booking form displays dropdown to select a pack
+4. On booking submission, a visit is decremented from the selected pack
+5. A redemption record is created linking pack, facility, and reservation
+
+### Cross-Facility Redemption
+
+Organizations can enable `cross_facility_visit_packs` to allow packs purchased at one facility to be redeemed at any facility within the organization. When disabled (default), packs can only be redeemed at the facility where they were purchased.
+
+### Visit Pack Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Eligibility | Only membership_level <= 1 can use visit packs |
+| Pack Status | Must be 'active' (not expired or depleted) |
+| Expiration | Checked at redemption time against current timestamp |
+| Visits | Must have visits_remaining > 0 |
+| Facility | Must match pack's facility or cross_facility_visit_packs enabled |
+| Pack Type Limit | Maximum 1000 pack types per facility |
+
+### Admin Operations
+
+| Operation | Endpoint | Notes |
+|-----------|----------|-------|
+| List pack types | GET `/api/v1/visit-pack-types` | Requires facility_id |
+| Create pack type | POST `/api/v1/visit-pack-types` | Staff only |
+| Update pack type | PUT `/api/v1/visit-pack-types/{id}` | Staff only |
+| Deactivate pack type | DELETE `/api/v1/visit-pack-types/{id}` | Soft deactivate |
+| Sell pack | POST `/api/v1/visit-packs` | Staff creates pack for user |
+| List user packs | GET `/api/v1/users/{id}/visit-packs` | Staff or self |
+
+---
+
 ## Theming and Branding
 
 Each facility can have its own visual identity. The member check-in screen at Downtown looks different from Westside because they chose different themes.
@@ -1374,6 +1451,18 @@ Authorization failures are logged with facility_id and user_id.
 | GET | `/api/v1/staff/waitlist` | View all waitlist entries for facility (staff) |
 | GET | `/member/waitlist` | Member portal waitlist entries |
 
+### Visit Packs
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/visit-packs` | Visit pack types admin page |
+| GET | `/api/v1/visit-pack-types` | List visit pack types for facility |
+| POST | `/api/v1/visit-pack-types` | Create visit pack type |
+| PUT | `/api/v1/visit-pack-types/{id}` | Update visit pack type |
+| DELETE | `/api/v1/visit-pack-types/{id}` | Deactivate visit pack type |
+| POST | `/api/v1/visit-packs` | Sell visit pack to user (staff only) |
+| GET | `/api/v1/users/{id}/visit-packs` | List user's active visit packs |
+
 ### Check-in
 
 | Method | Path | Description |
@@ -1832,6 +1921,17 @@ Changing any dropdown triggers an HTMX request to `/member/booking/slots` to rel
 | Reservation Limit | Member cannot exceed max_member_reservations active future bookings |
 | Single Court | Members book one court at a time |
 
+### Visit Pack Usage
+
+Members with membership_level <= 1 (guests) can use visit packs when booking courts:
+
+- **Pack Selection**: Booking form shows dropdown of active visit packs if member has any
+- **Pack Display**: Shows pack ID, visits remaining, and expiration date
+- **Redemption**: When pack selected, one visit is redeemed atomically with reservation creation
+- **Validation**: Pack must be active, not expired, have visits remaining, and be valid at the facility
+
+If no visit pack is selected, the booking proceeds without pack redemption.
+
 ### Lesson Booking
 
 Members can book lessons with teaching pros through a dedicated booking interface:
@@ -2143,6 +2243,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Cancellation Policies | Complete | Per-facility refund tiers, reservation type-specific policies, staff fee waiver, cancellation logging |
 | Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
 | Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
+| Visit Pack Management | Complete | Pack type CRUD, pack sales, redemption at booking, cross-facility support |
 
 ### Partial Implementation
 
