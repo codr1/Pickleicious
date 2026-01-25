@@ -215,6 +215,7 @@ SET visits_remaining = visits_remaining - 1,
 WHERE id = ?1
   AND status = 'active'
   AND visits_remaining > 0
+  AND expires_at > CURRENT_TIMESTAMP
 RETURNING id, pack_type_id, user_id, purchase_date, expires_at,
     visits_remaining, status, created_at, updated_at
 `
@@ -262,6 +263,36 @@ func (q *Queries) GetVisitPack(ctx context.Context, arg GetVisitPackParams) (Vis
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getVisitPackRedemptionInfo = `-- name: GetVisitPackRedemptionInfo :one
+SELECT vp.id AS visit_pack_id,
+    vp.pack_type_id,
+    vpt.facility_id AS pack_facility_id,
+    f.organization_id AS organization_id
+FROM visit_packs vp
+JOIN visit_pack_types vpt ON vpt.id = vp.pack_type_id
+JOIN facilities f ON f.id = vpt.facility_id
+WHERE vp.id = ?1
+`
+
+type GetVisitPackRedemptionInfoRow struct {
+	VisitPackID    int64 `json:"visitPackId"`
+	PackTypeID     int64 `json:"packTypeId"`
+	PackFacilityID int64 `json:"packFacilityId"`
+	OrganizationID int64 `json:"organizationId"`
+}
+
+func (q *Queries) GetVisitPackRedemptionInfo(ctx context.Context, id int64) (GetVisitPackRedemptionInfoRow, error) {
+	row := q.queryRow(ctx, q.getVisitPackRedemptionInfoStmt, getVisitPackRedemptionInfo, id)
+	var i GetVisitPackRedemptionInfoRow
+	err := row.Scan(
+		&i.VisitPackID,
+		&i.PackTypeID,
+		&i.PackFacilityID,
+		&i.OrganizationID,
 	)
 	return i, err
 }
@@ -314,6 +345,58 @@ type ListActiveVisitPacksForUserParams struct {
 
 func (q *Queries) ListActiveVisitPacksForUser(ctx context.Context, arg ListActiveVisitPacksForUserParams) ([]VisitPack, error) {
 	rows, err := q.query(ctx, q.listActiveVisitPacksForUserStmt, listActiveVisitPacksForUser, arg.UserID, arg.ComparisonTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []VisitPack
+	for rows.Next() {
+		var i VisitPack
+		if err := rows.Scan(
+			&i.ID,
+			&i.PackTypeID,
+			&i.UserID,
+			&i.PurchaseDate,
+			&i.ExpiresAt,
+			&i.VisitsRemaining,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveVisitPacksForUserByFacility = `-- name: ListActiveVisitPacksForUserByFacility :many
+SELECT vp.id, vp.pack_type_id, vp.user_id, vp.purchase_date, vp.expires_at,
+    vp.visits_remaining, vp.status, vp.created_at, vp.updated_at
+FROM visit_packs vp
+JOIN visit_pack_types vpt ON vpt.id = vp.pack_type_id
+WHERE vp.user_id = ?1
+  AND vpt.facility_id = ?2
+  AND vp.status = 'active'
+  AND vp.visits_remaining > 0
+  AND vp.expires_at > ?3
+ORDER BY vp.expires_at
+`
+
+type ListActiveVisitPacksForUserByFacilityParams struct {
+	UserID         int64     `json:"userId"`
+	FacilityID     int64     `json:"facilityId"`
+	ComparisonTime time.Time `json:"comparisonTime"`
+}
+
+func (q *Queries) ListActiveVisitPacksForUserByFacility(ctx context.Context, arg ListActiveVisitPacksForUserByFacilityParams) ([]VisitPack, error) {
+	rows, err := q.query(ctx, q.listActiveVisitPacksForUserByFacilityStmt, listActiveVisitPacksForUserByFacility, arg.UserID, arg.FacilityID, arg.ComparisonTime)
 	if err != nil {
 		return nil, err
 	}

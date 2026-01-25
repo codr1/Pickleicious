@@ -306,6 +306,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getVisitPackStmt, err = db.PrepareContext(ctx, getVisitPack); err != nil {
 		return nil, fmt.Errorf("error preparing query GetVisitPack: %w", err)
 	}
+	if q.getVisitPackRedemptionInfoStmt, err = db.PrepareContext(ctx, getVisitPackRedemptionInfo); err != nil {
+		return nil, fmt.Errorf("error preparing query GetVisitPackRedemptionInfo: %w", err)
+	}
 	if q.getVisitPackTypeStmt, err = db.PrepareContext(ctx, getVisitPackType); err != nil {
 		return nil, fmt.Errorf("error preparing query GetVisitPackType: %w", err)
 	}
@@ -320,6 +323,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listActiveVisitPacksForUserStmt, err = db.PrepareContext(ctx, listActiveVisitPacksForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query ListActiveVisitPacksForUser: %w", err)
+	}
+	if q.listActiveVisitPacksForUserByFacilityStmt, err = db.PrepareContext(ctx, listActiveVisitPacksForUserByFacility); err != nil {
+		return nil, fmt.Errorf("error preparing query ListActiveVisitPacksForUserByFacility: %w", err)
 	}
 	if q.listAvailableCourtsStmt, err = db.PrepareContext(ctx, listAvailableCourts); err != nil {
 		return nil, fmt.Errorf("error preparing query ListAvailableCourts: %w", err)
@@ -1006,6 +1012,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getVisitPackStmt: %w", cerr)
 		}
 	}
+	if q.getVisitPackRedemptionInfoStmt != nil {
+		if cerr := q.getVisitPackRedemptionInfoStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getVisitPackRedemptionInfoStmt: %w", cerr)
+		}
+	}
 	if q.getVisitPackTypeStmt != nil {
 		if cerr := q.getVisitPackTypeStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getVisitPackTypeStmt: %w", cerr)
@@ -1029,6 +1040,11 @@ func (q *Queries) Close() error {
 	if q.listActiveVisitPacksForUserStmt != nil {
 		if cerr := q.listActiveVisitPacksForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listActiveVisitPacksForUserStmt: %w", cerr)
+		}
+	}
+	if q.listActiveVisitPacksForUserByFacilityStmt != nil {
+		if cerr := q.listActiveVisitPacksForUserByFacilityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listActiveVisitPacksForUserByFacilityStmt: %w", cerr)
 		}
 	}
 	if q.listAvailableCourtsStmt != nil {
@@ -1514,11 +1530,13 @@ type Queries struct {
 	getUserByIDStmt                                  *sql.Stmt
 	getUserByPhoneStmt                               *sql.Stmt
 	getVisitPackStmt                                 *sql.Stmt
+	getVisitPackRedemptionInfoStmt                   *sql.Stmt
 	getVisitPackTypeStmt                             *sql.Stmt
 	getWaitlistConfigStmt                            *sql.Stmt
 	getWaitlistEntryStmt                             *sql.Stmt
 	isMemberOpenPlayParticipantStmt                  *sql.Stmt
 	listActiveVisitPacksForUserStmt                  *sql.Stmt
+	listActiveVisitPacksForUserByFacilityStmt        *sql.Stmt
 	listAvailableCourtsStmt                          *sql.Stmt
 	listCancellationPolicyTiersStmt                  *sql.Stmt
 	listCourtsStmt                                   *sql.Stmt
@@ -1689,11 +1707,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getUserByIDStmt:                                  q.getUserByIDStmt,
 		getUserByPhoneStmt:                               q.getUserByPhoneStmt,
 		getVisitPackStmt:                                 q.getVisitPackStmt,
+		getVisitPackRedemptionInfoStmt:                   q.getVisitPackRedemptionInfoStmt,
 		getVisitPackTypeStmt:                             q.getVisitPackTypeStmt,
 		getWaitlistConfigStmt:                            q.getWaitlistConfigStmt,
 		getWaitlistEntryStmt:                             q.getWaitlistEntryStmt,
 		isMemberOpenPlayParticipantStmt:                  q.isMemberOpenPlayParticipantStmt,
 		listActiveVisitPacksForUserStmt:                  q.listActiveVisitPacksForUserStmt,
+		listActiveVisitPacksForUserByFacilityStmt:        q.listActiveVisitPacksForUserByFacilityStmt,
 		listAvailableCourtsStmt:                          q.listAvailableCourtsStmt,
 		listCancellationPolicyTiersStmt:                  q.listCancellationPolicyTiersStmt,
 		listCourtsStmt:                                   q.listCourtsStmt,

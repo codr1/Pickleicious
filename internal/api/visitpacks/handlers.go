@@ -30,6 +30,7 @@ const (
 	maxVisitPackTypes     = 1000
 	facilityIDQueryKey    = "facility_id"
 	visitPackTypeIDParam  = "id"
+	userIDParam           = "id"
 )
 
 var (
@@ -40,8 +41,12 @@ var (
 type visitPackQueries interface {
 	models.ThemeQueries
 	CountVisitPackTypesByFacility(ctx context.Context, facilityID int64) (int64, error)
+	CreateVisitPack(ctx context.Context, arg dbgen.CreateVisitPackParams) (dbgen.VisitPack, error)
 	CreateVisitPackType(ctx context.Context, arg dbgen.CreateVisitPackTypeParams) (dbgen.VisitPackType, error)
 	DeactivateVisitPackType(ctx context.Context, arg dbgen.DeactivateVisitPackTypeParams) (dbgen.VisitPackType, error)
+	GetVisitPackType(ctx context.Context, arg dbgen.GetVisitPackTypeParams) (dbgen.VisitPackType, error)
+	ListActiveVisitPacksForUser(ctx context.Context, arg dbgen.ListActiveVisitPacksForUserParams) ([]dbgen.VisitPack, error)
+	ListActiveVisitPacksForUserByFacility(ctx context.Context, arg dbgen.ListActiveVisitPacksForUserByFacilityParams) ([]dbgen.VisitPack, error)
 	ListVisitPackTypes(ctx context.Context, facilityID int64) ([]dbgen.VisitPackType, error)
 	UpdateVisitPackType(ctx context.Context, arg dbgen.UpdateVisitPackTypeParams) (dbgen.VisitPackType, error)
 }
@@ -52,6 +57,13 @@ type visitPackTypeRequest struct {
 	PriceCents int64  `json:"priceCents"`
 	VisitCount int64  `json:"visitCount"`
 	ValidDays  int64  `json:"validDays"`
+}
+
+type visitPackSaleRequest struct {
+	FacilityID   *int64     `json:"facilityId"`
+	UserID       int64      `json:"userId"`
+	PackTypeID   int64      `json:"packTypeId"`
+	PurchaseDate *time.Time `json:"purchaseDate"`
 }
 
 // InitHandlers must be called during server startup before handling requests.
@@ -343,6 +355,159 @@ func HandleVisitPackTypeDeactivate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// POST /api/v1/visit-packs
+func HandleVisitPackSale(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	user := authz.UserFromContext(r.Context())
+	if !authz.IsStaff(user) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	req, err := decodeVisitPackSaleRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateVisitPackSaleRequest(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := facilityIDFromRequest(r, req.FacilityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), visitPackQueryTimeout)
+	defer cancel()
+
+	packType, err := q.GetVisitPackType(ctx, dbgen.GetVisitPackTypeParams{
+		ID:         req.PackTypeID,
+		FacilityID: facilityID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Visit pack type not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("visit_pack_type_id", req.PackTypeID).Msg("Failed to load visit pack type")
+		http.Error(w, "Failed to load visit pack type", http.StatusInternalServerError)
+		return
+	}
+	if !strings.EqualFold(packType.Status, "active") {
+		http.Error(w, "Visit pack type is inactive", http.StatusConflict)
+		return
+	}
+
+	purchaseDate := time.Now()
+	if req.PurchaseDate != nil {
+		purchaseDate = *req.PurchaseDate
+	}
+
+	created, err := q.CreateVisitPack(ctx, dbgen.CreateVisitPackParams{
+		UserID:       req.UserID,
+		PurchaseDate: purchaseDate,
+		Status:       "active",
+		PackTypeID:   req.PackTypeID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Visit pack type is inactive", http.StatusConflict)
+			return
+		}
+		if apiutil.IsSQLiteForeignKeyViolation(err) {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("visit_pack_type_id", req.PackTypeID).Int64("user_id", req.UserID).Msg("Failed to create visit pack")
+		http.Error(w, "Failed to create visit pack", http.StatusInternalServerError)
+		return
+	}
+
+	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
+		logger.Error().Err(err).Int64("visit_pack_id", created.ID).Msg("Failed to write visit pack response")
+	}
+}
+
+// GET /api/v1/users/{id}/visit-packs
+func HandleListUserVisitPacks(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	userID, err := userIDFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	requestUser := authz.UserFromContext(r.Context())
+	if requestUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var facilityID *int64
+	if requestUser.IsStaff {
+		facilityIDValue, err := facilityIDFromQuery(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if !apiutil.RequireFacilityAccess(w, r, facilityIDValue) {
+			return
+		}
+		facilityID = &facilityIDValue
+	} else if requestUser.ID != userID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), visitPackQueryTimeout)
+	defer cancel()
+
+	var visitPacks []dbgen.VisitPack
+	if facilityID != nil {
+		visitPacks, err = q.ListActiveVisitPacksForUserByFacility(ctx, dbgen.ListActiveVisitPacksForUserByFacilityParams{
+			UserID:         userID,
+			FacilityID:     *facilityID,
+			ComparisonTime: time.Now(),
+		})
+	} else {
+		visitPacks, err = q.ListActiveVisitPacksForUser(ctx, dbgen.ListActiveVisitPacksForUserParams{
+			UserID:         userID,
+			ComparisonTime: time.Now(),
+		})
+	}
+	if err != nil {
+		logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to list visit packs")
+		http.Error(w, "Failed to load visit packs", http.StatusInternalServerError)
+		return
+	}
+
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"visitPacks": visitPacks}); err != nil {
+		logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to write visit packs response")
+	}
+}
+
 func visitPackTypesPageComponent(facilityID int64) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
 		if _, err := io.WriteString(w, `<div class="space-y-6">`); err != nil {
@@ -496,6 +661,90 @@ func validateVisitPackTypeRequest(req visitPackTypeRequest) error {
 	}
 }
 
+func decodeVisitPackSaleRequest(r *http.Request) (visitPackSaleRequest, error) {
+	if apiutil.IsJSONRequest(r) {
+		var req visitPackSaleRequest
+		return req, apiutil.DecodeJSON(r, &req)
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return visitPackSaleRequest{}, err
+	}
+
+	facilityID, err := apiutil.ParseOptionalInt64Field(apiutil.FirstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
+	if err != nil {
+		return visitPackSaleRequest{}, err
+	}
+
+	userID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("user_id"), r.FormValue("userId")), "user_id")
+	if err != nil {
+		return visitPackSaleRequest{}, err
+	}
+
+	packTypeID, err := apiutil.ParseRequiredInt64Field(apiutil.FirstNonEmpty(r.FormValue("pack_type_id"), r.FormValue("packTypeId")), "pack_type_id")
+	if err != nil {
+		return visitPackSaleRequest{}, err
+	}
+
+	rawPurchaseDate := apiutil.FirstNonEmpty(r.FormValue("purchase_date"), r.FormValue("purchaseDate"))
+	var purchaseDate *time.Time
+	if strings.TrimSpace(rawPurchaseDate) != "" {
+		parsed, err := parseVisitPackPurchaseDate(rawPurchaseDate)
+		if err != nil {
+			return visitPackSaleRequest{}, err
+		}
+		purchaseDate = &parsed
+	}
+
+	return visitPackSaleRequest{
+		FacilityID:   facilityID,
+		UserID:       userID,
+		PackTypeID:   packTypeID,
+		PurchaseDate: purchaseDate,
+	}, nil
+}
+
+func validateVisitPackSaleRequest(req visitPackSaleRequest) error {
+	if req.UserID <= 0 {
+		return fmt.Errorf("user_id must be a positive integer")
+	}
+	if req.PackTypeID <= 0 {
+		return fmt.Errorf("pack_type_id must be a positive integer")
+	}
+	if req.PurchaseDate != nil && req.PurchaseDate.IsZero() {
+		return fmt.Errorf("purchase_date must be a valid date")
+	}
+	return nil
+}
+
+func parseVisitPackPurchaseDate(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("purchase_date is required")
+	}
+
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04",
+	}
+	for _, layout := range layouts {
+		if layout == time.RFC3339 {
+			parsed, err := time.Parse(layout, raw)
+			if err == nil {
+				return parsed, nil
+			}
+			continue
+		}
+		parsed, err := time.ParseInLocation(layout, raw, time.Local)
+		if err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("purchase_date must be a valid date")
+}
+
 func parseNonNegativeInt64Field(raw string, field string) (int64, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -550,6 +799,18 @@ func visitPackTypeIDFromRequest(r *http.Request) (int64, error) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value <= 0 {
 		return 0, fmt.Errorf("invalid visit pack type ID")
+	}
+	return value, nil
+}
+
+func userIDFromRequest(r *http.Request) (int64, error) {
+	raw := strings.TrimSpace(r.PathValue(userIDParam))
+	if raw == "" {
+		return 0, fmt.Errorf("invalid user ID")
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid user ID")
 	}
 	return value, nil
 }

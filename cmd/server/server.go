@@ -482,6 +482,12 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		http.MethodPut:    visitpacks.HandleVisitPackTypeUpdate,
 		http.MethodDelete: visitpacks.HandleVisitPackTypeDeactivate,
 	}))
+	mux.HandleFunc("/api/v1/visit-packs", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: visitpacks.HandleVisitPackSale,
+	}))
+	mux.HandleFunc("/api/v1/users/{id}/visit-packs", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: visitpacks.HandleListUserVisitPacks,
+	}))
 
 	// Operating hours admin page
 	mux.HandleFunc("/admin/operating-hours", operatinghours.HandleOperatingHoursPage)

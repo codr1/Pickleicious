@@ -33,6 +33,16 @@ FROM visit_pack_types
 WHERE id = @id
   AND facility_id = @facility_id;
 
+-- name: GetVisitPackRedemptionInfo :one
+SELECT vp.id AS visit_pack_id,
+    vp.pack_type_id,
+    vpt.facility_id AS pack_facility_id,
+    f.organization_id AS organization_id
+FROM visit_packs vp
+JOIN visit_pack_types vpt ON vpt.id = vp.pack_type_id
+JOIN facilities f ON f.id = vpt.facility_id
+WHERE vp.id = @id;
+
 -- name: UpdateVisitPackType :one
 UPDATE visit_pack_types
 SET name = @name,
@@ -98,6 +108,18 @@ WHERE user_id = @user_id
   AND expires_at > @comparison_time
 ORDER BY expires_at;
 
+-- name: ListActiveVisitPacksForUserByFacility :many
+SELECT vp.id, vp.pack_type_id, vp.user_id, vp.purchase_date, vp.expires_at,
+    vp.visits_remaining, vp.status, vp.created_at, vp.updated_at
+FROM visit_packs vp
+JOIN visit_pack_types vpt ON vpt.id = vp.pack_type_id
+WHERE vp.user_id = @user_id
+  AND vpt.facility_id = @facility_id
+  AND vp.status = 'active'
+  AND vp.visits_remaining > 0
+  AND vp.expires_at > @comparison_time
+ORDER BY vp.expires_at;
+
 -- name: DecrementVisitPackVisit :one
 UPDATE visit_packs
 SET visits_remaining = visits_remaining - 1,
@@ -109,6 +131,7 @@ SET visits_remaining = visits_remaining - 1,
 WHERE id = @id
   AND status = 'active'
   AND visits_remaining > 0
+  AND expires_at > CURRENT_TIMESTAMP
 RETURNING id, pack_type_id, user_id, purchase_date, expires_at,
     visits_remaining, status, created_at, updated_at;
 
