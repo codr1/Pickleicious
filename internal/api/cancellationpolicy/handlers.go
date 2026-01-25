@@ -626,6 +626,7 @@ func loadQueries() *dbgen.Queries {
 }
 
 func reservationTypeFilterIDFromRequest(r *http.Request) (*int64, error) {
+	// Query param takes precedence for GET filtering; form value supports HTMX posts.
 	raw := apiutil.FirstNonEmpty(
 		r.URL.Query().Get("reservation_type_id"),
 		r.FormValue("filter_reservation_type_id"),

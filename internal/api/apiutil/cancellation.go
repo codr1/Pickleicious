@@ -9,10 +9,7 @@ import (
 )
 
 func ApplicableRefundPercentage(ctx context.Context, q *dbgen.Queries, facilityID int64, hoursUntilReservation int64, reservationTypeID *int64) (int64, error) {
-	reservationTypeFilter := sql.NullInt64{}
-	if reservationTypeID != nil {
-		reservationTypeFilter = sql.NullInt64{Int64: *reservationTypeID, Valid: true}
-	}
+	reservationTypeFilter := ToNullInt64(reservationTypeID)
 	tier, err := q.GetApplicableCancellationTier(ctx, dbgen.GetApplicableCancellationTierParams{
 		FacilityID:            facilityID,
 		HoursUntilReservation: hoursUntilReservation,

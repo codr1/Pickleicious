@@ -1,3 +1,6 @@
+-- WARNING: Down migration copies only reservation_type_id IS NULL rows from
+-- cancellation_policy_tiers into cancellation_policy_tiers_old; type-specific
+-- tiers are dropped.
 PRAGMA foreign_keys = OFF;
 
 CREATE TABLE cancellation_policy_tiers_old (

@@ -658,6 +658,7 @@ This section documents features that are standard in competing pickleball/sports
 | Waiver Expiration | Email | Waiver renewal needed |
 
 **Marketing & Engagement:**
+
 | Feature | Description |
 |---------|-------------|
 | Email Newsletters | Bulk email campaigns to members |
@@ -667,6 +668,7 @@ This section documents features that are standard in competing pickleball/sports
 | Event Announcements | Promote leagues, tournaments, clinics |
 
 **In-App Communication:**
+
 | Feature | Description |
 |---------|-------------|
 | Member-to-Member Messaging | Find partners for games (opt-in) |
@@ -677,6 +679,7 @@ This section documents features that are standard in competing pickleball/sports
 
 <!-- BEGIN WIP: STORY-0034 -->
 **Core Waitlist Features:**
+
 | Feature | Description |
 |---------|-------------|
 | Auto-Waitlist | Automatically offer waitlist when court is full |
@@ -689,6 +692,7 @@ This section documents features that are standard in competing pickleball/sports
 
 <!-- BEGIN WIP: STORY-0034 -->
 **Configuration Options:**
+
 | Setting | Description |
 |---------|-------------|
 | Max Waitlist Size | Limit waitlist length per slot |
@@ -710,6 +714,7 @@ This section documents features that are standard in competing pickleball/sports
 ### 9.5 League & Tournament Management
 
 **League Features:**
+
 | Feature | Description |
 |---------|-------------|
 | League Creation | Name, format, schedule, rules |
