@@ -1,0 +1,62 @@
+// internal/templates/components/dashboard/layout.templ
+package dashboard
+
+import "fmt"
+
+templ DashboardLayout(data DashboardData) {
+	<div class="space-y-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<div>
+				<h2 class="text-2xl font-semibold text-foreground">Dashboard</h2>
+				if data.FacilityName != "" {
+					<p class="mt-1 text-sm text-muted-foreground">{data.FacilityName} activity snapshot.</p>
+				} else {
+					<p class="mt-1 text-sm text-muted-foreground">Facility activity snapshot.</p>
+				}
+			</div>
+			<span class="text-xs text-muted-foreground">Facility ID {fmt.Sprintf("%d", data.FacilityID)}</span>
+		</div>
+
+		<form
+			class="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-background p-4 shadow-sm"
+			hx-get={fmt.Sprintf("/api/v1/dashboard/metrics?facility_id=%d", data.FacilityID)}
+			hx-target="#dashboard-metrics"
+			hx-swap="innerHTML"
+			hx-trigger="change delay:300ms, submit">
+			<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)} />
+			<div>
+				<label for="dashboard-date-range" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date Range</label>
+				<input
+					type="text"
+					id="dashboard-date-range"
+					name="date_range"
+					value={data.DateRange}
+					placeholder="YYYY-MM-DD to YYYY-MM-DD"
+					class="mt-1 w-56 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+				/>
+			</div>
+			<div>
+				<label for="dashboard-granularity" class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Granularity</label>
+				<select
+					id="dashboard-granularity"
+					name="granularity"
+					class="mt-1 w-40 rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500">
+					<option value="day" selected?={isGranularity(data.Granularity, "day")}>Day</option>
+					<option value="week" selected?={isGranularity(data.Granularity, "week")}>Week</option>
+					<option value="month" selected?={isGranularity(data.Granularity, "month")}>Month</option>
+				</select>
+			</div>
+			<button type="submit" class="h-10 rounded-md border border-blue-600 bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700">
+				Apply
+			</button>
+		</form>
+
+		<div id="dashboard-metrics">
+			@DashboardMetrics(data)
+		</div>
+	</div>
+}
+
+func isGranularity(value string, expected string) bool {
+	return value == expected
+}
