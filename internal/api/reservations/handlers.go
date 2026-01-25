@@ -864,7 +864,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	notifyCtx, notifyCancel := context.WithTimeout(r.Context(), waitlistNotificationTimeout)
+	notifyCtx, notifyCancel := context.WithTimeout(context.Background(), waitlistNotificationTimeout)
 	defer notifyCancel()
 
 	if err := notifyWaitlistedMembers(notifyCtx, database, reservation, reservationCourts); err != nil {
