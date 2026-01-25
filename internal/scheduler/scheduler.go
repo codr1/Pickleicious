@@ -88,12 +88,12 @@ func Stop() error {
 }
 
 // AddJob registers a cron-based job with the singleton scheduler.
-func AddJob(name, cronExpr string, task func()) (gocron.Job, error) {
+func AddJob(name, cronExpr string, task func(), options ...gocron.JobOption) (gocron.Job, error) {
 	svc, err := ServiceInstance()
 	if err != nil {
 		return nil, err
 	}
-	return svc.AddJob(name, cronExpr, task)
+	return svc.AddJob(name, cronExpr, task, options...)
 }
 
 // Start begins running scheduled jobs.
@@ -119,7 +119,7 @@ func (s *Service) Stop() error {
 }
 
 // AddJob registers a cron-based job with the scheduler.
-func (s *Service) AddJob(name, cronExpr string, task func()) (gocron.Job, error) {
+func (s *Service) AddJob(name, cronExpr string, task func(), options ...gocron.JobOption) (gocron.Job, error) {
 	if s == nil {
 		return nil, ErrNotInitialized
 	}
@@ -138,10 +138,11 @@ func (s *Service) AddJob(name, cronExpr string, task func()) (gocron.Job, error)
 		jobLogger.Debug().Msg("Scheduler job completed")
 	}
 
+	jobOptions := append([]gocron.JobOption{gocron.WithName(name)}, options...)
 	job, err := s.scheduler.NewJob(
 		gocron.CronJob(cronExpr, false),
 		gocron.NewTask(wrappedTask),
-		gocron.WithName(name),
+		jobOptions...,
 	)
 	if err != nil {
 		jobLogger.Error().Err(err).Msg("Failed to register scheduler job")
@@ -173,7 +174,7 @@ func RegisterWaitlistJobs(database *db.DB) error {
 		if err := ExpireWaitlistOffers(ctx, database, time.Now()); err != nil {
 			expireLogger.Error().Err(err).Msg("Waitlist offer expiry run failed")
 		}
-	})
+	}, gocron.WithSingletonMode(gocron.LimitModeWait))
 	if err != nil {
 		return fmt.Errorf("add waitlist offer expiry job: %w", err)
 	}
@@ -195,7 +196,7 @@ func RegisterWaitlistJobs(database *db.DB) error {
 		if err := CleanupPastWaitlists(ctx, database, time.Now()); err != nil {
 			cleanupLogger.Error().Err(err).Msg("Waitlist cleanup run failed")
 		}
-	})
+	}, gocron.WithSingletonMode(gocron.LimitModeWait))
 	if err != nil {
 		return fmt.Errorf("add waitlist cleanup job: %w", err)
 	}

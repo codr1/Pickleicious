@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS waitlist_offers (
 
 CREATE INDEX IF NOT EXISTS idx_waitlists_facility_id ON waitlists(facility_id);
 CREATE INDEX IF NOT EXISTS idx_waitlists_slot ON waitlists(facility_id, target_date, target_start_time, target_end_time);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlists_slot_position_unique
+    ON waitlists(facility_id, target_date, target_start_time, target_end_time, COALESCE(target_court_id, -1), position);
 CREATE INDEX IF NOT EXISTS idx_waitlists_user_id ON waitlists(user_id);
 CREATE INDEX IF NOT EXISTS idx_waitlists_target_date ON waitlists(target_date);
 CREATE INDEX IF NOT EXISTS idx_waitlists_status ON waitlists(status);
@@ -47,3 +49,5 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_offers_waitlist_id ON waitlist_offers(wa
 CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlists_unique_active_user_slot
     ON waitlists(facility_id, target_date, target_start_time, target_end_time, COALESCE(target_court_id, -1), user_id)
     WHERE status IN ('pending', 'notified');
+CREATE INDEX IF NOT EXISTS idx_waitlist_offers_status ON waitlist_offers(status);
+CREATE INDEX IF NOT EXISTS idx_waitlist_offers_expires_at ON waitlist_offers(expires_at);
