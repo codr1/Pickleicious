@@ -108,7 +108,7 @@ func HandleDashboardPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDashboardData(ctx, q, facilityID, facilityName, startTime, endTime, dateRange, granularity)
+	data, err := buildDashboardData(ctx, q, facilityID, facilityName, facilityLoc, startTime, endTime, dateRange, granularity)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to build dashboard data")
 		http.Error(w, "Failed to load dashboard", http.StatusInternalServerError)
@@ -210,7 +210,7 @@ func HandleDashboardMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDashboardData(ctx, q, facilityID, facilityName, startTime, endTime, dateRange, granularity)
+	data, err := buildDashboardData(ctx, q, facilityID, facilityName, facilityLoc, startTime, endTime, dateRange, granularity)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to build dashboard metrics")
 		http.Error(w, "Failed to load dashboard metrics", http.StatusInternalServerError)
@@ -227,7 +227,7 @@ func HandleDashboardMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildDashboardData(ctx context.Context, q *dbgen.Queries, facilityID int64, facilityName string, startTime time.Time, endTime time.Time, dateRange string, granularity string) (dashboardtempl.DashboardData, error) {
+func buildDashboardData(ctx context.Context, q *dbgen.Queries, facilityID int64, facilityName string, facilityLoc *time.Location, startTime time.Time, endTime time.Time, dateRange string, granularity string) (dashboardtempl.DashboardData, error) {
 	bookings, err := q.CountReservationsByTypeInRange(ctx, dbgen.CountReservationsByTypeInRangeParams{
 		FacilityID: facilityID,
 		StartTime:  startTime,
@@ -300,7 +300,7 @@ func buildDashboardData(ctx context.Context, q *dbgen.Queries, facilityID int64,
 		}
 	}
 
-	comparisonTime := time.Now().UTC()
+	comparisonTime := time.Now().In(facilityLoc)
 	reservationStatusCounts, err := q.CountScheduledVsCompletedReservations(ctx, dbgen.CountScheduledVsCompletedReservationsParams{
 		FacilityID:     facilityID,
 		StartTime:      startTime,
