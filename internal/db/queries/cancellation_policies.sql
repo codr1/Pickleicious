@@ -87,10 +87,10 @@ WHERE cpt.facility_id = @facility_id
     cpt.reservation_type_id = @reservation_type_id
     OR cpt.reservation_type_id IS NULL
   )
--- Prefer type-specific tiers when available for the same hours window; fall back to defaults.
+-- Prefer type-specific tiers over defaults, then pick the highest hours threshold.
 ORDER BY
-    cpt.min_hours_before DESC,
-    CASE WHEN cpt.reservation_type_id IS NULL THEN 1 ELSE 0 END
+    CASE WHEN cpt.reservation_type_id IS NULL THEN 1 ELSE 0 END,
+    cpt.min_hours_before DESC
 LIMIT 1;
 
 -- name: LogCancellation :one

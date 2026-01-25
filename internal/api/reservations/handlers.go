@@ -777,16 +777,18 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 			if !reservation.ProID.Valid {
 				logger.Error().Int64("reservation_id", reservationID).Msg("Missing pro for lesson cancellation notification")
 			} else {
-				member, err := qtx.GetMemberByID(ctx, user.ID)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load member details", Err: err}
-				}
-				memberName := ""
-				if err == nil {
-					memberName = strings.TrimSpace(fmt.Sprintf("%s %s", member.FirstName, member.LastName))
-				}
-				if memberName == "" {
-					memberName = "Member"
+				memberName := "Member"
+				if reservation.PrimaryUserID.Valid {
+					member, err := qtx.GetMemberByID(ctx, reservation.PrimaryUserID.Int64)
+					if err != nil && !errors.Is(err, sql.ErrNoRows) {
+						return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load member details", Err: err}
+					}
+					if err == nil {
+						memberName = strings.TrimSpace(fmt.Sprintf("%s %s", member.FirstName, member.LastName))
+					}
+					if memberName == "" {
+						memberName = "Member"
+					}
 				}
 				message := fmt.Sprintf(
 					"Lesson cancelled: %s (%s - %s)",

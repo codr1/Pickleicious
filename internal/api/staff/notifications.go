@@ -2,6 +2,7 @@
 package staff
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -108,11 +109,7 @@ func HandleNotificationDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	courtRows, err := queries.ListReservationCourtsByDateRange(ctx, dbgen.ListReservationCourtsByDateRangeParams{
-		FacilityID: reservation.FacilityID,
-		StartTime:  reservation.StartTime,
-		EndTime:    reservation.EndTime,
-	})
+	courtRows, err := queries.ListReservationCourts(ctx, reservation.ID)
 	if err != nil {
 		logger.Error().Err(err).Int64("reservation_id", reservation.ID).Msg("Failed to load reservation courts")
 		http.Error(w, "Failed to load courts", http.StatusInternalServerError)
@@ -121,9 +118,6 @@ func HandleNotificationDetail(w http.ResponseWriter, r *http.Request) {
 
 	courtLabels := make([]string, 0, len(courtRows))
 	for _, row := range courtRows {
-		if row.ReservationID != reservation.ID {
-			continue
-		}
 		courtLabels = append(courtLabels, fmt.Sprintf("Court %d", row.CourtNumber))
 	}
 
@@ -178,9 +172,14 @@ func HandleNotificationDetail(w http.ResponseWriter, r *http.Request) {
 
 	sessionType := authz.SessionTypeFromContext(r.Context())
 	page := layouts.Base(stafftempl.NotificationDetail(detailData), activeTheme, sessionType)
-	if err := page.Render(r.Context(), w); err != nil {
+	var buf bytes.Buffer
+	if err := page.Render(r.Context(), &buf); err != nil {
 		logger.Error().Err(err).Msg("Failed to render notification detail page")
 		http.Error(w, "Failed to render page", http.StatusInternalServerError)
 		return
+	}
+	w.Header().Set("Content-Type", "text/html")
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		logger.Error().Err(err).Msg("Failed to write notification detail page")
 	}
 }

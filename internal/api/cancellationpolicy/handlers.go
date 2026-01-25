@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
@@ -226,27 +227,9 @@ func HandleCancellationPolicyTierCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	filterReservationTypeID, err := reservationTypeFilterIDFromRequest(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !renderTiersAfterMutation(ctx, w, r, q, facilityID, logger) {
 		return
 	}
-
-	tiers, err := q.ListCancellationPolicyTiers(ctx, dbgen.ListCancellationPolicyTiersParams{
-		FacilityID:        facilityID,
-		ReservationTypeID: apiutil.ToNullInt64(filterReservationTypeID),
-	})
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch cancellation policy tiers")
-		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
-		return
-	}
-	reservationTypes, err := q.ListReservationTypes(ctx)
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
-		reservationTypes = nil
-	}
-	renderCancellationPolicyList(r.Context(), w, facilityID, tiers, reservationTypeNameMap(reservationTypes), filterReservationTypeID)
 }
 
 // PUT /api/v1/cancellation-policy/tiers/{id}
@@ -321,27 +304,9 @@ func HandleCancellationPolicyTierUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	filterReservationTypeID, err := reservationTypeFilterIDFromRequest(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !renderTiersAfterMutation(ctx, w, r, q, facilityID, logger) {
 		return
 	}
-
-	tiers, err := q.ListCancellationPolicyTiers(ctx, dbgen.ListCancellationPolicyTiersParams{
-		FacilityID:        facilityID,
-		ReservationTypeID: apiutil.ToNullInt64(filterReservationTypeID),
-	})
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch cancellation policy tiers")
-		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
-		return
-	}
-	reservationTypes, err := q.ListReservationTypes(ctx)
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
-		reservationTypes = nil
-	}
-	renderCancellationPolicyList(r.Context(), w, facilityID, tiers, reservationTypeNameMap(reservationTypes), filterReservationTypeID)
 }
 
 // DELETE /api/v1/cancellation-policy/tiers/{id}
@@ -395,10 +360,16 @@ func HandleCancellationPolicyTierDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !renderTiersAfterMutation(ctx, w, r, q, facilityID, logger) {
+		return
+	}
+}
+
+func renderTiersAfterMutation(ctx context.Context, w http.ResponseWriter, r *http.Request, q *dbgen.Queries, facilityID int64, logger *zerolog.Logger) bool {
 	filterReservationTypeID, err := reservationTypeFilterIDFromRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return false
 	}
 
 	tiers, err := q.ListCancellationPolicyTiers(ctx, dbgen.ListCancellationPolicyTiersParams{
@@ -408,14 +379,17 @@ func HandleCancellationPolicyTierDelete(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch cancellation policy tiers")
 		http.Error(w, "Failed to load cancellation policy tiers", http.StatusInternalServerError)
-		return
+		return false
 	}
+
 	reservationTypes, err := q.ListReservationTypes(ctx)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load reservation types")
 		reservationTypes = nil
 	}
-	renderCancellationPolicyList(r.Context(), w, facilityID, tiers, reservationTypeNameMap(reservationTypes), filterReservationTypeID)
+
+	renderCancellationPolicyList(ctx, w, facilityID, tiers, reservationTypeNameMap(reservationTypes), filterReservationTypeID)
+	return true
 }
 
 func renderCancellationPolicyList(ctx context.Context, w http.ResponseWriter, facilityID int64, tiers []dbgen.CancellationPolicyTier, reservationTypeNames map[int64]string, filterReservationTypeID *int64) {
@@ -491,20 +465,20 @@ func reservationTypeFilterOptions(reservationTypes []dbgen.ReservationType) []ca
 	if len(reservationTypes) == 0 {
 		return nil
 	}
-	options := make([]cancellationpolicytempl.ReservationTypeFilterOption, 0, 2)
+	labelMap := map[string]string{
+		"GAME":        "Court Reservations/GAME",
+		"PRO_SESSION": "Lessons/PRO_SESSION",
+	}
+	options := make([]cancellationpolicytempl.ReservationTypeFilterOption, 0, len(reservationTypes))
 	for _, reservationType := range reservationTypes {
-		switch reservationType.Name {
-		case "GAME":
-			options = append(options, cancellationpolicytempl.ReservationTypeFilterOption{
-				ID:    reservationType.ID,
-				Label: "Court Reservations/GAME",
-			})
-		case "PRO_SESSION":
-			options = append(options, cancellationpolicytempl.ReservationTypeFilterOption{
-				ID:    reservationType.ID,
-				Label: "Lessons/PRO_SESSION",
-			})
+		label, ok := labelMap[reservationType.Name]
+		if !ok {
+			label = reservationType.Name
 		}
+		options = append(options, cancellationpolicytempl.ReservationTypeFilterOption{
+			ID:    reservationType.ID,
+			Label: label,
+		})
 	}
 	return options
 }

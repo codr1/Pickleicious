@@ -3,6 +3,13 @@ package cancellationpolicy
 
 import "fmt"
 
+func formatOptionalInt64(v *int64) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *v)
+}
+
 templ CancellationPolicyLayout(facilityID int64, tiers []PolicyTierData, reservationTypes []ReservationTypeOption, filterOptions []ReservationTypeFilterOption, activeReservationTypeID *int64) {
 	<div class="space-y-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
@@ -156,7 +163,7 @@ templ PolicyTierRow(facilityID int64, tier PolicyTierData, activeReservationType
 		hx-on::after-request="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} if(event.detail.xhr.status===200){indicator.textContent='Saved'; indicator.classList.remove('text-red-600'); indicator.classList.add('text-emerald-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},1200);}"
 		hx-on::response-error="const row=event.target; const indicator=row.querySelector('[data-save-indicator]'); if(!indicator){return;} indicator.textContent='Error'; indicator.classList.remove('text-emerald-600'); indicator.classList.add('text-red-600'); indicator.classList.remove('opacity-0'); setTimeout(()=>{indicator.classList.add('opacity-0');},2000);">
 		<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", facilityID)} />
-		<input type="hidden" name="reservation_type_id" value={func() string { if tier.ReservationTypeID == nil { return "" }; return fmt.Sprintf("%d", *tier.ReservationTypeID) }()} />
+		<input type="hidden" name="reservation_type_id" value={formatOptionalInt64(tier.ReservationTypeID)} />
 		<div>
 			<label class="sr-only" for={fmt.Sprintf("min_hours_before_%d", tier.ID)}>Minimum hours before start</label>
 			<input
