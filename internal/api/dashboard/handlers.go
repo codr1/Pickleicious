@@ -28,6 +28,12 @@ const (
 	dashboardQueryTimeout = 5 * time.Second
 	dashboardDateLayout   = "2006-01-02"
 	defaultRangeDays      = 30
+	dateRangeToday        = "today"
+	dateRangeLast7Days    = "last_7_days"
+	dateRangeLast30Days   = "last_30_days"
+	dateRangeThisMonth    = "this_month"
+	dateRangeThisYear     = "this_year"
+	dateRangeCustom       = "custom"
 )
 
 var (
@@ -70,19 +76,26 @@ func HandleDashboardPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), dashboardQueryTimeout)
 	defer cancel()
 
-	facility, err := q.GetFacilityByID(ctx, facilityID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Facility not found", http.StatusNotFound)
+	facilityName := ""
+	facilityLoc := time.Local
+	if facilityID > 0 {
+		facility, err := q.GetFacilityByID(ctx, facilityID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Facility not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
+			http.Error(w, "Failed to load facility", http.StatusInternalServerError)
 			return
 		}
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
-		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
-		return
+		facilityName = facility.Name
+		facilityLoc = loadFacilityLocation(logger, facility.Timezone)
+	} else {
+		facilityName = "All Facilities"
 	}
 
-	facilityLoc := loadFacilityLocation(logger, facility.Timezone)
-	startTime, endTime, dateRange, err := parseDateRange(r, facilityLoc)
+	startTime, endTime, dateRange, dateRangePreset, startDate, endDate, err := parseDateRange(r, facilityLoc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -94,17 +107,43 @@ func HandleDashboardPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDashboardData(ctx, q, facility.ID, facility.Name, startTime, endTime, dateRange, granularity)
+	data, err := buildDashboardData(ctx, q, facilityID, facilityName, startTime, endTime, dateRange, granularity)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to build dashboard data")
 		http.Error(w, "Failed to load dashboard", http.StatusInternalServerError)
 		return
 	}
 
-	activeTheme, err := models.GetActiveTheme(ctx, q, facilityID)
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load active theme")
-		activeTheme = nil
+	data.DateRangePreset = dateRangePreset
+	data.StartDate = startDate
+	data.EndDate = endDate
+
+	showFacilitySelector := user != nil && user.IsStaff && user.HomeFacilityID == nil
+	if showFacilitySelector {
+		facilities, err := q.ListFacilities(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to load facilities for dashboard")
+			http.Error(w, "Failed to load facilities", http.StatusInternalServerError)
+			return
+		}
+		data.ShowFacilitySelector = true
+		data.Facilities = make([]dashboardtempl.FacilityOption, 0, len(facilities))
+		for _, facility := range facilities {
+			data.Facilities = append(data.Facilities, dashboardtempl.FacilityOption{
+				ID:   facility.ID,
+				Name: facility.Name,
+			})
+		}
+	}
+
+	var activeTheme *models.Theme
+	if facilityID > 0 {
+		var themeErr error
+		activeTheme, themeErr = models.GetActiveTheme(ctx, q, facilityID)
+		if themeErr != nil {
+			logger.Error().Err(themeErr).Int64("facility_id", facilityID).Msg("Failed to load active theme")
+			activeTheme = nil
+		}
 	}
 
 	sessionType := authz.SessionTypeFromContext(r.Context())
@@ -139,19 +178,26 @@ func HandleDashboardMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), dashboardQueryTimeout)
 	defer cancel()
 
-	facility, err := q.GetFacilityByID(ctx, facilityID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Facility not found", http.StatusNotFound)
+	facilityName := ""
+	facilityLoc := time.Local
+	if facilityID > 0 {
+		facility, err := q.GetFacilityByID(ctx, facilityID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "Facility not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
+			http.Error(w, "Failed to load facility", http.StatusInternalServerError)
 			return
 		}
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
-		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
-		return
+		facilityName = facility.Name
+		facilityLoc = loadFacilityLocation(logger, facility.Timezone)
+	} else {
+		facilityName = "All Facilities"
 	}
 
-	facilityLoc := loadFacilityLocation(logger, facility.Timezone)
-	startTime, endTime, dateRange, err := parseDateRange(r, facilityLoc)
+	startTime, endTime, dateRange, dateRangePreset, startDate, endDate, err := parseDateRange(r, facilityLoc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -163,12 +209,16 @@ func HandleDashboardMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildDashboardData(ctx, q, facility.ID, facility.Name, startTime, endTime, dateRange, granularity)
+	data, err := buildDashboardData(ctx, q, facilityID, facilityName, startTime, endTime, dateRange, granularity)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to build dashboard metrics")
 		http.Error(w, "Failed to load dashboard metrics", http.StatusInternalServerError)
 		return
 	}
+
+	data.DateRangePreset = dateRangePreset
+	data.StartDate = startDate
+	data.EndDate = endDate
 
 	component := dashboardtempl.DashboardMetrics(data)
 	if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render dashboard metrics", "Failed to render metrics") {
@@ -280,49 +330,60 @@ func buildDashboardData(ctx context.Context, q *dbgen.Queries, facilityID int64,
 	}, nil
 }
 
-func parseDateRange(r *http.Request, loc *time.Location) (time.Time, time.Time, string, error) {
+func parseDateRange(r *http.Request, loc *time.Location) (time.Time, time.Time, string, string, string, string, error) {
 	query := r.URL.Query()
+	rangeRaw := strings.TrimSpace(query.Get("date_range"))
+	preset := strings.ToLower(rangeRaw)
 	startRaw := strings.TrimSpace(query.Get("start_date"))
 	endRaw := strings.TrimSpace(query.Get("end_date"))
 
-	if startRaw == "" && endRaw == "" {
-		if rangeRaw := strings.TrimSpace(query.Get("date_range")); rangeRaw != "" {
-			parts := strings.SplitN(rangeRaw, "to", 2)
-			if len(parts) != 2 {
-				return time.Time{}, time.Time{}, "", fmt.Errorf("date_range must be in YYYY-MM-DD to YYYY-MM-DD format")
-			}
-			startRaw = strings.TrimSpace(parts[0])
-			endRaw = strings.TrimSpace(parts[1])
+	if rangeRaw != "" && strings.Contains(rangeRaw, "to") && !isKnownDateRangePreset(preset) {
+		parts := strings.SplitN(rangeRaw, "to", 2)
+		if len(parts) != 2 {
+			return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("date_range must be in YYYY-MM-DD to YYYY-MM-DD format")
 		}
+		startRaw = strings.TrimSpace(parts[0])
+		endRaw = strings.TrimSpace(parts[1])
+		preset = ""
+	}
+
+	if preset != "" && preset != dateRangeCustom {
+		startDate, endDate := presetDateRange(preset, loc)
+		if startDate.IsZero() || endDate.IsZero() {
+			return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("invalid date_range")
+		}
+		return startDate, endDate.AddDate(0, 0, 1), formatDateRange(startDate, endDate), preset, formatDate(startDate), formatDate(endDate), nil
 	}
 
 	if startRaw == "" && endRaw == "" {
+		if preset == dateRangeCustom {
+			return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("start_date and end_date are required")
+		}
 		now := time.Now().In(loc)
 		endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-		startDate := endDate.AddDate(0, 0, -defaultRangeDays)
-		return startDate, endDate.AddDate(0, 0, 1), fmt.Sprintf("%s to %s", startDate.Format(dashboardDateLayout), endDate.Format(dashboardDateLayout)), nil
+		startDate := endDate.AddDate(0, 0, -(defaultRangeDays - 1))
+		return startDate, endDate.AddDate(0, 0, 1), formatDateRange(startDate, endDate), dateRangeLast30Days, formatDate(startDate), formatDate(endDate), nil
 	}
 
 	if startRaw == "" || endRaw == "" {
-		return time.Time{}, time.Time{}, "", fmt.Errorf("start_date and end_date are required")
+		return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("start_date and end_date are required")
 	}
 
 	startDate, err := time.ParseInLocation(dashboardDateLayout, startRaw, loc)
 	if err != nil {
-		return time.Time{}, time.Time{}, "", fmt.Errorf("start_date must be in YYYY-MM-DD format")
+		return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("start_date must be in YYYY-MM-DD format")
 	}
 
 	endDate, err := time.ParseInLocation(dashboardDateLayout, endRaw, loc)
 	if err != nil {
-		return time.Time{}, time.Time{}, "", fmt.Errorf("end_date must be in YYYY-MM-DD format")
+		return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("end_date must be in YYYY-MM-DD format")
 	}
 
 	if endDate.Before(startDate) {
-		return time.Time{}, time.Time{}, "", fmt.Errorf("end_date must be after start_date")
+		return time.Time{}, time.Time{}, "", "", "", "", fmt.Errorf("end_date must be after start_date")
 	}
 
-	dateRange := fmt.Sprintf("%s to %s", startDate.Format(dashboardDateLayout), endDate.Format(dashboardDateLayout))
-	return startDate, endDate.AddDate(0, 0, 1), dateRange, nil
+	return startDate, endDate.AddDate(0, 0, 1), formatDateRange(startDate, endDate), dateRangeCustom, formatDate(startDate), formatDate(endDate), nil
 }
 
 func parseGranularity(raw string) (string, error) {
@@ -350,12 +411,23 @@ func parseGranularity(raw string) (string, error) {
 }
 
 func resolveFacilityID(r *http.Request, user *authz.AuthUser) (int64, error) {
-	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
-		return facilityID, nil
+	rawFacilityID := strings.TrimSpace(r.URL.Query().Get("facility_id"))
+	if rawFacilityID != "" {
+		if rawFacilityID == "0" {
+			return 0, nil
+		}
+		if facilityID, ok := request.ParseFacilityID(rawFacilityID); ok {
+			return facilityID, nil
+		}
+		return 0, fmt.Errorf("facility_id must be a positive integer")
 	}
 
 	if user != nil && user.HomeFacilityID != nil {
 		return *user.HomeFacilityID, nil
+	}
+
+	if user != nil && user.IsStaff {
+		return 0, nil
 	}
 
 	return 0, fmt.Errorf("facility_id is required")
@@ -368,10 +440,52 @@ func requireDashboardAccess(user *authz.AuthUser, facilityID int64) error {
 	if !user.IsStaff {
 		return authz.ErrForbidden
 	}
-	if user.HomeFacilityID != nil && *user.HomeFacilityID != facilityID {
+	if user.HomeFacilityID == nil {
+		return nil
+	}
+	if *user.HomeFacilityID != facilityID {
 		return authz.ErrForbidden
 	}
 	return nil
+}
+
+func presetDateRange(preset string, loc *time.Location) (time.Time, time.Time) {
+	now := time.Now().In(loc)
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+
+	switch preset {
+	case dateRangeToday:
+		return endDate, endDate
+	case dateRangeLast7Days:
+		return endDate.AddDate(0, 0, -6), endDate
+	case dateRangeLast30Days:
+		return endDate.AddDate(0, 0, -(defaultRangeDays - 1)), endDate
+	case dateRangeThisMonth:
+		startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+		return startDate, endDate
+	case dateRangeThisYear:
+		startDate := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, loc)
+		return startDate, endDate
+	default:
+		return time.Time{}, time.Time{}
+	}
+}
+
+func formatDateRange(startDate time.Time, endDate time.Time) string {
+	return fmt.Sprintf("%s to %s", startDate.Format(dashboardDateLayout), endDate.Format(dashboardDateLayout))
+}
+
+func formatDate(value time.Time) string {
+	return value.Format(dashboardDateLayout)
+}
+
+func isKnownDateRangePreset(preset string) bool {
+	switch preset {
+	case dateRangeToday, dateRangeLast7Days, dateRangeLast30Days, dateRangeThisMonth, dateRangeThisYear, dateRangeCustom:
+		return true
+	default:
+		return false
+	}
 }
 
 func respondAccessError(w http.ResponseWriter, r *http.Request, facilityID int64, err error) {
