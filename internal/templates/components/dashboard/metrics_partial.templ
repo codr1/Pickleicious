@@ -55,7 +55,7 @@ templ DashboardMetrics(data DashboardData) {
 				<div class="mt-4 space-y-3">
 					<div class="flex items-center justify-between text-sm">
 						<span class="text-muted-foreground">Refund percentage applied</span>
-						<span class="font-semibold text-foreground">{formatPercent(data.CancellationMetrics.TotalRefundPercentage)}</span>
+						<span class="font-semibold text-foreground">{formatPercent(averageRefundPercent(data.CancellationMetrics))}</span>
 					</div>
 					<div class="flex items-center justify-between text-sm">
 						<span class="text-muted-foreground">Total reservations</span>
@@ -77,6 +77,13 @@ func formatCount(value int64) string {
 
 func formatPercent(value float64) string {
 	return fmt.Sprintf("%.1f%%", value*100)
+}
+
+func averageRefundPercent(metrics CancellationMetrics) float64 {
+	if metrics.Count == 0 {
+		return 0
+	}
+	return (metrics.TotalRefundPercentage / float64(metrics.Count)) / 100
 }
 
 func formatBookingType(booking BookingTypeCount) string {

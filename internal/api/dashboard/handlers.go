@@ -44,6 +44,7 @@ var (
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
 	if database == nil {
+		log.Warn().Msg("InitHandlers called with nil database; dashboard handlers will be unavailable")
 		return
 	}
 	queriesOnce.Do(func() {
@@ -293,12 +294,17 @@ func buildDashboardData(ctx context.Context, q *dbgen.Queries, facilityID int64,
 	utilizationRate := 0.0
 	if availableHours > 0 {
 		utilizationRate = bookedHours / availableHours
+		if utilizationRate > 1.0 {
+			utilizationRate = 1.0
+		}
 	}
 
+	comparisonTime := time.Now().UTC()
 	reservationStatusCounts, err := q.CountScheduledVsCompletedReservations(ctx, dbgen.CountScheduledVsCompletedReservationsParams{
-		FacilityID: facilityID,
-		StartTime:  startTime,
-		EndTime:    endTime,
+		FacilityID:     facilityID,
+		StartTime:      startTime,
+		EndTime:        endTime,
+		ComparisonTime: comparisonTime,
 	})
 	if err != nil {
 		return dashboardtempl.DashboardData{}, err
