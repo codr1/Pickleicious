@@ -839,6 +839,7 @@ A self-service marketplace where members discover and book coaches directly, red
 
 ### 9.8 Reporting & Analytics Dashboard
 
+<!-- BEGIN WIP: STORY-0037 -->
 **Court Utilization:**
 | Metric | Description | Benchmark |
 |--------|-------------|-----------|
@@ -846,6 +847,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Peak Hour Analysis | Busiest times of day/week | Identify patterns |
 | Court Comparison | Usage across different courts | Balance load |
 | Cancellation Rate | % of bookings cancelled | < 10% |
+<!-- END WIP -->
 
 **Financial Analytics:**
 | Metric | Description |
@@ -909,8 +911,10 @@ A self-service marketplace where members discover and book coaches directly, red
 |---------|-------------|
 | Self-Service Terminal | Dedicated check-in station |
 | Waiver Signing | Complete waivers at kiosk |
+<!-- BEGIN WIP: STORY-0036 -->
 | Guest Registration | Walk-in guest sign-up |
 | Payment Processing | Pay at kiosk |
+<!-- END WIP -->
 
 **Physical Access:**
 | Feature | Description |
@@ -949,6 +953,7 @@ A self-service marketplace where members discover and book coaches directly, red
 
 ### 9.12 Guest & Drop-In Management
 
+<!-- BEGIN WIP: STORY-0036 -->
 **Guest Passes:**
 | Feature | Description |
 |---------|-------------|
@@ -956,6 +961,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Guest Pricing | Non-member rates |
 | Guest Limits | Max guests per member per month |
 | Guest Registration | Quick sign-up flow |
+<!-- END WIP -->
 
 
 **Guest Conversion:**
