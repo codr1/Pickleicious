@@ -223,6 +223,19 @@ func (q *Queries) CreateLeagueTeam(ctx context.Context, arg CreateLeagueTeamPara
 	return i, err
 }
 
+const deleteLeague = `-- name: DeleteLeague :execrows
+DELETE FROM leagues
+WHERE id = ?1
+`
+
+func (q *Queries) DeleteLeague(ctx context.Context, id int64) (int64, error) {
+	result, err := q.exec(ctx, q.deleteLeagueStmt, deleteLeague, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getLeague = `-- name: GetLeague :one
 SELECT id, facility_id, name, format, start_date, end_date, division_config,
     min_team_size, max_team_size, roster_lock_date, status, created_at, updated_at
@@ -432,6 +445,68 @@ func (q *Queries) ListTeamMembers(ctx context.Context, leagueTeamID int64) ([]Le
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateLeague = `-- name: UpdateLeague :one
+UPDATE leagues
+SET name = ?1,
+    format = ?2,
+    start_date = ?3,
+    end_date = ?4,
+    division_config = ?5,
+    min_team_size = ?6,
+    max_team_size = ?7,
+    roster_lock_date = ?8,
+    status = ?9,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?10
+RETURNING id, facility_id, name, format, start_date, end_date, division_config,
+    min_team_size, max_team_size, roster_lock_date, status, created_at, updated_at
+`
+
+type UpdateLeagueParams struct {
+	Name           string       `json:"name"`
+	Format         string       `json:"format"`
+	StartDate      time.Time    `json:"startDate"`
+	EndDate        time.Time    `json:"endDate"`
+	DivisionConfig string       `json:"divisionConfig"`
+	MinTeamSize    int64        `json:"minTeamSize"`
+	MaxTeamSize    int64        `json:"maxTeamSize"`
+	RosterLockDate sql.NullTime `json:"rosterLockDate"`
+	Status         string       `json:"status"`
+	ID             int64        `json:"id"`
+}
+
+func (q *Queries) UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (League, error) {
+	row := q.queryRow(ctx, q.updateLeagueStmt, updateLeague,
+		arg.Name,
+		arg.Format,
+		arg.StartDate,
+		arg.EndDate,
+		arg.DivisionConfig,
+		arg.MinTeamSize,
+		arg.MaxTeamSize,
+		arg.RosterLockDate,
+		arg.Status,
+		arg.ID,
+	)
+	var i League
+	err := row.Scan(
+		&i.ID,
+		&i.FacilityID,
+		&i.Name,
+		&i.Format,
+		&i.StartDate,
+		&i.EndDate,
+		&i.DivisionConfig,
+		&i.MinTeamSize,
+		&i.MaxTeamSize,
+		&i.RosterLockDate,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateMatchResult = `-- name: UpdateMatchResult :one

@@ -40,6 +40,26 @@ FROM leagues
 WHERE facility_id = @facility_id
 ORDER BY start_date DESC, name;
 
+-- name: UpdateLeague :one
+UPDATE leagues
+SET name = @name,
+    format = @format,
+    start_date = @start_date,
+    end_date = @end_date,
+    division_config = @division_config,
+    min_team_size = @min_team_size,
+    max_team_size = @max_team_size,
+    roster_lock_date = @roster_lock_date,
+    status = @status,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+RETURNING id, facility_id, name, format, start_date, end_date, division_config,
+    min_team_size, max_team_size, roster_lock_date, status, created_at, updated_at;
+
+-- name: DeleteLeague :execrows
+DELETE FROM leagues
+WHERE id = @id;
+
 -- name: CreateLeagueTeam :one
 INSERT INTO league_teams (
     league_id,

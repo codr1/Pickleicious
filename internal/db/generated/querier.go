@@ -59,6 +59,7 @@ type Querier interface {
 	DeactivateVisitPackType(ctx context.Context, arg DeactivateVisitPackTypeParams) (VisitPackType, error)
 	DecrementVisitPackVisit(ctx context.Context, id int64) (VisitPack, error)
 	DeleteCancellationPolicyTier(ctx context.Context, arg DeleteCancellationPolicyTierParams) (int64, error)
+	DeleteLeague(ctx context.Context, id int64) (int64, error)
 	DeleteMember(ctx context.Context, id int64) error
 	DeleteOpenPlayRule(ctx context.Context, arg DeleteOpenPlayRuleParams) (int64, error)
 	DeleteOperatingHours(ctx context.Context, arg DeleteOperatingHoursParams) (int64, error)
@@ -200,6 +201,7 @@ type Querier interface {
 	UpdateCourtStatus(ctx context.Context, arg UpdateCourtStatusParams) (Court, error)
 	UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFacilityBookingConfigParams) (Facility, error)
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)
+	UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (League, error)
 	UpdateMatchResult(ctx context.Context, arg UpdateMatchResultParams) (LeagueMatch, error)
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) error
 	UpdateMemberEmail(ctx context.Context, arg UpdateMemberEmailParams) (User, error)

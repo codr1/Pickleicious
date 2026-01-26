@@ -18,6 +18,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/checkin"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/dashboard"
+	"github.com/codr1/Pickleicious/internal/api/leagues"
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
@@ -82,6 +83,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	waitlist.InitHandlers(database)
 
 	staff.InitHandlers(database)
+	leagues.InitHandlers(database)
 
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
@@ -376,6 +378,20 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+
+	// League routes
+	mux.HandleFunc("/leagues", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleLeaguesPage,
+	}))
+	mux.HandleFunc("/api/v1/leagues", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  leagues.HandleLeaguesList,
+		http.MethodPost: leagues.HandleLeagueCreate,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:    leagues.HandleLeagueDetail,
+		http.MethodPut:    leagues.HandleLeagueUpdate,
+		http.MethodDelete: leagues.HandleLeagueDelete,
+	}))
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)

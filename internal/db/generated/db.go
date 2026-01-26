@@ -156,6 +156,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteCancellationPolicyTierStmt, err = db.PrepareContext(ctx, deleteCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteCancellationPolicyTier: %w", err)
 	}
+	if q.deleteLeagueStmt, err = db.PrepareContext(ctx, deleteLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteLeague: %w", err)
+	}
 	if q.deleteMemberStmt, err = db.PrepareContext(ctx, deleteMember); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMember: %w", err)
 	}
@@ -534,6 +537,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateFacilityVisitActivityStmt, err = db.PrepareContext(ctx, updateFacilityVisitActivity); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateFacilityVisitActivity: %w", err)
 	}
+	if q.updateLeagueStmt, err = db.PrepareContext(ctx, updateLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateLeague: %w", err)
+	}
 	if q.updateMatchResultStmt, err = db.PrepareContext(ctx, updateMatchResult); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMatchResult: %w", err)
 	}
@@ -814,6 +820,11 @@ func (q *Queries) Close() error {
 	if q.deleteCancellationPolicyTierStmt != nil {
 		if cerr := q.deleteCancellationPolicyTierStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteCancellationPolicyTierStmt: %w", cerr)
+		}
+	}
+	if q.deleteLeagueStmt != nil {
+		if cerr := q.deleteLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteLeagueStmt: %w", cerr)
 		}
 	}
 	if q.deleteMemberStmt != nil {
@@ -1446,6 +1457,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateFacilityVisitActivityStmt: %w", cerr)
 		}
 	}
+	if q.updateLeagueStmt != nil {
+		if cerr := q.updateLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateLeagueStmt: %w", cerr)
+		}
+	}
 	if q.updateMatchResultStmt != nil {
 		if cerr := q.updateMatchResultStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateMatchResultStmt: %w", cerr)
@@ -1624,6 +1640,7 @@ type Queries struct {
 	deactivateVisitPackTypeStmt                      *sql.Stmt
 	decrementVisitPackVisitStmt                      *sql.Stmt
 	deleteCancellationPolicyTierStmt                 *sql.Stmt
+	deleteLeagueStmt                                 *sql.Stmt
 	deleteMemberStmt                                 *sql.Stmt
 	deleteOpenPlayRuleStmt                           *sql.Stmt
 	deleteOperatingHoursStmt                         *sql.Stmt
@@ -1750,6 +1767,7 @@ type Queries struct {
 	updateCourtStatusStmt                            *sql.Stmt
 	updateFacilityBookingConfigStmt                  *sql.Stmt
 	updateFacilityVisitActivityStmt                  *sql.Stmt
+	updateLeagueStmt                                 *sql.Stmt
 	updateMatchResultStmt                            *sql.Stmt
 	updateMemberStmt                                 *sql.Stmt
 	updateMemberEmailStmt                            *sql.Stmt
@@ -1819,6 +1837,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deactivateVisitPackTypeStmt:                      q.deactivateVisitPackTypeStmt,
 		decrementVisitPackVisitStmt:                      q.decrementVisitPackVisitStmt,
 		deleteCancellationPolicyTierStmt:                 q.deleteCancellationPolicyTierStmt,
+		deleteLeagueStmt:                                 q.deleteLeagueStmt,
 		deleteMemberStmt:                                 q.deleteMemberStmt,
 		deleteOpenPlayRuleStmt:                           q.deleteOpenPlayRuleStmt,
 		deleteOperatingHoursStmt:                         q.deleteOperatingHoursStmt,
@@ -1945,6 +1964,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateCourtStatusStmt:                            q.updateCourtStatusStmt,
 		updateFacilityBookingConfigStmt:                  q.updateFacilityBookingConfigStmt,
 		updateFacilityVisitActivityStmt:                  q.updateFacilityVisitActivityStmt,
+		updateLeagueStmt:                                 q.updateLeagueStmt,
 		updateMatchResultStmt:                            q.updateMatchResultStmt,
 		updateMemberStmt:                                 q.updateMemberStmt,
 		updateMemberEmailStmt:                            q.updateMemberEmailStmt,
