@@ -17,6 +17,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/cancellationpolicy"
 	"github.com/codr1/Pickleicious/internal/api/checkin"
 	"github.com/codr1/Pickleicious/internal/api/courts"
+	"github.com/codr1/Pickleicious/internal/api/dashboard"
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
@@ -70,6 +71,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	openplayapi.InitHandlers(database)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
+	dashboard.InitHandlers(database)
 	checkin.InitHandlers(database.Queries)
 	reservations.InitHandlers(database)
 	member.InitHandlers(database)
@@ -445,6 +447,12 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 
 	// Theme admin page
 	mux.HandleFunc("/admin/themes", themes.HandleThemesPage)
+
+	// Dashboard page
+	mux.HandleFunc("/admin/dashboard", dashboard.HandleDashboardPage)
+	mux.HandleFunc("/api/v1/dashboard/metrics", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: dashboard.HandleDashboardMetrics,
+	}))
 
 	// Theme API
 	mux.HandleFunc("/api/v1/themes", methodHandler(map[string]http.HandlerFunc{

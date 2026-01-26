@@ -1,0 +1,113 @@
+// internal/templates/components/dashboard/metrics_partial.templ
+package dashboard
+
+import "fmt"
+
+templ DashboardMetrics(data DashboardData) {
+	<div class="space-y-6">
+		<section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
+				<p class="text-xs uppercase tracking-wide text-muted-foreground">Utilization Rate</p>
+				<p class="mt-2 text-2xl font-semibold text-foreground">{formatPercent(data.UtilizationRate)}</p>
+				<p class="mt-1 text-xs text-muted-foreground">Booked hours vs. available courts</p>
+			</div>
+			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
+				<p class="text-xs uppercase tracking-wide text-muted-foreground">Scheduled Reservations</p>
+				<p class="mt-2 text-2xl font-semibold text-foreground">{formatCount(data.ScheduledCount)}</p>
+				<p class="mt-1 text-xs text-muted-foreground">Upcoming during {data.DateRange}</p>
+			</div>
+			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
+				<p class="text-xs uppercase tracking-wide text-muted-foreground">Check-Ins</p>
+				<p class="mt-2 text-2xl font-semibold text-foreground">{formatCount(data.CheckinCount)}</p>
+				<p class="mt-1 text-xs text-muted-foreground">Facility visits this period</p>
+			</div>
+			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
+				<p class="text-xs uppercase tracking-wide text-muted-foreground">Cancellation Rate</p>
+				<p class="mt-2 text-2xl font-semibold text-foreground">{formatPercent(data.CancellationMetrics.Rate)}</p>
+				<p class="mt-1 text-xs text-muted-foreground">{formatCount(data.CancellationMetrics.Count)} cancellations</p>
+			</div>
+		</section>
+
+		<section class="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
+				<div class="flex items-center justify-between">
+					<h3 class="text-sm font-semibold text-foreground">Bookings by Type</h3>
+					<span class="text-xs text-muted-foreground">{granularityLabel(data.Granularity)}</span>
+				</div>
+				<div class="mt-4 space-y-3">
+					if len(data.BookingsByType) == 0 {
+						<div class="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+							No bookings recorded for this range.
+						</div>
+					} else {
+						for _, booking := range data.BookingsByType {
+							<div class="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+								<span class="text-foreground">{formatBookingType(booking)}</span>
+								<span class="font-semibold text-foreground">{formatCount(booking.Count)}</span>
+							</div>
+						}
+					}
+				</div>
+			</div>
+
+			<div class="rounded-lg border border-border bg-background p-4 shadow-sm">
+				<h3 class="text-sm font-semibold text-foreground">Cancellation Impact</h3>
+				<div class="mt-4 space-y-3">
+					<div class="flex items-center justify-between text-sm">
+						<span class="text-muted-foreground">Refund percentage applied</span>
+						<span class="font-semibold text-foreground">{formatPercent(averageRefundPercent(data.CancellationMetrics))}</span>
+					</div>
+					<div class="flex items-center justify-between text-sm">
+						<span class="text-muted-foreground">Total reservations</span>
+						<span class="font-semibold text-foreground">{formatCount(data.CancellationMetrics.TotalReservations)}</span>
+					</div>
+					<div class="flex items-center justify-between text-sm">
+						<span class="text-muted-foreground">Total cancellations</span>
+						<span class="font-semibold text-foreground">{formatCount(data.CancellationMetrics.Count)}</span>
+					</div>
+				</div>
+			</div>
+		</section>
+	</div>
+}
+
+func formatCount(value int64) string {
+	return fmt.Sprintf("%d", value)
+}
+
+func formatPercent(value float64) string {
+	return fmt.Sprintf("%.1f%%", value*100)
+}
+
+func averageRefundPercent(metrics CancellationMetrics) float64 {
+	if metrics.Count == 0 {
+		return 0
+	}
+	return (metrics.TotalRefundPercentage / float64(metrics.Count)) / 100
+}
+
+func formatBookingType(booking BookingTypeCount) string {
+	if booking.TypeName != "" {
+		return booking.TypeName
+	}
+	return fmt.Sprintf("Type %d", booking.TypeID)
+}
+
+func granularityLabel(value string) string {
+	switch value {
+	case "day":
+		return "Daily"
+	case "week":
+		return "Weekly"
+	case "month":
+		return "Monthly"
+	case "annual":
+		return "Annual"
+	case "dow_month":
+		return "Day-of-week (month)"
+	case "dow_year":
+		return "Day-of-week (year)"
+	default:
+		return value
+	}
+}

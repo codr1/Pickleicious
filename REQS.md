@@ -842,6 +842,7 @@ A self-service marketplace where members discover and book coaches directly, red
 <!-- BEGIN WIP: STORY-0037 -->
 
 **Court Utilization:**
+
 | Metric | Description | Benchmark |
 |--------|-------------|-----------|
 | Occupancy Rate | % of available slots booked | 70-80% peak |
@@ -951,7 +952,17 @@ A self-service marketplace where members discover and book coaches directly, red
 
 ### 9.12 Guest & Drop-In Management
 
+<!-- BEGIN WIP: STORY-0036 -->
+**Guest Passes:**
 
+| Feature | Description |
+|---------|-------------|
+| Guest Pass Types | Day pass, week pass, punch card |
+| Guest Pricing | Non-member rates |
+| Guest Limits | Max guests per member per month |
+| Guest Registration | Quick sign-up flow |
+
+<!-- END WIP -->
 
 **Guest Conversion:**
 | Feature | Description |
