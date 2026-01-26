@@ -45,13 +45,9 @@
 
 **Context**: Follow-up from member-booking feature (STORY-0021). These are enhancements identified during implementation.
 
-#### 0.0.1 Seed System Reservation Types
-**Problem**: The "GAME" reservation type is hard-coded but not guaranteed to exist in the database.
+#### 0.0.1 Simple Date Picker for Member Booking
 
-
-#### 0.0.2 Simple Date Picker for Member Booking
-
-#### 0.0.3 Member Reservation Limits
+#### 0.0.2 Member Reservation Limits
 
 ---
 
