@@ -15,6 +15,7 @@ type Querier interface {
 	AddOpenPlayParticipant(ctx context.Context, arg AddOpenPlayParticipantParams) (ReservationParticipant, error)
 	AddParticipant(ctx context.Context, arg AddParticipantParams) error
 	AddReservationCourt(ctx context.Context, arg AddReservationCourtParams) error
+	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (LeagueTeamMember, error)
 	AdvanceWaitlistOffer(ctx context.Context, arg AdvanceWaitlistOfferParams) (WaitlistOffer, error)
 	CountActiveMemberReservations(ctx context.Context, arg CountActiveMemberReservationsParams) (int64, error)
 	CountCheckinsByFacilityInRange(ctx context.Context, arg CountCheckinsByFacilityInRangeParams) (int64, error)
@@ -32,6 +33,10 @@ type Querier interface {
 	CreateCourt(ctx context.Context, arg CreateCourtParams) (Court, error)
 	// internal/db/queries/facility_visits.sql
 	CreateFacilityVisit(ctx context.Context, arg CreateFacilityVisitParams) (FacilityVisit, error)
+	// internal/db/queries/leagues.sql
+	CreateLeague(ctx context.Context, arg CreateLeagueParams) (League, error)
+	CreateLeagueMatch(ctx context.Context, arg CreateLeagueMatchParams) (LeagueMatch, error)
+	CreateLeagueTeam(ctx context.Context, arg CreateLeagueTeamParams) (LeagueTeam, error)
 	CreateLessonCancelledNotification(ctx context.Context, arg CreateLessonCancelledNotificationParams) (StaffNotification, error)
 	CreateMember(ctx context.Context, arg CreateMemberParams) (int64, error)
 	CreateOpenPlayAuditLog(ctx context.Context, arg CreateOpenPlayAuditLogParams) (OpenPlayAuditLog, error)
@@ -86,6 +91,8 @@ type Querier interface {
 	GetFacilityHours(ctx context.Context, facilityID int64) ([]OperatingHour, error)
 	GetFutureProSessionsByStaffID(ctx context.Context, arg GetFutureProSessionsByStaffIDParams) ([]GetFutureProSessionsByStaffIDRow, error)
 	GetLatestCancellationByReservationID(ctx context.Context, reservationID int64) (ReservationCancellation, error)
+	GetLeague(ctx context.Context, id int64) (League, error)
+	GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, error)
 	GetMemberBilling(ctx context.Context, userID int64) (GetMemberBillingRow, error)
 	GetMemberByEmail(ctx context.Context, email sql.NullString) (User, error)
 	GetMemberByEmailIncludeDeleted(ctx context.Context, email sql.NullString) (User, error)
@@ -138,6 +145,9 @@ type Querier interface {
 	// internal/db/queries/facilities.sql
 	ListFacilities(ctx context.Context) ([]Facility, error)
 	ListFacilityThemes(ctx context.Context, facilityID sql.NullInt64) ([]Theme, error)
+	ListLeagueMatches(ctx context.Context, leagueID int64) ([]LeagueMatch, error)
+	ListLeagueTeams(ctx context.Context, leagueID int64) ([]LeagueTeam, error)
+	ListLeaguesByFacility(ctx context.Context, facilityID int64) ([]League, error)
 	ListMatchingPendingWaitlistsForCancelledSlot(ctx context.Context, arg ListMatchingPendingWaitlistsForCancelledSlotParams) ([]Waitlist, error)
 	// Empty facility_ids intentionally yields zero rows (caller should prefilter).
 	ListMemberUpcomingOpenPlaySessions(ctx context.Context, arg ListMemberUpcomingOpenPlaySessionsParams) ([]ListMemberUpcomingOpenPlaySessionsRow, error)
@@ -170,6 +180,7 @@ type Querier interface {
 	ListStaffNotificationsForFacilityOrCorporate(ctx context.Context, arg ListStaffNotificationsForFacilityOrCorporateParams) ([]StaffNotification, error)
 	ListStaffNotificationsForStaff(ctx context.Context, arg ListStaffNotificationsForStaffParams) ([]StaffNotification, error)
 	ListSystemThemes(ctx context.Context) ([]Theme, error)
+	ListTeamMembers(ctx context.Context, leagueTeamID int64) ([]LeagueTeamMember, error)
 	ListTodayVisitsByFacility(ctx context.Context, arg ListTodayVisitsByFacilityParams) ([]FacilityVisit, error)
 	ListVisitPackTypes(ctx context.Context, facilityID int64) ([]VisitPackType, error)
 	ListWaitlistsByFacility(ctx context.Context, facilityID int64) ([]Waitlist, error)
@@ -189,6 +200,7 @@ type Querier interface {
 	UpdateCourtStatus(ctx context.Context, arg UpdateCourtStatusParams) (Court, error)
 	UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFacilityBookingConfigParams) (Facility, error)
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)
+	UpdateMatchResult(ctx context.Context, arg UpdateMatchResultParams) (LeagueMatch, error)
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) error
 	UpdateMemberEmail(ctx context.Context, arg UpdateMemberEmailParams) (User, error)
 	UpdateOpenPlayRule(ctx context.Context, arg UpdateOpenPlayRuleParams) (OpenPlayRule, error)

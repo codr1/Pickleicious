@@ -68,6 +68,54 @@ type FacilityVisit struct {
 	UpdatedAt            time.Time      `json:"updatedAt"`
 }
 
+type League struct {
+	ID             int64        `json:"id"`
+	FacilityID     int64        `json:"facilityId"`
+	Name           string       `json:"name"`
+	Format         string       `json:"format"`
+	StartDate      time.Time    `json:"startDate"`
+	EndDate        time.Time    `json:"endDate"`
+	DivisionConfig string       `json:"divisionConfig"`
+	MinTeamSize    int64        `json:"minTeamSize"`
+	MaxTeamSize    int64        `json:"maxTeamSize"`
+	RosterLockDate sql.NullTime `json:"rosterLockDate"`
+	Status         string       `json:"status"`
+	CreatedAt      time.Time    `json:"createdAt"`
+	UpdatedAt      time.Time    `json:"updatedAt"`
+}
+
+type LeagueMatch struct {
+	ID            int64         `json:"id"`
+	LeagueID      int64         `json:"leagueId"`
+	HomeTeamID    int64         `json:"homeTeamId"`
+	AwayTeamID    int64         `json:"awayTeamId"`
+	ReservationID sql.NullInt64 `json:"reservationId"`
+	ScheduledTime time.Time     `json:"scheduledTime"`
+	HomeScore     sql.NullInt64 `json:"homeScore"`
+	AwayScore     sql.NullInt64 `json:"awayScore"`
+	Status        string        `json:"status"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
+}
+
+type LeagueTeam struct {
+	ID            int64     `json:"id"`
+	LeagueID      int64     `json:"leagueId"`
+	Name          string    `json:"name"`
+	CaptainUserID int64     `json:"captainUserId"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+type LeagueTeamMember struct {
+	ID           int64     `json:"id"`
+	LeagueTeamID int64     `json:"leagueTeamId"`
+	UserID       int64     `json:"userId"`
+	IsFreeAgent  bool      `json:"isFreeAgent"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
 type OpenPlayAuditLog struct {
 	ID          int64          `json:"id"`
 	SessionID   int64          `json:"sessionId"`
