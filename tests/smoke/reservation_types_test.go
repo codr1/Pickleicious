@@ -64,3 +64,55 @@ func TestSystemReservationTypesSeeded(t *testing.T) {
 		}
 	}
 }
+
+func TestMigrationIdempotency(t *testing.T) {
+	db := testutil.NewTestDB(t)
+
+	const seedInsert = `
+INSERT INTO reservation_types (name, description, color)
+VALUES
+    ('OPEN_PLAY', 'Open play session', '#2E7D32'),
+    ('GAME', 'Standard game reservation', '#1976D2'),
+    ('PRO_SESSION', 'Pro-led session', '#6A1B9A'),
+    ('EVENT', 'Special event booking', '#F57C00'),
+    ('MAINTENANCE', 'Maintenance block', '#546E7A'),
+    ('LEAGUE', 'League play', '#C62828'),
+    ('LESSON', 'Lesson session', '#00897B'),
+    ('TOURNAMENT', 'Tournament play', '#5E35B1'),
+    ('CLINIC', 'Clinic session', '#8D6E63')
+ON CONFLICT(name) DO UPDATE
+SET description = excluded.description,
+    color = excluded.color;
+`
+
+	_, err := db.Exec("UPDATE reservation_types SET description = ?, color = ? WHERE name = ?", "Stale description", "#000000", "GAME")
+	if err != nil {
+		t.Fatalf("corrupt reservation_types row: %v", err)
+	}
+
+	// Re-run the migration insert to verify the upsert restores canonical values.
+	_, err = db.Exec(seedInsert)
+	if err != nil {
+		t.Fatalf("reseed reservation_types: %v", err)
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM reservation_types").Scan(&count); err != nil {
+		t.Fatalf("count reservation_types: %v", err)
+	}
+	if count != 9 {
+		t.Fatalf("reservation_types count mismatch: got %d want %d", count, 9)
+	}
+
+	var description string
+	var color string
+	if err := db.QueryRow("SELECT description, color FROM reservation_types WHERE name = ?", "GAME").Scan(&description, &color); err != nil {
+		t.Fatalf("fetch reservation_types row: %v", err)
+	}
+	if description != "Standard game reservation" {
+		t.Fatalf("reservation_types GAME description mismatch: got %q want %q", description, "Standard game reservation")
+	}
+	if color != "#1976D2" {
+		t.Fatalf("reservation_types GAME color mismatch: got %q want %q", color, "#1976D2")
+	}
+}
