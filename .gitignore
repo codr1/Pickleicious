@@ -47,7 +47,6 @@ logs/
 # Generated code
 *_templ.go
 *_templ.txt
-/internal/db/generated/
 /web/static/css/main.css
 
 # Air hot reload
@@ -72,5 +71,4 @@ coverage.out
 coverage.html
 
 # Keep certain directories with .gitkeep
-!/internal/db/generated/.gitkeep
 !/build/.gitkeep
