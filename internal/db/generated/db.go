@@ -162,6 +162,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteLeagueStmt, err = db.PrepareContext(ctx, deleteLeague); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteLeague: %w", err)
 	}
+	if q.deleteLeagueMatchesByLeagueIDStmt, err = db.PrepareContext(ctx, deleteLeagueMatchesByLeagueID); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteLeagueMatchesByLeagueID: %w", err)
+	}
 	if q.deleteMemberStmt, err = db.PrepareContext(ctx, deleteMember); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMember: %w", err)
 	}
@@ -398,6 +401,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listLeagueMatchesStmt, err = db.PrepareContext(ctx, listLeagueMatches); err != nil {
 		return nil, fmt.Errorf("error preparing query ListLeagueMatches: %w", err)
+	}
+	if q.listLeagueMatchesWithReservationsStmt, err = db.PrepareContext(ctx, listLeagueMatchesWithReservations); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLeagueMatchesWithReservations: %w", err)
 	}
 	if q.listLeagueTeamsStmt, err = db.PrepareContext(ctx, listLeagueTeams); err != nil {
 		return nil, fmt.Errorf("error preparing query ListLeagueTeams: %w", err)
@@ -847,6 +853,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteLeagueStmt: %w", cerr)
 		}
 	}
+	if q.deleteLeagueMatchesByLeagueIDStmt != nil {
+		if cerr := q.deleteLeagueMatchesByLeagueIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteLeagueMatchesByLeagueIDStmt: %w", cerr)
+		}
+	}
 	if q.deleteMemberStmt != nil {
 		if cerr := q.deleteMemberStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteMemberStmt: %w", cerr)
@@ -1240,6 +1251,11 @@ func (q *Queries) Close() error {
 	if q.listLeagueMatchesStmt != nil {
 		if cerr := q.listLeagueMatchesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listLeagueMatchesStmt: %w", cerr)
+		}
+	}
+	if q.listLeagueMatchesWithReservationsStmt != nil {
+		if cerr := q.listLeagueMatchesWithReservationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLeagueMatchesWithReservationsStmt: %w", cerr)
 		}
 	}
 	if q.listLeagueTeamsStmt != nil {
@@ -1682,6 +1698,7 @@ type Queries struct {
 	decrementVisitPackVisitStmt                      *sql.Stmt
 	deleteCancellationPolicyTierStmt                 *sql.Stmt
 	deleteLeagueStmt                                 *sql.Stmt
+	deleteLeagueMatchesByLeagueIDStmt                *sql.Stmt
 	deleteMemberStmt                                 *sql.Stmt
 	deleteOpenPlayRuleStmt                           *sql.Stmt
 	deleteOperatingHoursStmt                         *sql.Stmt
@@ -1761,6 +1778,7 @@ type Queries struct {
 	listFacilityThemesStmt                           *sql.Stmt
 	listFreeAgentsByLeagueStmt                       *sql.Stmt
 	listLeagueMatchesStmt                            *sql.Stmt
+	listLeagueMatchesWithReservationsStmt            *sql.Stmt
 	listLeagueTeamsStmt                              *sql.Stmt
 	listLeaguesByFacilityStmt                        *sql.Stmt
 	listMatchingPendingWaitlistsForCancelledSlotStmt *sql.Stmt
@@ -1884,6 +1902,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		decrementVisitPackVisitStmt:                      q.decrementVisitPackVisitStmt,
 		deleteCancellationPolicyTierStmt:                 q.deleteCancellationPolicyTierStmt,
 		deleteLeagueStmt:                                 q.deleteLeagueStmt,
+		deleteLeagueMatchesByLeagueIDStmt:                q.deleteLeagueMatchesByLeagueIDStmt,
 		deleteMemberStmt:                                 q.deleteMemberStmt,
 		deleteOpenPlayRuleStmt:                           q.deleteOpenPlayRuleStmt,
 		deleteOperatingHoursStmt:                         q.deleteOperatingHoursStmt,
@@ -1963,6 +1982,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listFacilityThemesStmt:                           q.listFacilityThemesStmt,
 		listFreeAgentsByLeagueStmt:                       q.listFreeAgentsByLeagueStmt,
 		listLeagueMatchesStmt:                            q.listLeagueMatchesStmt,
+		listLeagueMatchesWithReservationsStmt:            q.listLeagueMatchesWithReservationsStmt,
 		listLeagueTeamsStmt:                              q.listLeagueTeamsStmt,
 		listLeaguesByFacilityStmt:                        q.listLeaguesByFacilityStmt,
 		listMatchingPendingWaitlistsForCancelledSlotStmt: q.listMatchingPendingWaitlistsForCancelledSlotStmt,

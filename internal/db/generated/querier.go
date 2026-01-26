@@ -61,6 +61,7 @@ type Querier interface {
 	DecrementVisitPackVisit(ctx context.Context, id int64) (VisitPack, error)
 	DeleteCancellationPolicyTier(ctx context.Context, arg DeleteCancellationPolicyTierParams) (int64, error)
 	DeleteLeague(ctx context.Context, id int64) (int64, error)
+	DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error)
 	DeleteMember(ctx context.Context, id int64) error
 	DeleteOpenPlayRule(ctx context.Context, arg DeleteOpenPlayRuleParams) (int64, error)
 	DeleteOperatingHours(ctx context.Context, arg DeleteOperatingHoursParams) (int64, error)
@@ -149,6 +150,7 @@ type Querier interface {
 	ListFacilityThemes(ctx context.Context, facilityID sql.NullInt64) ([]Theme, error)
 	ListFreeAgentsByLeague(ctx context.Context, leagueID int64) ([]ListFreeAgentsByLeagueRow, error)
 	ListLeagueMatches(ctx context.Context, leagueID int64) ([]LeagueMatch, error)
+	ListLeagueMatchesWithReservations(ctx context.Context, leagueID int64) ([]ListLeagueMatchesWithReservationsRow, error)
 	ListLeagueTeams(ctx context.Context, leagueID int64) ([]LeagueTeam, error)
 	ListLeaguesByFacility(ctx context.Context, facilityID int64) ([]League, error)
 	ListMatchingPendingWaitlistsForCancelledSlot(ctx context.Context, arg ListMatchingPendingWaitlistsForCancelledSlotParams) ([]Waitlist, error)

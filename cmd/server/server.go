@@ -412,6 +412,12 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/leagues/{id}/free-agents/{user_id}/assign", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: leagues.HandleAssignFreeAgent,
 	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/schedule/generate", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleGenerateSchedule,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/schedule/regenerate", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleRegenerateSchedule,
+	}))
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)

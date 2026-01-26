@@ -270,6 +270,19 @@ func (q *Queries) DeleteLeague(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected()
 }
 
+const deleteLeagueMatchesByLeagueID = `-- name: DeleteLeagueMatchesByLeagueID :execrows
+DELETE FROM league_matches
+WHERE league_id = ?1
+`
+
+func (q *Queries) DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error) {
+	result, err := q.exec(ctx, q.deleteLeagueMatchesByLeagueIDStmt, deleteLeagueMatchesByLeagueID, leagueID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getLeague = `-- name: GetLeague :one
 SELECT id, facility_id, name, format, start_date, end_date, division_config,
     min_team_size, max_team_size, roster_lock_date, status, created_at, updated_at
@@ -405,6 +418,99 @@ func (q *Queries) ListLeagueMatches(ctx context.Context, leagueID int64) ([]Leag
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLeagueMatchesWithReservations = `-- name: ListLeagueMatchesWithReservations :many
+SELECT lm.id,
+    lm.league_id,
+    lm.home_team_id,
+    lm.away_team_id,
+    lm.reservation_id,
+    lm.scheduled_time,
+    lm.home_score,
+    lm.away_score,
+    lm.status,
+    lm.created_at,
+    lm.updated_at,
+    r.start_time,
+    r.end_time,
+    CASE
+        WHEN COUNT(rc.court_id) = 0 THEN NULL
+        ELSE MIN(rc.court_id)
+    END AS court_id
+FROM league_matches lm
+LEFT JOIN reservations r ON r.id = lm.reservation_id
+LEFT JOIN reservation_courts rc ON rc.reservation_id = r.id
+WHERE lm.league_id = ?1
+GROUP BY lm.id,
+    lm.league_id,
+    lm.home_team_id,
+    lm.away_team_id,
+    lm.reservation_id,
+    lm.scheduled_time,
+    lm.home_score,
+    lm.away_score,
+    lm.status,
+    lm.created_at,
+    lm.updated_at,
+    r.start_time,
+    r.end_time
+ORDER BY lm.scheduled_time
+`
+
+type ListLeagueMatchesWithReservationsRow struct {
+	ID            int64         `json:"id"`
+	LeagueID      int64         `json:"leagueId"`
+	HomeTeamID    int64         `json:"homeTeamId"`
+	AwayTeamID    int64         `json:"awayTeamId"`
+	ReservationID sql.NullInt64 `json:"reservationId"`
+	ScheduledTime time.Time     `json:"scheduledTime"`
+	HomeScore     sql.NullInt64 `json:"homeScore"`
+	AwayScore     sql.NullInt64 `json:"awayScore"`
+	Status        string        `json:"status"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
+	StartTime     sql.NullTime  `json:"startTime"`
+	EndTime       sql.NullTime  `json:"endTime"`
+	CourtID       interface{}   `json:"courtId"`
+}
+
+func (q *Queries) ListLeagueMatchesWithReservations(ctx context.Context, leagueID int64) ([]ListLeagueMatchesWithReservationsRow, error) {
+	rows, err := q.query(ctx, q.listLeagueMatchesWithReservationsStmt, listLeagueMatchesWithReservations, leagueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLeagueMatchesWithReservationsRow
+	for rows.Next() {
+		var i ListLeagueMatchesWithReservationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.LeagueID,
+			&i.HomeTeamID,
+			&i.AwayTeamID,
+			&i.ReservationID,
+			&i.ScheduledTime,
+			&i.HomeScore,
+			&i.AwayScore,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.StartTime,
+			&i.EndTime,
+			&i.CourtID,
 		); err != nil {
 			return nil, err
 		}

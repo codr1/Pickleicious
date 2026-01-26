@@ -38,6 +38,7 @@ const (
 
 var (
 	queries *dbgen.Queries
+	store   *appdb.DB
 )
 
 type leagueRequest struct {
@@ -92,6 +93,7 @@ func InitHandlers(database *appdb.DB) {
 		return
 	}
 	queries = database.Queries
+	store = database
 }
 
 // GET /leagues
@@ -1428,6 +1430,10 @@ func rosterLocked(league dbgen.League) bool {
 
 func loadQueries() *dbgen.Queries {
 	return queries
+}
+
+func loadDB() *appdb.DB {
+	return store
 }
 
 func leaguesPageComponent(leagues []dbgen.League, facilityID int64) templ.Component {

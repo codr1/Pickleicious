@@ -143,6 +143,47 @@ FROM league_matches
 WHERE league_id = @league_id
 ORDER BY scheduled_time;
 
+-- name: ListLeagueMatchesWithReservations :many
+SELECT lm.id,
+    lm.league_id,
+    lm.home_team_id,
+    lm.away_team_id,
+    lm.reservation_id,
+    lm.scheduled_time,
+    lm.home_score,
+    lm.away_score,
+    lm.status,
+    lm.created_at,
+    lm.updated_at,
+    r.start_time,
+    r.end_time,
+    CASE
+        WHEN COUNT(rc.court_id) = 0 THEN NULL
+        ELSE MIN(rc.court_id)
+    END AS court_id
+FROM league_matches lm
+LEFT JOIN reservations r ON r.id = lm.reservation_id
+LEFT JOIN reservation_courts rc ON rc.reservation_id = r.id
+WHERE lm.league_id = @league_id
+GROUP BY lm.id,
+    lm.league_id,
+    lm.home_team_id,
+    lm.away_team_id,
+    lm.reservation_id,
+    lm.scheduled_time,
+    lm.home_score,
+    lm.away_score,
+    lm.status,
+    lm.created_at,
+    lm.updated_at,
+    r.start_time,
+    r.end_time
+ORDER BY lm.scheduled_time;
+
+-- name: DeleteLeagueMatchesByLeagueID :execrows
+DELETE FROM league_matches
+WHERE league_id = @league_id;
+
 -- name: UpdateLeagueTeam :one
 UPDATE league_teams
 SET name = @name,
