@@ -816,6 +816,16 @@ A self-service marketplace where members discover and book coaches directly, red
 
 ### 9.8 Reporting & Analytics Dashboard
 
+<!-- BEGIN WIP: STORY-0041 -->
+**Utilization Analytics:**
+| Metric | Description |
+|--------|-------------|
+| Utilization Rate | Booked hours / Available hours percentage |
+| Scheduled Reservations | Count of reservations in time range |
+| Bookings by Type | Reservation counts grouped by type |
+| Check-in Count | Number of check-ins per facility |
+| Cancellation Metrics | Cancellation counts and patterns |
+<!-- END WIP -->
 
 **Financial Analytics:**
 | Metric | Description |
