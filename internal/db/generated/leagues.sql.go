@@ -311,6 +311,96 @@ func (q *Queries) GetLeague(ctx context.Context, id int64) (League, error) {
 	return i, err
 }
 
+const getLeagueMatch = `-- name: GetLeagueMatch :one
+SELECT id, league_id, home_team_id, away_team_id, reservation_id,
+    scheduled_time, home_score, away_score, status, created_at, updated_at
+FROM league_matches
+WHERE id = ?1
+  AND league_id = ?2
+`
+
+type GetLeagueMatchParams struct {
+	ID       int64 `json:"id"`
+	LeagueID int64 `json:"leagueId"`
+}
+
+func (q *Queries) GetLeagueMatch(ctx context.Context, arg GetLeagueMatchParams) (LeagueMatch, error) {
+	row := q.queryRow(ctx, q.getLeagueMatchStmt, getLeagueMatch, arg.ID, arg.LeagueID)
+	var i LeagueMatch
+	err := row.Scan(
+		&i.ID,
+		&i.LeagueID,
+		&i.HomeTeamID,
+		&i.AwayTeamID,
+		&i.ReservationID,
+		&i.ScheduledTime,
+		&i.HomeScore,
+		&i.AwayScore,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getLeagueStandingsData = `-- name: GetLeagueStandingsData :many
+SELECT lt.id AS team_id,
+    lt.name AS team_name,
+    lm.id AS match_id,
+    lm.home_team_id,
+    lm.away_team_id,
+    lm.home_score,
+    lm.away_score
+FROM league_teams lt
+LEFT JOIN league_matches lm
+    ON lm.league_id = lt.league_id
+    AND lm.status = 'completed'
+    AND (lm.home_team_id = lt.id OR lm.away_team_id = lt.id)
+WHERE lt.league_id = ?1
+ORDER BY lt.name, lm.scheduled_time
+`
+
+type GetLeagueStandingsDataRow struct {
+	TeamID     int64         `json:"teamId"`
+	TeamName   string        `json:"teamName"`
+	MatchID    sql.NullInt64 `json:"matchId"`
+	HomeTeamID sql.NullInt64 `json:"homeTeamId"`
+	AwayTeamID sql.NullInt64 `json:"awayTeamId"`
+	HomeScore  sql.NullInt64 `json:"homeScore"`
+	AwayScore  sql.NullInt64 `json:"awayScore"`
+}
+
+func (q *Queries) GetLeagueStandingsData(ctx context.Context, leagueID int64) ([]GetLeagueStandingsDataRow, error) {
+	rows, err := q.query(ctx, q.getLeagueStandingsDataStmt, getLeagueStandingsData, leagueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetLeagueStandingsDataRow
+	for rows.Next() {
+		var i GetLeagueStandingsDataRow
+		if err := rows.Scan(
+			&i.TeamID,
+			&i.TeamName,
+			&i.MatchID,
+			&i.HomeTeamID,
+			&i.AwayTeamID,
+			&i.HomeScore,
+			&i.AwayScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLeagueTeam = `-- name: GetLeagueTeam :one
 SELECT id, league_id, name, captain_user_id, status, created_at, updated_at
 FROM league_teams
@@ -769,6 +859,7 @@ SET home_score = ?1,
     status = ?3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?4
+  AND league_id = ?5
 RETURNING id, league_id, home_team_id, away_team_id, reservation_id,
     scheduled_time, home_score, away_score, status, created_at, updated_at
 `
@@ -778,6 +869,7 @@ type UpdateMatchResultParams struct {
 	AwayScore sql.NullInt64 `json:"awayScore"`
 	Status    string        `json:"status"`
 	ID        int64         `json:"id"`
+	LeagueID  int64         `json:"leagueId"`
 }
 
 func (q *Queries) UpdateMatchResult(ctx context.Context, arg UpdateMatchResultParams) (LeagueMatch, error) {
@@ -786,6 +878,7 @@ func (q *Queries) UpdateMatchResult(ctx context.Context, arg UpdateMatchResultPa
 		arg.AwayScore,
 		arg.Status,
 		arg.ID,
+		arg.LeagueID,
 	)
 	var i LeagueMatch
 	err := row.Scan(

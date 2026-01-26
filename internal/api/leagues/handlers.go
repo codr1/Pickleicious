@@ -2,8 +2,10 @@
 package leagues
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"html"
@@ -21,6 +23,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/htmx"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	leaguestandings "github.com/codr1/Pickleicious/internal/leagues"
 	"github.com/codr1/Pickleicious/internal/models"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
 )
@@ -31,6 +34,7 @@ const (
 	leagueIDPathKey     = "id"
 	teamIDPathKey       = "team_id"
 	userIDPathKey       = "user_id"
+	matchIDPathKey      = "match_id"
 	leagueDateLayout    = "2006-01-02"
 	defaultLeagueStatus = "draft"
 	defaultTeamStatus   = "active"
@@ -85,6 +89,11 @@ type teamMemberRequest struct {
 
 type assignFreeAgentRequest struct {
 	TeamID int64 `json:"teamId"`
+}
+
+type matchResultRequest struct {
+	HomeScore int64 `json:"homeScore"`
+	AwayScore int64 `json:"awayScore"`
 }
 
 // InitHandlers must be called during server startup before handling requests.
@@ -1112,6 +1121,235 @@ func HandleAssignFreeAgent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PUT /api/v1/leagues/{id}/matches/{match_id}/result
+func HandleRecordMatchResult(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	leagueID, err := leagueIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid league ID", http.StatusBadRequest)
+		return
+	}
+
+	matchID, err := matchIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid match ID", http.StatusBadRequest)
+		return
+	}
+
+	req, err := decodeMatchResultRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := validateMatchResult(req.HomeScore, req.AwayScore); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), leagueQueryTimeout)
+	defer cancel()
+
+	league, err := q.GetLeague(ctx, leagueID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "League not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to fetch league")
+		http.Error(w, "Failed to fetch league", http.StatusInternalServerError)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, league.FacilityID) {
+		return
+	}
+
+	match, err := q.GetLeagueMatch(ctx, dbgen.GetLeagueMatchParams{ID: matchID, LeagueID: leagueID})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Match not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("match_id", matchID).Int64("league_id", leagueID).Msg("Failed to fetch match")
+		http.Error(w, "Failed to fetch match", http.StatusInternalServerError)
+		return
+	}
+
+	status := strings.ToLower(strings.TrimSpace(match.Status))
+	if status != "scheduled" && status != "in_progress" {
+		http.Error(w, "Match result can only be recorded for scheduled or in-progress matches", http.StatusConflict)
+		return
+	}
+
+	updated, err := q.UpdateMatchResult(ctx, dbgen.UpdateMatchResultParams{
+		HomeScore: sql.NullInt64{Int64: req.HomeScore, Valid: true},
+		AwayScore: sql.NullInt64{Int64: req.AwayScore, Valid: true},
+		Status:    "completed",
+		ID:        matchID,
+		LeagueID:  leagueID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Match not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("match_id", matchID).Int64("league_id", leagueID).Msg("Failed to update match result")
+		http.Error(w, "Failed to update match result", http.StatusInternalServerError)
+		return
+	}
+
+	if err := apiutil.WriteJSON(w, http.StatusOK, updated); err != nil {
+		logger.Error().Err(err).Int64("match_id", matchID).Msg("Failed to write match result response")
+	}
+}
+
+// GET /api/v1/leagues/{id}/standings
+func HandleLeagueStandings(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	leagueID, err := leagueIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid league ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), leagueQueryTimeout)
+	defer cancel()
+
+	league, err := q.GetLeague(ctx, leagueID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "League not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to fetch league")
+		http.Error(w, "Failed to fetch league", http.StatusInternalServerError)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, league.FacilityID) {
+		return
+	}
+
+	standings, err := leaguestandings.CalculateStandings(ctx, q, leagueID)
+	if err != nil {
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to calculate standings")
+		http.Error(w, "Failed to load standings", http.StatusInternalServerError)
+		return
+	}
+
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"standings": standings}); err != nil {
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to write standings response")
+	}
+}
+
+// GET /api/v1/leagues/{id}/standings/export
+func HandleExportStandingsCSV(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	leagueID, err := leagueIDFromRequest(r)
+	if err != nil {
+		http.Error(w, "Invalid league ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), leagueQueryTimeout)
+	defer cancel()
+
+	league, err := q.GetLeague(ctx, leagueID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "League not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to fetch league")
+		http.Error(w, "Failed to fetch league", http.StatusInternalServerError)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, league.FacilityID) {
+		return
+	}
+
+	standings, err := leaguestandings.CalculateStandings(ctx, q, leagueID)
+	if err != nil {
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to calculate standings")
+		http.Error(w, "Failed to load standings", http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	if err := writer.Write([]string{
+		"Rank",
+		"Team",
+		"Matches Played",
+		"Wins",
+		"Losses",
+		"Points For",
+		"Points Against",
+		"Point Differential",
+	}); err != nil {
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to write standings CSV header")
+		http.Error(w, "Failed to export standings", http.StatusInternalServerError)
+		return
+	}
+
+	for idx, entry := range standings {
+		record := []string{
+			strconv.Itoa(idx + 1),
+			entry.TeamName,
+			strconv.Itoa(entry.MatchesPlayed),
+			strconv.Itoa(entry.Wins),
+			strconv.Itoa(entry.Losses),
+			strconv.Itoa(entry.PointsFor),
+			strconv.Itoa(entry.PointsAgainst),
+			strconv.Itoa(entry.PointDifferential),
+		}
+		if err := writer.Write(record); err != nil {
+			logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to write standings CSV row")
+			http.Error(w, "Failed to export standings", http.StatusInternalServerError)
+			return
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to finalize standings CSV")
+		http.Error(w, "Failed to export standings", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"league_%d_standings.csv\"", leagueID))
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to write standings CSV response")
+	}
+}
+
 func decodeLeagueRequest(r *http.Request) (leagueRequest, error) {
 	if apiutil.IsJSONRequest(r) {
 		var req leagueRequest
@@ -1212,6 +1450,65 @@ func decodeAssignFreeAgentRequest(r *http.Request) (assignFreeAgentRequest, erro
 	return assignFreeAgentRequest{
 		TeamID: teamID,
 	}, nil
+}
+
+func decodeMatchResultRequest(r *http.Request) (matchResultRequest, error) {
+	if apiutil.IsJSONRequest(r) {
+		var req matchResultRequest
+		return req, apiutil.DecodeJSON(r, &req)
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return matchResultRequest{}, err
+	}
+
+	homeScore, err := parseScoreField(apiutil.FirstNonEmpty(r.FormValue("home_score"), r.FormValue("homeScore")), "home_score")
+	if err != nil {
+		return matchResultRequest{}, err
+	}
+
+	awayScore, err := parseScoreField(apiutil.FirstNonEmpty(r.FormValue("away_score"), r.FormValue("awayScore")), "away_score")
+	if err != nil {
+		return matchResultRequest{}, err
+	}
+
+	return matchResultRequest{
+		HomeScore: homeScore,
+		AwayScore: awayScore,
+	}, nil
+}
+
+func parseScoreField(raw string, field string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", field)
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", field)
+	}
+	return value, nil
+}
+
+func validateMatchResult(homeScore, awayScore int64) error {
+	if homeScore == awayScore {
+		return fmt.Errorf("matches cannot end in a tie")
+	}
+	diff := homeScore - awayScore
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff < 2 {
+		return fmt.Errorf("winner must lead by at least two points")
+	}
+	winnerScore := homeScore
+	if awayScore > homeScore {
+		winnerScore = awayScore
+	}
+	if winnerScore < 11 {
+		return fmt.Errorf("winning score must be at least 11 points")
+	}
+	return nil
 }
 
 func parseLeagueRequest(req leagueRequest, defaultStatus string) (leagueInput, error) {
@@ -1417,6 +1714,18 @@ func userIDFromRequest(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("invalid user ID")
+	}
+	return id, nil
+}
+
+func matchIDFromRequest(r *http.Request) (int64, error) {
+	raw := strings.TrimSpace(r.PathValue(matchIDPathKey))
+	if raw == "" {
+		return 0, fmt.Errorf("invalid match ID")
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid match ID")
 	}
 	return id, nil
 }

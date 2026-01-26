@@ -133,8 +133,32 @@ SET home_score = @home_score,
     status = @status,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id
+  AND league_id = @league_id
 RETURNING id, league_id, home_team_id, away_team_id, reservation_id,
     scheduled_time, home_score, away_score, status, created_at, updated_at;
+
+-- name: GetLeagueMatch :one
+SELECT id, league_id, home_team_id, away_team_id, reservation_id,
+    scheduled_time, home_score, away_score, status, created_at, updated_at
+FROM league_matches
+WHERE id = @id
+  AND league_id = @league_id;
+
+-- name: GetLeagueStandingsData :many
+SELECT lt.id AS team_id,
+    lt.name AS team_name,
+    lm.id AS match_id,
+    lm.home_team_id,
+    lm.away_team_id,
+    lm.home_score,
+    lm.away_score
+FROM league_teams lt
+LEFT JOIN league_matches lm
+    ON lm.league_id = lt.league_id
+    AND lm.status = 'completed'
+    AND (lm.home_team_id = lt.id OR lm.away_team_id = lt.id)
+WHERE lt.league_id = @league_id
+ORDER BY lt.name, lm.scheduled_time;
 
 -- name: ListLeagueMatches :many
 SELECT id, league_id, home_team_id, away_team_id, reservation_id,

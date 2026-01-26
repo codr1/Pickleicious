@@ -418,6 +418,15 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/leagues/{id}/schedule/regenerate", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: leagues.HandleRegenerateSchedule,
 	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/matches/{match_id}/result", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: leagues.HandleRecordMatchResult,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/standings", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleLeagueStandings,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/standings/export", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleExportStandingsCSV,
+	}))
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)

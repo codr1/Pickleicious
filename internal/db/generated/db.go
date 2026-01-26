@@ -249,6 +249,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getLeagueStmt, err = db.PrepareContext(ctx, getLeague); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLeague: %w", err)
 	}
+	if q.getLeagueMatchStmt, err = db.PrepareContext(ctx, getLeagueMatch); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueMatch: %w", err)
+	}
+	if q.getLeagueStandingsDataStmt, err = db.PrepareContext(ctx, getLeagueStandingsData); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueStandingsData: %w", err)
+	}
 	if q.getLeagueTeamStmt, err = db.PrepareContext(ctx, getLeagueTeam); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLeagueTeam: %w", err)
 	}
@@ -998,6 +1004,16 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLeagueStmt: %w", cerr)
 		}
 	}
+	if q.getLeagueMatchStmt != nil {
+		if cerr := q.getLeagueMatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueMatchStmt: %w", cerr)
+		}
+	}
+	if q.getLeagueStandingsDataStmt != nil {
+		if cerr := q.getLeagueStandingsDataStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueStandingsDataStmt: %w", cerr)
+		}
+	}
 	if q.getLeagueTeamStmt != nil {
 		if cerr := q.getLeagueTeamStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLeagueTeamStmt: %w", cerr)
@@ -1727,6 +1743,8 @@ type Queries struct {
 	getFutureProSessionsByStaffIDStmt                *sql.Stmt
 	getLatestCancellationByReservationIDStmt         *sql.Stmt
 	getLeagueStmt                                    *sql.Stmt
+	getLeagueMatchStmt                               *sql.Stmt
+	getLeagueStandingsDataStmt                       *sql.Stmt
 	getLeagueTeamStmt                                *sql.Stmt
 	getMemberBillingStmt                             *sql.Stmt
 	getMemberByEmailStmt                             *sql.Stmt
@@ -1931,6 +1949,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getFutureProSessionsByStaffIDStmt:                q.getFutureProSessionsByStaffIDStmt,
 		getLatestCancellationByReservationIDStmt:         q.getLatestCancellationByReservationIDStmt,
 		getLeagueStmt:                                    q.getLeagueStmt,
+		getLeagueMatchStmt:                               q.getLeagueMatchStmt,
+		getLeagueStandingsDataStmt:                       q.getLeagueStandingsDataStmt,
 		getLeagueTeamStmt:                                q.getLeagueTeamStmt,
 		getMemberBillingStmt:                             q.getMemberBillingStmt,
 		getMemberByEmailStmt:                             q.getMemberByEmailStmt,

@@ -95,6 +95,8 @@ type Querier interface {
 	GetFutureProSessionsByStaffID(ctx context.Context, arg GetFutureProSessionsByStaffIDParams) ([]GetFutureProSessionsByStaffIDRow, error)
 	GetLatestCancellationByReservationID(ctx context.Context, reservationID int64) (ReservationCancellation, error)
 	GetLeague(ctx context.Context, id int64) (League, error)
+	GetLeagueMatch(ctx context.Context, arg GetLeagueMatchParams) (LeagueMatch, error)
+	GetLeagueStandingsData(ctx context.Context, leagueID int64) ([]GetLeagueStandingsDataRow, error)
 	GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, error)
 	GetMemberBilling(ctx context.Context, userID int64) (GetMemberBillingRow, error)
 	GetMemberByEmail(ctx context.Context, email sql.NullString) (User, error)
