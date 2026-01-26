@@ -839,18 +839,6 @@ A self-service marketplace where members discover and book coaches directly, red
 
 ### 9.8 Reporting & Analytics Dashboard
 
-<!-- BEGIN WIP: STORY-0037 -->
-
-**Court Utilization:**
-
-| Metric | Description | Benchmark |
-|--------|-------------|-----------|
-| Occupancy Rate | % of available slots booked | 70-80% peak |
-| Peak Hour Analysis | Busiest times of day/week | Identify patterns |
-| Court Comparison | Usage across different courts | Balance load |
-| Cancellation Rate | % of bookings cancelled | < 10% |
-
-<!-- END WIP -->
 
 **Financial Analytics:**
 | Metric | Description |

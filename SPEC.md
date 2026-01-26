@@ -944,6 +944,45 @@ Organizations can enable `cross_facility_visit_packs` to allow packs purchased a
 
 ---
 
+## Reporting Dashboard
+
+Staff can view facility metrics through `/admin/dashboard`. The dashboard displays utilization and activity metrics for a configurable date range.
+
+### Dashboard Metrics
+
+| Metric | Description |
+|--------|-------------|
+| Court Utilization Rate | Booked court hours / available court hours |
+| Scheduled Reservations | Future reservations in date range |
+| Bookings by Type | Reservation counts grouped by type (Court, Lesson, etc.) |
+| Cancellation Rate | Cancelled / total reservations, with refund percentage |
+| Check-in Count | Total check-ins in date range |
+
+### Date Range Options
+
+| Preset | Description |
+|--------|-------------|
+| today | Current day only |
+| last_7_days | Past 7 days including today |
+| last_30_days | Past 30 days including today (default) |
+| this_month | First of current month to today |
+| this_year | January 1 to today |
+| custom | Explicit start_date and end_date |
+
+Custom date ranges use `YYYY-MM-DD` format. The `date_range` parameter accepts either a preset name or a `YYYY-MM-DD to YYYY-MM-DD` format.
+
+### Facility Selection
+
+- Staff with `home_facility_id` see only their facility
+- Org-level staff (no home facility) see a facility selector
+- Org-level staff can select "All Facilities" (facility_id=0) for aggregate view
+
+### Authorization
+
+Dashboard access requires staff authentication. Staff can only view metrics for their assigned facility, or all facilities if they have no home facility assignment.
+
+---
+
 ## Theming and Branding
 
 Each facility can have its own visual identity. The member check-in screen at Downtown looks different from Westside because they chose different themes.
@@ -1462,6 +1501,13 @@ Authorization failures are logged with facility_id and user_id.
 | DELETE | `/api/v1/visit-pack-types/{id}` | Deactivate visit pack type |
 | POST | `/api/v1/visit-packs` | Sell visit pack to user (staff only) |
 | GET | `/api/v1/users/{id}/visit-packs` | List user's active visit packs |
+
+### Dashboard
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/dashboard` | Reporting dashboard page |
+| GET | `/api/v1/dashboard/metrics` | Dashboard metrics partial (HTMX) |
 
 ### Check-in
 
@@ -2244,6 +2290,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
 | Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
 | Visit Pack Management | Complete | Pack type CRUD, pack sales, redemption at booking, cross-facility support |
+| Reporting Dashboard | Complete | Utilization metrics, booking counts by type, cancellation rates, check-in counts, date range filtering |
 
 ### Partial Implementation
 
@@ -2260,7 +2307,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 |---------|-------|
 | Member Notifications | Email/SMS delivery |
 | Payment Processing | Stripe/Square integration |
-| Reporting | Usage stats, financials |
+| Financial Reporting | Revenue tracking, payment reconciliation |
 | Mobile App | Native iOS/Android |
 
 ---
