@@ -43,6 +43,40 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (L
 	return i, err
 }
 
+const assignFreeAgentToTeam = `-- name: AssignFreeAgentToTeam :one
+UPDATE league_team_members
+SET league_team_id = ?1,
+    is_free_agent = 0
+WHERE user_id = ?2
+  AND is_free_agent = 1
+  AND league_team_id IN (
+    SELECT id FROM league_teams WHERE league_teams.league_id = ?3
+  )
+  AND EXISTS (
+    SELECT 1 FROM league_teams lt WHERE lt.id = ?1 AND lt.league_id = ?3
+  )
+RETURNING id, league_team_id, user_id, is_free_agent, created_at
+`
+
+type AssignFreeAgentToTeamParams struct {
+	LeagueTeamID int64 `json:"leagueTeamId"`
+	UserID       int64 `json:"userId"`
+	LeagueID     int64 `json:"leagueId"`
+}
+
+func (q *Queries) AssignFreeAgentToTeam(ctx context.Context, arg AssignFreeAgentToTeamParams) (LeagueTeamMember, error) {
+	row := q.queryRow(ctx, q.assignFreeAgentToTeamStmt, assignFreeAgentToTeam, arg.LeagueTeamID, arg.UserID, arg.LeagueID)
+	var i LeagueTeamMember
+	err := row.Scan(
+		&i.ID,
+		&i.LeagueTeamID,
+		&i.UserID,
+		&i.IsFreeAgent,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createLeague = `-- name: CreateLeague :one
 
 INSERT INTO leagues (
@@ -285,6 +319,63 @@ func (q *Queries) GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, erro
 	return i, err
 }
 
+const listFreeAgentsByLeague = `-- name: ListFreeAgentsByLeague :many
+SELECT ltm.id,
+    ltm.league_team_id,
+    ltm.user_id,
+    u.first_name,
+    u.last_name,
+    u.photo_url,
+    ltm.created_at
+FROM league_team_members ltm
+JOIN league_teams lt ON lt.id = ltm.league_team_id
+JOIN users u ON u.id = ltm.user_id
+WHERE lt.league_id = ?1
+  AND ltm.is_free_agent = 1
+ORDER BY u.last_name, u.first_name
+`
+
+type ListFreeAgentsByLeagueRow struct {
+	ID           int64          `json:"id"`
+	LeagueTeamID int64          `json:"leagueTeamId"`
+	UserID       int64          `json:"userId"`
+	FirstName    string         `json:"firstName"`
+	LastName     string         `json:"lastName"`
+	PhotoUrl     sql.NullString `json:"photoUrl"`
+	CreatedAt    time.Time      `json:"createdAt"`
+}
+
+func (q *Queries) ListFreeAgentsByLeague(ctx context.Context, leagueID int64) ([]ListFreeAgentsByLeagueRow, error) {
+	rows, err := q.query(ctx, q.listFreeAgentsByLeagueStmt, listFreeAgentsByLeague, leagueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFreeAgentsByLeagueRow
+	for rows.Next() {
+		var i ListFreeAgentsByLeagueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.LeagueTeamID,
+			&i.UserID,
+			&i.FirstName,
+			&i.LastName,
+			&i.PhotoUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLeagueMatches = `-- name: ListLeagueMatches :many
 SELECT id, league_id, home_team_id, away_team_id, reservation_id,
     scheduled_time, home_score, away_score, status, created_at, updated_at
@@ -447,6 +538,25 @@ func (q *Queries) ListTeamMembers(ctx context.Context, leagueTeamID int64) ([]Le
 	return items, nil
 }
 
+const removeTeamMember = `-- name: RemoveTeamMember :execrows
+DELETE FROM league_team_members
+WHERE league_team_id = ?1
+  AND user_id = ?2
+`
+
+type RemoveTeamMemberParams struct {
+	LeagueTeamID int64 `json:"leagueTeamId"`
+	UserID       int64 `json:"userId"`
+}
+
+func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error) {
+	result, err := q.exec(ctx, q.removeTeamMemberStmt, removeTeamMember, arg.LeagueTeamID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateLeague = `-- name: UpdateLeague :one
 UPDATE leagues
 SET name = ?1,
@@ -509,6 +619,43 @@ func (q *Queries) UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (Lea
 	return i, err
 }
 
+const updateLeagueTeam = `-- name: UpdateLeagueTeam :one
+UPDATE league_teams
+SET name = ?1,
+    status = ?2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3
+  AND league_id = ?4
+RETURNING id, league_id, name, captain_user_id, status, created_at, updated_at
+`
+
+type UpdateLeagueTeamParams struct {
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	ID       int64  `json:"id"`
+	LeagueID int64  `json:"leagueId"`
+}
+
+func (q *Queries) UpdateLeagueTeam(ctx context.Context, arg UpdateLeagueTeamParams) (LeagueTeam, error) {
+	row := q.queryRow(ctx, q.updateLeagueTeamStmt, updateLeagueTeam,
+		arg.Name,
+		arg.Status,
+		arg.ID,
+		arg.LeagueID,
+	)
+	var i LeagueTeam
+	err := row.Scan(
+		&i.ID,
+		&i.LeagueID,
+		&i.Name,
+		&i.CaptainUserID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateMatchResult = `-- name: UpdateMatchResult :one
 UPDATE league_matches
 SET home_score = ?1,
@@ -544,6 +691,36 @@ func (q *Queries) UpdateMatchResult(ctx context.Context, arg UpdateMatchResultPa
 		&i.ScheduledTime,
 		&i.HomeScore,
 		&i.AwayScore,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTeamCaptain = `-- name: UpdateTeamCaptain :one
+UPDATE league_teams
+SET captain_user_id = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2
+  AND league_id = ?3
+RETURNING id, league_id, name, captain_user_id, status, created_at, updated_at
+`
+
+type UpdateTeamCaptainParams struct {
+	CaptainUserID int64 `json:"captainUserId"`
+	ID            int64 `json:"id"`
+	LeagueID      int64 `json:"leagueId"`
+}
+
+func (q *Queries) UpdateTeamCaptain(ctx context.Context, arg UpdateTeamCaptainParams) (LeagueTeam, error) {
+	row := q.queryRow(ctx, q.updateTeamCaptainStmt, updateTeamCaptain, arg.CaptainUserID, arg.ID, arg.LeagueID)
+	var i LeagueTeam
+	err := row.Scan(
+		&i.ID,
+		&i.LeagueID,
+		&i.Name,
+		&i.CaptainUserID,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,

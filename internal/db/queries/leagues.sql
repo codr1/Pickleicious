@@ -142,3 +142,54 @@ SELECT id, league_id, home_team_id, away_team_id, reservation_id,
 FROM league_matches
 WHERE league_id = @league_id
 ORDER BY scheduled_time;
+
+-- name: UpdateLeagueTeam :one
+UPDATE league_teams
+SET name = @name,
+    status = @status,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+  AND league_id = @league_id
+RETURNING id, league_id, name, captain_user_id, status, created_at, updated_at;
+
+-- name: UpdateTeamCaptain :one
+UPDATE league_teams
+SET captain_user_id = @captain_user_id,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+  AND league_id = @league_id
+RETURNING id, league_id, name, captain_user_id, status, created_at, updated_at;
+
+-- name: RemoveTeamMember :execrows
+DELETE FROM league_team_members
+WHERE league_team_id = @league_team_id
+  AND user_id = @user_id;
+
+-- name: ListFreeAgentsByLeague :many
+SELECT ltm.id,
+    ltm.league_team_id,
+    ltm.user_id,
+    u.first_name,
+    u.last_name,
+    u.photo_url,
+    ltm.created_at
+FROM league_team_members ltm
+JOIN league_teams lt ON lt.id = ltm.league_team_id
+JOIN users u ON u.id = ltm.user_id
+WHERE lt.league_id = @league_id
+  AND ltm.is_free_agent = 1
+ORDER BY u.last_name, u.first_name;
+
+-- name: AssignFreeAgentToTeam :one
+UPDATE league_team_members
+SET league_team_id = @league_team_id,
+    is_free_agent = 0
+WHERE user_id = @user_id
+  AND is_free_agent = 1
+  AND league_team_id IN (
+    SELECT id FROM league_teams WHERE league_teams.league_id = @league_id
+  )
+  AND EXISTS (
+    SELECT 1 FROM league_teams lt WHERE lt.id = @league_team_id AND lt.league_id = @league_id
+  )
+RETURNING id, league_team_id, user_id, is_free_agent, created_at;

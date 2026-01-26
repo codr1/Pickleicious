@@ -17,6 +17,7 @@ type Querier interface {
 	AddReservationCourt(ctx context.Context, arg AddReservationCourtParams) error
 	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (LeagueTeamMember, error)
 	AdvanceWaitlistOffer(ctx context.Context, arg AdvanceWaitlistOfferParams) (WaitlistOffer, error)
+	AssignFreeAgentToTeam(ctx context.Context, arg AssignFreeAgentToTeamParams) (LeagueTeamMember, error)
 	CountActiveMemberReservations(ctx context.Context, arg CountActiveMemberReservationsParams) (int64, error)
 	CountCheckinsByFacilityInRange(ctx context.Context, arg CountCheckinsByFacilityInRangeParams) (int64, error)
 	CountFacilityThemeName(ctx context.Context, arg CountFacilityThemeNameParams) (int64, error)
@@ -146,6 +147,7 @@ type Querier interface {
 	// internal/db/queries/facilities.sql
 	ListFacilities(ctx context.Context) ([]Facility, error)
 	ListFacilityThemes(ctx context.Context, facilityID sql.NullInt64) ([]Theme, error)
+	ListFreeAgentsByLeague(ctx context.Context, leagueID int64) ([]ListFreeAgentsByLeagueRow, error)
 	ListLeagueMatches(ctx context.Context, leagueID int64) ([]LeagueMatch, error)
 	ListLeagueTeams(ctx context.Context, leagueID int64) ([]LeagueTeam, error)
 	ListLeaguesByFacility(ctx context.Context, facilityID int64) ([]League, error)
@@ -194,6 +196,7 @@ type Querier interface {
 	RemoveOpenPlayParticipant(ctx context.Context, arg RemoveOpenPlayParticipantParams) (int64, error)
 	RemoveParticipant(ctx context.Context, arg RemoveParticipantParams) error
 	RemoveReservationCourt(ctx context.Context, arg RemoveReservationCourtParams) error
+	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	RestoreMember(ctx context.Context, id int64) error
 	SearchMembers(ctx context.Context, arg SearchMembersParams) ([]SearchMembersRow, error)
 	UpdateBillingInfo(ctx context.Context, arg UpdateBillingInfoParams) (UserBilling, error)
@@ -202,6 +205,7 @@ type Querier interface {
 	UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFacilityBookingConfigParams) (Facility, error)
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)
 	UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (League, error)
+	UpdateLeagueTeam(ctx context.Context, arg UpdateLeagueTeamParams) (LeagueTeam, error)
 	UpdateMatchResult(ctx context.Context, arg UpdateMatchResultParams) (LeagueMatch, error)
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) error
 	UpdateMemberEmail(ctx context.Context, arg UpdateMemberEmailParams) (User, error)
@@ -212,6 +216,7 @@ type Querier interface {
 	UpdateSessionAutoScaleOverride(ctx context.Context, arg UpdateSessionAutoScaleOverrideParams) (OpenPlaySession, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) error
 	UpdateStaffUser(ctx context.Context, arg UpdateStaffUserParams) error
+	UpdateTeamCaptain(ctx context.Context, arg UpdateTeamCaptainParams) (LeagueTeam, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUserCognitoStatus(ctx context.Context, arg UpdateUserCognitoStatusParams) error
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error

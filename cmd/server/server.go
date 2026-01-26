@@ -392,6 +392,26 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		http.MethodPut:    leagues.HandleLeagueUpdate,
 		http.MethodDelete: leagues.HandleLeagueDelete,
 	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  leagues.HandleListLeagueTeams,
+		http.MethodPost: leagues.HandleTeamCreate,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams/{team_id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleTeamDetail,
+		http.MethodPut: leagues.HandleTeamUpdate,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams/{team_id}/members", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleAddTeamMember,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams/{team_id}/members/{user_id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodDelete: leagues.HandleRemoveTeamMember,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/free-agents", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleListFreeAgents,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/free-agents/{user_id}/assign", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleAssignFreeAgent,
+	}))
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)
