@@ -756,25 +756,6 @@ This section documents features that are standard in competing pickleball/sports
 - `lesson_min_notice_hours` facility setting (default: 24 hours) - booking must be at least this far in advance
 - Lessons count toward max_member_reservations limit
 
-<!-- BEGIN WIP: STORY-0035 -->
-**Enhancement Needed: Lesson Cancellation Policy**
-
-The current implementation does not enforce cancellation notice requirements for lessons. While `lesson_min_notice_hours` controls how far in advance a lesson must be booked, there is no equivalent enforcement preventing last-minute cancellations.
-
-| Gap | Description |
-|-----|-------------|
-| Cancellation window | No minimum notice required to cancel a lesson |
-| Policy enforcement | Lessons use same cancellation policy as GAME reservations |
-| Pro protection | Pros have no protection from last-minute member cancellations |
-
-**Suggested Implementation:**
-| Option | Description |
-|--------|-------------|
-| Dedicated lesson cancellation policy | Separate policy tier for PRO_SESSION reservations |
-| lesson_cancellation_notice_hours | Facility setting mirroring lesson_min_notice_hours for cancellations |
-| Pro notification | Notify pro when their lesson is cancelled |
-<!-- END WIP -->
-
 **Lesson Packages:**
 | Feature | Description |
 |---------|-------------|
@@ -939,18 +920,6 @@ A self-service marketplace where members discover and book coaches directly, red
 | Safety Inspections | Facility inspection logs |
 
 ### 9.12 Guest & Drop-In Management
-
-<!-- BEGIN WIP: STORY-0036 -->
-**Guest Passes:**
-
-| Feature | Description |
-|---------|-------------|
-| Guest Pass Types | Day pass, week pass, punch card |
-| Guest Pricing | Non-member rates |
-| Guest Limits | Max guests per member per month |
-| Guest Registration | Quick sign-up flow |
-
-<!-- END WIP -->
 
 **Guest Conversion:**
 | Feature | Description |
