@@ -42,6 +42,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countActiveMemberReservationsStmt, err = db.PrepareContext(ctx, countActiveMemberReservations); err != nil {
 		return nil, fmt.Errorf("error preparing query CountActiveMemberReservations: %w", err)
 	}
+	if q.countCheckinsByFacilityInRangeStmt, err = db.PrepareContext(ctx, countCheckinsByFacilityInRange); err != nil {
+		return nil, fmt.Errorf("error preparing query CountCheckinsByFacilityInRange: %w", err)
+	}
 	if q.countFacilityThemeNameStmt, err = db.PrepareContext(ctx, countFacilityThemeName); err != nil {
 		return nil, fmt.Errorf("error preparing query CountFacilityThemeName: %w", err)
 	}
@@ -56,6 +59,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.countReservationParticipantsStmt, err = db.PrepareContext(ctx, countReservationParticipants); err != nil {
 		return nil, fmt.Errorf("error preparing query CountReservationParticipants: %w", err)
+	}
+	if q.countReservationsByTypeInRangeStmt, err = db.PrepareContext(ctx, countReservationsByTypeInRange); err != nil {
+		return nil, fmt.Errorf("error preparing query CountReservationsByTypeInRange: %w", err)
+	}
+	if q.countScheduledVsCompletedReservationsStmt, err = db.PrepareContext(ctx, countScheduledVsCompletedReservations); err != nil {
+		return nil, fmt.Errorf("error preparing query CountScheduledVsCompletedReservations: %w", err)
 	}
 	if q.countThemeUsageStmt, err = db.PrepareContext(ctx, countThemeUsage); err != nil {
 		return nil, fmt.Errorf("error preparing query CountThemeUsage: %w", err)
@@ -182,6 +191,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getApplicableCancellationTierStmt, err = db.PrepareContext(ctx, getApplicableCancellationTier); err != nil {
 		return nil, fmt.Errorf("error preparing query GetApplicableCancellationTier: %w", err)
+	}
+	if q.getAvailableCourtHoursStmt, err = db.PrepareContext(ctx, getAvailableCourtHours); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAvailableCourtHours: %w", err)
+	}
+	if q.getBookedCourtHoursStmt, err = db.PrepareContext(ctx, getBookedCourtHours); err != nil {
+		return nil, fmt.Errorf("error preparing query GetBookedCourtHours: %w", err)
+	}
+	if q.getCancellationMetricsInRangeStmt, err = db.PrepareContext(ctx, getCancellationMetricsInRange); err != nil {
+		return nil, fmt.Errorf("error preparing query GetCancellationMetricsInRange: %w", err)
 	}
 	if q.getCancellationPolicyTierStmt, err = db.PrepareContext(ctx, getCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCancellationPolicyTier: %w", err)
@@ -575,6 +593,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing countActiveMemberReservationsStmt: %w", cerr)
 		}
 	}
+	if q.countCheckinsByFacilityInRangeStmt != nil {
+		if cerr := q.countCheckinsByFacilityInRangeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countCheckinsByFacilityInRangeStmt: %w", cerr)
+		}
+	}
 	if q.countFacilityThemeNameStmt != nil {
 		if cerr := q.countFacilityThemeNameStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countFacilityThemeNameStmt: %w", cerr)
@@ -598,6 +621,16 @@ func (q *Queries) Close() error {
 	if q.countReservationParticipantsStmt != nil {
 		if cerr := q.countReservationParticipantsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countReservationParticipantsStmt: %w", cerr)
+		}
+	}
+	if q.countReservationsByTypeInRangeStmt != nil {
+		if cerr := q.countReservationsByTypeInRangeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countReservationsByTypeInRangeStmt: %w", cerr)
+		}
+	}
+	if q.countScheduledVsCompletedReservationsStmt != nil {
+		if cerr := q.countScheduledVsCompletedReservationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countScheduledVsCompletedReservationsStmt: %w", cerr)
 		}
 	}
 	if q.countThemeUsageStmt != nil {
@@ -808,6 +841,21 @@ func (q *Queries) Close() error {
 	if q.getApplicableCancellationTierStmt != nil {
 		if cerr := q.getApplicableCancellationTierStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getApplicableCancellationTierStmt: %w", cerr)
+		}
+	}
+	if q.getAvailableCourtHoursStmt != nil {
+		if cerr := q.getAvailableCourtHoursStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAvailableCourtHoursStmt: %w", cerr)
+		}
+	}
+	if q.getBookedCourtHoursStmt != nil {
+		if cerr := q.getBookedCourtHoursStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getBookedCourtHoursStmt: %w", cerr)
+		}
+	}
+	if q.getCancellationMetricsInRangeStmt != nil {
+		if cerr := q.getCancellationMetricsInRangeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getCancellationMetricsInRangeStmt: %w", cerr)
 		}
 	}
 	if q.getCancellationPolicyTierStmt != nil {
@@ -1450,11 +1498,14 @@ type Queries struct {
 	addReservationCourtStmt                          *sql.Stmt
 	advanceWaitlistOfferStmt                         *sql.Stmt
 	countActiveMemberReservationsStmt                *sql.Stmt
+	countCheckinsByFacilityInRangeStmt               *sql.Stmt
 	countFacilityThemeNameStmt                       *sql.Stmt
 	countFacilityThemeNameExcludingIDStmt            *sql.Stmt
 	countFacilityThemesStmt                          *sql.Stmt
 	countOpenPlayReservationsForSessionStmt          *sql.Stmt
 	countReservationParticipantsStmt                 *sql.Stmt
+	countReservationsByTypeInRangeStmt               *sql.Stmt
+	countScheduledVsCompletedReservationsStmt        *sql.Stmt
 	countThemeUsageStmt                              *sql.Stmt
 	countUnreadStaffNotificationsStmt                *sql.Stmt
 	countVisitPackTypesByFacilityStmt                *sql.Stmt
@@ -1497,6 +1548,9 @@ type Queries struct {
 	facilityExistsStmt                               *sql.Stmt
 	getActiveThemeIDStmt                             *sql.Stmt
 	getApplicableCancellationTierStmt                *sql.Stmt
+	getAvailableCourtHoursStmt                       *sql.Stmt
+	getBookedCourtHoursStmt                          *sql.Stmt
+	getCancellationMetricsInRangeStmt                *sql.Stmt
 	getCancellationPolicyTierStmt                    *sql.Stmt
 	getCognitoConfigStmt                             *sql.Stmt
 	getCourtStmt                                     *sql.Stmt
@@ -1628,11 +1682,14 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addReservationCourtStmt:                          q.addReservationCourtStmt,
 		advanceWaitlistOfferStmt:                         q.advanceWaitlistOfferStmt,
 		countActiveMemberReservationsStmt:                q.countActiveMemberReservationsStmt,
+		countCheckinsByFacilityInRangeStmt:               q.countCheckinsByFacilityInRangeStmt,
 		countFacilityThemeNameStmt:                       q.countFacilityThemeNameStmt,
 		countFacilityThemeNameExcludingIDStmt:            q.countFacilityThemeNameExcludingIDStmt,
 		countFacilityThemesStmt:                          q.countFacilityThemesStmt,
 		countOpenPlayReservationsForSessionStmt:          q.countOpenPlayReservationsForSessionStmt,
 		countReservationParticipantsStmt:                 q.countReservationParticipantsStmt,
+		countReservationsByTypeInRangeStmt:               q.countReservationsByTypeInRangeStmt,
+		countScheduledVsCompletedReservationsStmt:        q.countScheduledVsCompletedReservationsStmt,
 		countThemeUsageStmt:                              q.countThemeUsageStmt,
 		countUnreadStaffNotificationsStmt:                q.countUnreadStaffNotificationsStmt,
 		countVisitPackTypesByFacilityStmt:                q.countVisitPackTypesByFacilityStmt,
@@ -1675,6 +1732,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		facilityExistsStmt:                               q.facilityExistsStmt,
 		getActiveThemeIDStmt:                             q.getActiveThemeIDStmt,
 		getApplicableCancellationTierStmt:                q.getApplicableCancellationTierStmt,
+		getAvailableCourtHoursStmt:                       q.getAvailableCourtHoursStmt,
+		getBookedCourtHoursStmt:                          q.getBookedCourtHoursStmt,
+		getCancellationMetricsInRangeStmt:                q.getCancellationMetricsInRangeStmt,
 		getCancellationPolicyTierStmt:                    q.getCancellationPolicyTierStmt,
 		getCognitoConfigStmt:                             q.getCognitoConfigStmt,
 		getCourtStmt:                                     q.getCourtStmt,

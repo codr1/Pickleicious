@@ -17,11 +17,14 @@ type Querier interface {
 	AddReservationCourt(ctx context.Context, arg AddReservationCourtParams) error
 	AdvanceWaitlistOffer(ctx context.Context, arg AdvanceWaitlistOfferParams) (WaitlistOffer, error)
 	CountActiveMemberReservations(ctx context.Context, arg CountActiveMemberReservationsParams) (int64, error)
+	CountCheckinsByFacilityInRange(ctx context.Context, arg CountCheckinsByFacilityInRangeParams) (int64, error)
 	CountFacilityThemeName(ctx context.Context, arg CountFacilityThemeNameParams) (int64, error)
 	CountFacilityThemeNameExcludingID(ctx context.Context, arg CountFacilityThemeNameExcludingIDParams) (int64, error)
 	CountFacilityThemes(ctx context.Context, facilityID sql.NullInt64) (int64, error)
 	CountOpenPlayReservationsForSession(ctx context.Context, arg CountOpenPlayReservationsForSessionParams) (int64, error)
 	CountReservationParticipants(ctx context.Context, reservationID int64) (int64, error)
+	CountReservationsByTypeInRange(ctx context.Context, arg CountReservationsByTypeInRangeParams) ([]CountReservationsByTypeInRangeRow, error)
+	CountScheduledVsCompletedReservations(ctx context.Context, arg CountScheduledVsCompletedReservationsParams) ([]CountScheduledVsCompletedReservationsRow, error)
 	CountThemeUsage(ctx context.Context, themeID sql.NullInt64) (int64, error)
 	CountUnreadStaffNotifications(ctx context.Context, facilityID interface{}) (int64, error)
 	CountVisitPackTypesByFacility(ctx context.Context, facilityID int64) (int64, error)
@@ -69,6 +72,9 @@ type Querier interface {
 	GetActiveThemeID(ctx context.Context, facilityID int64) (int64, error)
 	// Prefer type-specific tiers over defaults, then pick the highest hours threshold.
 	GetApplicableCancellationTier(ctx context.Context, arg GetApplicableCancellationTierParams) (CancellationPolicyTier, error)
+	GetAvailableCourtHours(ctx context.Context, arg GetAvailableCourtHoursParams) (float64, error)
+	GetBookedCourtHours(ctx context.Context, arg GetBookedCourtHoursParams) (float64, error)
+	GetCancellationMetricsInRange(ctx context.Context, arg GetCancellationMetricsInRangeParams) (GetCancellationMetricsInRangeRow, error)
 	GetCancellationPolicyTier(ctx context.Context, arg GetCancellationPolicyTierParams) (CancellationPolicyTier, error)
 	// internal/db/queries/cognito.sql
 	GetCognitoConfig(ctx context.Context, organizationID int64) (CognitoConfig, error)
