@@ -422,6 +422,54 @@ func (q *Queries) GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, erro
 	return i, err
 }
 
+const getLeagueWithFacilityTimezone = `-- name: GetLeagueWithFacilityTimezone :one
+SELECT l.id, l.facility_id, l.name, l.format, l.start_date, l.end_date, l.division_config,
+    l.min_team_size, l.max_team_size, l.roster_lock_date, l.status, l.created_at, l.updated_at,
+    f.timezone AS facility_timezone
+FROM leagues l
+JOIN facilities f ON f.id = l.facility_id
+WHERE l.id = ?1
+`
+
+type GetLeagueWithFacilityTimezoneRow struct {
+	ID               int64        `json:"id"`
+	FacilityID       int64        `json:"facilityId"`
+	Name             string       `json:"name"`
+	Format           string       `json:"format"`
+	StartDate        time.Time    `json:"startDate"`
+	EndDate          time.Time    `json:"endDate"`
+	DivisionConfig   string       `json:"divisionConfig"`
+	MinTeamSize      int64        `json:"minTeamSize"`
+	MaxTeamSize      int64        `json:"maxTeamSize"`
+	RosterLockDate   sql.NullTime `json:"rosterLockDate"`
+	Status           string       `json:"status"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	UpdatedAt        time.Time    `json:"updatedAt"`
+	FacilityTimezone string       `json:"facilityTimezone"`
+}
+
+func (q *Queries) GetLeagueWithFacilityTimezone(ctx context.Context, id int64) (GetLeagueWithFacilityTimezoneRow, error) {
+	row := q.queryRow(ctx, q.getLeagueWithFacilityTimezoneStmt, getLeagueWithFacilityTimezone, id)
+	var i GetLeagueWithFacilityTimezoneRow
+	err := row.Scan(
+		&i.ID,
+		&i.FacilityID,
+		&i.Name,
+		&i.Format,
+		&i.StartDate,
+		&i.EndDate,
+		&i.DivisionConfig,
+		&i.MinTeamSize,
+		&i.MaxTeamSize,
+		&i.RosterLockDate,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FacilityTimezone,
+	)
+	return i, err
+}
+
 const listFreeAgentsByLeague = `-- name: ListFreeAgentsByLeague :many
 SELECT ltm.id,
     ltm.league_team_id,

@@ -98,6 +98,7 @@ type Querier interface {
 	GetLeagueMatch(ctx context.Context, arg GetLeagueMatchParams) (LeagueMatch, error)
 	GetLeagueStandingsData(ctx context.Context, leagueID int64) ([]GetLeagueStandingsDataRow, error)
 	GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, error)
+	GetLeagueWithFacilityTimezone(ctx context.Context, id int64) (GetLeagueWithFacilityTimezoneRow, error)
 	GetMemberBilling(ctx context.Context, userID int64) (GetMemberBillingRow, error)
 	GetMemberByEmail(ctx context.Context, email sql.NullString) (User, error)
 	GetMemberByEmailIncludeDeleted(ctx context.Context, email sql.NullString) (User, error)

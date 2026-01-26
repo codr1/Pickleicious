@@ -33,6 +33,14 @@ SELECT id, facility_id, name, format, start_date, end_date, division_config,
 FROM leagues
 WHERE id = @id;
 
+-- name: GetLeagueWithFacilityTimezone :one
+SELECT l.id, l.facility_id, l.name, l.format, l.start_date, l.end_date, l.division_config,
+    l.min_team_size, l.max_team_size, l.roster_lock_date, l.status, l.created_at, l.updated_at,
+    f.timezone AS facility_timezone
+FROM leagues l
+JOIN facilities f ON f.id = l.facility_id
+WHERE l.id = @id;
+
 -- name: ListLeaguesByFacility :many
 SELECT id, facility_id, name, format, start_date, end_date, division_config,
     min_team_size, max_team_size, roster_lock_date, status, created_at, updated_at

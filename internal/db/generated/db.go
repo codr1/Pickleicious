@@ -258,6 +258,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getLeagueTeamStmt, err = db.PrepareContext(ctx, getLeagueTeam); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLeagueTeam: %w", err)
 	}
+	if q.getLeagueWithFacilityTimezoneStmt, err = db.PrepareContext(ctx, getLeagueWithFacilityTimezone); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueWithFacilityTimezone: %w", err)
+	}
 	if q.getMemberBillingStmt, err = db.PrepareContext(ctx, getMemberBilling); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMemberBilling: %w", err)
 	}
@@ -1019,6 +1022,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLeagueTeamStmt: %w", cerr)
 		}
 	}
+	if q.getLeagueWithFacilityTimezoneStmt != nil {
+		if cerr := q.getLeagueWithFacilityTimezoneStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueWithFacilityTimezoneStmt: %w", cerr)
+		}
+	}
 	if q.getMemberBillingStmt != nil {
 		if cerr := q.getMemberBillingStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMemberBillingStmt: %w", cerr)
@@ -1746,6 +1754,7 @@ type Queries struct {
 	getLeagueMatchStmt                               *sql.Stmt
 	getLeagueStandingsDataStmt                       *sql.Stmt
 	getLeagueTeamStmt                                *sql.Stmt
+	getLeagueWithFacilityTimezoneStmt                *sql.Stmt
 	getMemberBillingStmt                             *sql.Stmt
 	getMemberByEmailStmt                             *sql.Stmt
 	getMemberByEmailIncludeDeletedStmt               *sql.Stmt
@@ -1952,6 +1961,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getLeagueMatchStmt:                               q.getLeagueMatchStmt,
 		getLeagueStandingsDataStmt:                       q.getLeagueStandingsDataStmt,
 		getLeagueTeamStmt:                                q.getLeagueTeamStmt,
+		getLeagueWithFacilityTimezoneStmt:                q.getLeagueWithFacilityTimezoneStmt,
 		getMemberBillingStmt:                             q.getMemberBillingStmt,
 		getMemberByEmailStmt:                             q.getMemberByEmailStmt,
 		getMemberByEmailIncludeDeletedStmt:               q.getMemberByEmailIncludeDeletedStmt,

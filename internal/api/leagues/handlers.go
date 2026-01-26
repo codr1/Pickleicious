@@ -812,7 +812,7 @@ func HandleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), leagueQueryTimeout)
 	defer cancel()
 
-	league, err := q.GetLeague(ctx, leagueID)
+	leagueRow, err := q.GetLeagueWithFacilityTimezone(ctx, leagueID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "League not found", http.StatusNotFound)
@@ -823,11 +823,12 @@ func HandleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	league := leagueFromRosterLockRow(leagueRow)
 	if !apiutil.RequireFacilityAccess(w, r, league.FacilityID) {
 		return
 	}
 
-	rosterLoc := loadRosterLockLocation(ctx, q, league, logger)
+	rosterLoc := rosterLockLocationForTimezone(leagueRow.FacilityTimezone, logger)
 	if rosterLocked(league, rosterLoc) {
 		http.Error(w, "Roster is locked for this league", http.StatusConflict)
 		return
@@ -921,7 +922,7 @@ func HandleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), leagueQueryTimeout)
 	defer cancel()
 
-	league, err := q.GetLeague(ctx, leagueID)
+	leagueRow, err := q.GetLeagueWithFacilityTimezone(ctx, leagueID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "League not found", http.StatusNotFound)
@@ -932,11 +933,12 @@ func HandleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	league := leagueFromRosterLockRow(leagueRow)
 	if !apiutil.RequireFacilityAccess(w, r, league.FacilityID) {
 		return
 	}
 
-	rosterLoc := loadRosterLockLocation(ctx, q, league, logger)
+	rosterLoc := rosterLockLocationForTimezone(leagueRow.FacilityTimezone, logger)
 	if rosterLocked(league, rosterLoc) {
 		http.Error(w, "Roster is locked for this league", http.StatusConflict)
 		return
@@ -1059,7 +1061,7 @@ func HandleAssignFreeAgent(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), leagueQueryTimeout)
 	defer cancel()
 
-	league, err := q.GetLeague(ctx, leagueID)
+	leagueRow, err := q.GetLeagueWithFacilityTimezone(ctx, leagueID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "League not found", http.StatusNotFound)
@@ -1070,11 +1072,12 @@ func HandleAssignFreeAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	league := leagueFromRosterLockRow(leagueRow)
 	if !apiutil.RequireFacilityAccess(w, r, league.FacilityID) {
 		return
 	}
 
-	rosterLoc := loadRosterLockLocation(ctx, q, league, logger)
+	rosterLoc := rosterLockLocationForTimezone(leagueRow.FacilityTimezone, logger)
 	if rosterLocked(league, rosterLoc) {
 		http.Error(w, "Roster is locked for this league", http.StatusConflict)
 		return
@@ -1735,27 +1738,23 @@ func matchIDFromRequest(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func loadRosterLockLocation(ctx context.Context, q *dbgen.Queries, league dbgen.League, logger *zerolog.Logger) *time.Location {
-	if q == nil || league.FacilityID <= 0 {
+func rosterLockLocationForTimezone(timezone string, logger *zerolog.Logger) *time.Location {
+	if strings.TrimSpace(timezone) == "" {
 		return time.UTC
 	}
-	facility, err := q.GetFacilityByID(ctx, league.FacilityID)
+	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		logger.Warn().Err(err).Int64("facility_id", league.FacilityID).Msg("Failed to load facility for roster lock timezone; using UTC")
-		return time.UTC
-	}
-	if strings.TrimSpace(facility.Timezone) == "" {
-		return time.UTC
-	}
-	loc, err := time.LoadLocation(facility.Timezone)
-	if err != nil {
-		logger.Warn().Err(err).Int64("facility_id", league.FacilityID).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone; using UTC")
+		logger.Warn().Err(err).Str("timezone", timezone).Msg("Failed to load facility timezone; using UTC")
 		return time.UTC
 	}
 	return loc
 }
 
 func rosterLocked(league dbgen.League, loc *time.Location) bool {
+	return rosterLockedAt(league, loc, time.Now())
+}
+
+func rosterLockedAt(league dbgen.League, loc *time.Location, now time.Time) bool {
 	if !league.RosterLockDate.Valid {
 		return false
 	}
@@ -1764,7 +1763,25 @@ func rosterLocked(league dbgen.League, loc *time.Location) bool {
 	}
 	lockDate := league.RosterLockDate.Time
 	lockTime := time.Date(lockDate.Year(), lockDate.Month(), lockDate.Day(), 0, 0, 0, 0, loc)
-	return !time.Now().In(loc).Before(lockTime)
+	return !now.In(loc).Before(lockTime)
+}
+
+func leagueFromRosterLockRow(row dbgen.GetLeagueWithFacilityTimezoneRow) dbgen.League {
+	return dbgen.League{
+		ID:             row.ID,
+		FacilityID:     row.FacilityID,
+		Name:           row.Name,
+		Format:         row.Format,
+		StartDate:      row.StartDate,
+		EndDate:        row.EndDate,
+		DivisionConfig: row.DivisionConfig,
+		MinTeamSize:    row.MinTeamSize,
+		MaxTeamSize:    row.MaxTeamSize,
+		RosterLockDate: row.RosterLockDate,
+		Status:         row.Status,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
+	}
 }
 
 func loadQueries() *dbgen.Queries {
