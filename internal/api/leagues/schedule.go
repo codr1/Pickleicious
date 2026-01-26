@@ -213,10 +213,6 @@ func handleScheduleGeneration(w http.ResponseWriter, r *http.Request, regenerate
 	if req.MatchDurationMinutes > 0 {
 		matchDuration = time.Duration(req.MatchDurationMinutes) * time.Minute
 	}
-	if matchDuration <= 0 {
-		http.Error(w, "Match duration must be positive", http.StatusBadRequest)
-		return
-	}
 
 	schedule, err := leaguescheduler.GenerateRoundRobinSchedule(leagueID, teams, league.StartDate, league.EndDate, courts, hours, matchDuration)
 	if err != nil {

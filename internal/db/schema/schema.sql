@@ -445,7 +445,8 @@ CREATE TABLE league_teams (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (league_id) REFERENCES leagues(id) ON DELETE CASCADE,
-    FOREIGN KEY (captain_user_id) REFERENCES users(id)
+    FOREIGN KEY (captain_user_id) REFERENCES users(id),
+    UNIQUE (league_id, name)
 );
 
 CREATE TABLE league_team_members (
@@ -486,6 +487,8 @@ CREATE INDEX idx_league_team_members_user_id ON league_team_members(user_id);
 CREATE INDEX idx_league_matches_league_id ON league_matches(league_id);
 CREATE INDEX idx_league_matches_reservation_id ON league_matches(reservation_id);
 CREATE INDEX idx_league_matches_scheduled_time ON league_matches(scheduled_time);
+CREATE INDEX idx_league_matches_home_team_id ON league_matches(home_team_id);
+CREATE INDEX idx_league_matches_away_team_id ON league_matches(away_team_id);
 
 ------ RESERVATION CANCELLATIONS ------
 CREATE TABLE reservation_cancellations (

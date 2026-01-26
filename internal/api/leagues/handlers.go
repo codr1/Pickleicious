@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
@@ -99,6 +100,7 @@ type matchResultRequest struct {
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
 	if database == nil {
+		log.Warn().Msg("InitHandlers called with nil database; league handlers will not function")
 		return
 	}
 	queries = database.Queries
@@ -825,7 +827,8 @@ func HandleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rosterLocked(league) {
+	rosterLoc := loadRosterLockLocation(ctx, q, league, logger)
+	if rosterLocked(league, rosterLoc) {
 		http.Error(w, "Roster is locked for this league", http.StatusConflict)
 		return
 	}
@@ -933,7 +936,8 @@ func HandleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rosterLocked(league) {
+	rosterLoc := loadRosterLockLocation(ctx, q, league, logger)
+	if rosterLocked(league, rosterLoc) {
 		http.Error(w, "Roster is locked for this league", http.StatusConflict)
 		return
 	}
@@ -1070,7 +1074,8 @@ func HandleAssignFreeAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rosterLocked(league) {
+	rosterLoc := loadRosterLockLocation(ctx, q, league, logger)
+	if rosterLocked(league, rosterLoc) {
 		http.Error(w, "Roster is locked for this league", http.StatusConflict)
 		return
 	}
@@ -1730,11 +1735,36 @@ func matchIDFromRequest(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func rosterLocked(league dbgen.League) bool {
+func loadRosterLockLocation(ctx context.Context, q *dbgen.Queries, league dbgen.League, logger *zerolog.Logger) *time.Location {
+	if q == nil || league.FacilityID <= 0 {
+		return time.UTC
+	}
+	facility, err := q.GetFacilityByID(ctx, league.FacilityID)
+	if err != nil {
+		logger.Warn().Err(err).Int64("facility_id", league.FacilityID).Msg("Failed to load facility for roster lock timezone; using UTC")
+		return time.UTC
+	}
+	if strings.TrimSpace(facility.Timezone) == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(facility.Timezone)
+	if err != nil {
+		logger.Warn().Err(err).Int64("facility_id", league.FacilityID).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone; using UTC")
+		return time.UTC
+	}
+	return loc
+}
+
+func rosterLocked(league dbgen.League, loc *time.Location) bool {
 	if !league.RosterLockDate.Valid {
 		return false
 	}
-	return !time.Now().Before(league.RosterLockDate.Time)
+	if loc == nil {
+		loc = time.UTC
+	}
+	lockDate := league.RosterLockDate.Time
+	lockTime := time.Date(lockDate.Year(), lockDate.Month(), lockDate.Day(), 0, 0, 0, 0, loc)
+	return !time.Now().In(loc).Before(lockTime)
 }
 
 func loadQueries() *dbgen.Queries {

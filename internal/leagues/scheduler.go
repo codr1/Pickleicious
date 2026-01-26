@@ -192,18 +192,18 @@ func parseTimeOfDay(raw string) (time.Time, error) {
 	}
 	parsed, err := time.Parse("15:04", raw)
 	if err != nil {
-		parsed, err = time.Parse("3:04 PM", strings.ToUpper(raw))
-		if err != nil {
-			return time.Time{}, errors.New("time must be in HH:MM or H:MM AM/PM format")
+		formats := []string{"3:04 PM", "03:04 PM", "3:04PM", "03:04PM"}
+		for _, format := range formats {
+			if parsed, err = time.Parse(format, strings.ToUpper(raw)); err == nil {
+				return parsed, nil
+			}
 		}
+		return time.Time{}, errors.New("time must be in HH:MM or H:MM AM/PM format")
 	}
 	return parsed, nil
 }
 
 func truncateDate(value time.Time) time.Time {
 	loc := value.Location()
-	if loc == nil {
-		loc = time.Local
-	}
 	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, loc)
 }
