@@ -764,6 +764,7 @@ This section documents features that are standard in competing pickleball/sports
 | Expiration | Package validity period |
 | Transferability | Can package be shared/gifted |
 
+<!-- BEGIN WIP: STORY-0043 -->
 **Clinics & Classes:**
 | Feature | Description |
 |---------|-------------|
@@ -772,6 +773,7 @@ This section documents features that are standard in competing pickleball/sports
 | Recurring Classes | Weekly clinics |
 | Min/Max Enrollment | Cancel if min not met |
 | Waitlist | For popular sessions |
+<!-- END WIP -->
 
 **Camps & Programs:**
 | Feature | Description |
