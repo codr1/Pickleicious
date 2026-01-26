@@ -3,8 +3,12 @@
 package smoke
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"testing"
 
+	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 	"github.com/codr1/Pickleicious/internal/testutil"
 )
 
@@ -114,5 +118,38 @@ SET description = excluded.description,
 	}
 	if color != "#1976D2" {
 		t.Fatalf("reservation_types GAME color mismatch: got %q want %q", color, "#1976D2")
+	}
+}
+
+func TestGetReservationTypeByName(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	queries := dbgen.New(db)
+	ctx := context.Background()
+
+	for _, name := range []string{"GAME", "PRO_SESSION"} {
+		resType, err := queries.GetReservationTypeByName(ctx, name)
+		if err != nil {
+			t.Fatalf("get reservation type %q: %v", name, err)
+		}
+		if resType.ID == 0 {
+			t.Fatalf("reservation type %q has zero ID", name)
+		}
+		if resType.Name != name {
+			t.Fatalf("reservation type %q name mismatch: got %q", name, resType.Name)
+		}
+		if !resType.Description.Valid || resType.Description.String == "" {
+			t.Fatalf("reservation type %q missing description", name)
+		}
+		if !resType.Color.Valid || resType.Color.String == "" {
+			t.Fatalf("reservation type %q missing color", name)
+		}
+		if resType.CreatedAt.IsZero() || resType.UpdatedAt.IsZero() {
+			t.Fatalf("reservation type %q missing timestamps", name)
+		}
+	}
+
+	_, err := queries.GetReservationTypeByName(ctx, "INVALID_TYPE")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows for invalid reservation type, got %v", err)
 	}
 }
