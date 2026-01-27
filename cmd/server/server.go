@@ -16,6 +16,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	"github.com/codr1/Pickleicious/internal/api/cancellationpolicy"
 	"github.com/codr1/Pickleicious/internal/api/checkin"
+	"github.com/codr1/Pickleicious/internal/api/clinics"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/dashboard"
 	"github.com/codr1/Pickleicious/internal/api/leagues"
@@ -74,6 +75,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	courts.InitHandlers(database.Queries)
 	dashboard.InitHandlers(database)
 	checkin.InitHandlers(database.Queries)
+	clinics.InitHandlers(database)
 	reservations.InitHandlers(database)
 	member.InitHandlers(database)
 	operatinghours.InitHandlers(database.Queries)
@@ -240,6 +242,13 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))))
 	mux.Handle("/member/lessons", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: member.HandleLessonBookingCreate,
+	}))))
+	mux.Handle("/member/clinics", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: member.HandleListAvailableClinics,
+	}))))
+	mux.Handle("/member/clinics/{id}/enroll", member.RequireMemberSession(http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost:   member.HandleClinicEnroll,
+		http.MethodDelete: member.HandleClinicCancel,
 	}))))
 	mux.Handle("/api/v1/member/reservations/widget", member.RequireMemberSession(http.HandlerFunc(member.HandleMemberReservationsWidget)))
 	mux.HandleFunc("/members", members.HandleMembersPage)
@@ -426,6 +435,23 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/leagues/{id}/standings/export", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: leagues.HandleExportStandingsCSV,
+	}))
+
+	// Clinic routes
+	mux.HandleFunc("/api/v1/clinic-types", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  clinics.HandleClinicTypeList,
+		http.MethodPost: clinics.HandleClinicTypeCreate,
+	}))
+	mux.HandleFunc("/api/v1/clinics", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  clinics.HandleClinicSessionList,
+		http.MethodPost: clinics.HandleClinicSessionCreate,
+	}))
+	mux.HandleFunc("/api/v1/clinics/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut:    clinics.HandleClinicSessionUpdate,
+		http.MethodDelete: clinics.HandleClinicCancel,
+	}))
+	mux.HandleFunc("/api/v1/clinics/{id}/roster", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: clinics.HandleClinicRoster,
 	}))
 
 	// Court routes

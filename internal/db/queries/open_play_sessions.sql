@@ -258,15 +258,18 @@ INSERT INTO staff_notifications (
     facility_id,
     notification_type,
     message,
-    related_session_id
+    related_session_id,
+    related_clinic_session_id
 ) VALUES (
     @facility_id,
     @notification_type,
     @message,
-    @related_session_id
+    @related_session_id,
+    @related_clinic_session_id
 )
 RETURNING id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at;
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at;
 
 -- name: CreateLessonCancelledNotification :one
 INSERT INTO staff_notifications (
@@ -284,7 +287,8 @@ VALUES (
     @target_staff_id
 )
 RETURNING id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at;
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at;
 
 -- name: CountUnreadStaffNotifications :one
 SELECT COUNT(*)
@@ -294,7 +298,8 @@ WHERE (@facility_id IS NULL OR facility_id = @facility_id)
 
 -- name: ListStaffNotifications :many
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE facility_id = @facility_id
 ORDER BY created_at DESC
@@ -302,7 +307,8 @@ LIMIT @limit OFFSET @offset;
 
 -- name: ListStaffNotificationsForStaff :many
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE target_staff_id = @target_staff_id
 ORDER BY created_at DESC
@@ -310,7 +316,8 @@ LIMIT @limit OFFSET @offset;
 
 -- name: ListStaffNotificationsForFacilityOrCorporate :many
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE @facility_id IS NULL
    OR facility_id = @facility_id
@@ -319,7 +326,8 @@ LIMIT @limit OFFSET @offset;
 
 -- name: GetStaffNotificationByID :one
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE id = @id;
 
@@ -330,4 +338,5 @@ SET read = 1,
 WHERE id = @id
   AND facility_id = @facility_id
 RETURNING id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at;
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at;

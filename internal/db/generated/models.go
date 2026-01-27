@@ -19,6 +19,42 @@ type CancellationPolicyTier struct {
 	UpdatedAt         time.Time     `json:"updatedAt"`
 }
 
+type ClinicEnrollment struct {
+	ID              int64     `json:"id"`
+	ClinicSessionID int64     `json:"clinicSessionId"`
+	UserID          int64     `json:"userId"`
+	Status          string    `json:"status"`
+	Position        int64     `json:"position"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type ClinicSession struct {
+	ID               int64     `json:"id"`
+	ClinicTypeID     int64     `json:"clinicTypeId"`
+	FacilityID       int64     `json:"facilityId"`
+	ProID            int64     `json:"proId"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	EnrollmentStatus string    `json:"enrollmentStatus"`
+	CreatedByUserID  int64     `json:"createdByUserId"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+type ClinicType struct {
+	ID              int64          `json:"id"`
+	FacilityID      int64          `json:"facilityId"`
+	Name            string         `json:"name"`
+	Description     sql.NullString `json:"description"`
+	MinParticipants int64          `json:"minParticipants"`
+	MaxParticipants int64          `json:"maxParticipants"`
+	PriceCents      int64          `json:"priceCents"`
+	Status          string         `json:"status"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+}
+
 type CognitoConfig struct {
 	ID             int64     `json:"id"`
 	OrganizationID int64     `json:"organizationId"`
@@ -258,16 +294,17 @@ type Staff struct {
 }
 
 type StaffNotification struct {
-	ID                   int64         `json:"id"`
-	FacilityID           int64         `json:"facilityId"`
-	NotificationType     string        `json:"notificationType"`
-	Message              string        `json:"message"`
-	RelatedSessionID     sql.NullInt64 `json:"relatedSessionId"`
-	RelatedReservationID sql.NullInt64 `json:"relatedReservationId"`
-	TargetStaffID        sql.NullInt64 `json:"targetStaffId"`
-	Read                 bool          `json:"read"`
-	CreatedAt            time.Time     `json:"createdAt"`
-	UpdatedAt            time.Time     `json:"updatedAt"`
+	ID                     int64         `json:"id"`
+	FacilityID             int64         `json:"facilityId"`
+	NotificationType       string        `json:"notificationType"`
+	Message                string        `json:"message"`
+	RelatedSessionID       sql.NullInt64 `json:"relatedSessionId"`
+	RelatedReservationID   sql.NullInt64 `json:"relatedReservationId"`
+	RelatedClinicSessionID sql.NullInt64 `json:"relatedClinicSessionId"`
+	TargetStaffID          sql.NullInt64 `json:"targetStaffId"`
+	Read                   bool          `json:"read"`
+	CreatedAt              time.Time     `json:"createdAt"`
+	UpdatedAt              time.Time     `json:"updatedAt"`
 }
 
 type Theme struct {

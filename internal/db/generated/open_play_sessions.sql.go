@@ -113,7 +113,8 @@ VALUES (
     ?4
 )
 RETURNING id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 `
 
 type CreateLessonCancelledNotificationParams struct {
@@ -138,6 +139,7 @@ func (q *Queries) CreateLessonCancelledNotification(ctx context.Context, arg Cre
 		&i.Message,
 		&i.RelatedSessionID,
 		&i.RelatedReservationID,
+		&i.RelatedClinicSessionID,
 		&i.TargetStaffID,
 		&i.Read,
 		&i.CreatedAt,
@@ -266,22 +268,26 @@ INSERT INTO staff_notifications (
     facility_id,
     notification_type,
     message,
-    related_session_id
+    related_session_id,
+    related_clinic_session_id
 ) VALUES (
     ?1,
     ?2,
     ?3,
-    ?4
+    ?4,
+    ?5
 )
 RETURNING id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 `
 
 type CreateStaffNotificationParams struct {
-	FacilityID       int64         `json:"facilityId"`
-	NotificationType string        `json:"notificationType"`
-	Message          string        `json:"message"`
-	RelatedSessionID sql.NullInt64 `json:"relatedSessionId"`
+	FacilityID             int64         `json:"facilityId"`
+	NotificationType       string        `json:"notificationType"`
+	Message                string        `json:"message"`
+	RelatedSessionID       sql.NullInt64 `json:"relatedSessionId"`
+	RelatedClinicSessionID sql.NullInt64 `json:"relatedClinicSessionId"`
 }
 
 func (q *Queries) CreateStaffNotification(ctx context.Context, arg CreateStaffNotificationParams) (StaffNotification, error) {
@@ -290,6 +296,7 @@ func (q *Queries) CreateStaffNotification(ctx context.Context, arg CreateStaffNo
 		arg.NotificationType,
 		arg.Message,
 		arg.RelatedSessionID,
+		arg.RelatedClinicSessionID,
 	)
 	var i StaffNotification
 	err := row.Scan(
@@ -299,6 +306,7 @@ func (q *Queries) CreateStaffNotification(ctx context.Context, arg CreateStaffNo
 		&i.Message,
 		&i.RelatedSessionID,
 		&i.RelatedReservationID,
+		&i.RelatedClinicSessionID,
 		&i.TargetStaffID,
 		&i.Read,
 		&i.CreatedAt,
@@ -380,7 +388,8 @@ func (q *Queries) GetOpenPlaySession(ctx context.Context, arg GetOpenPlaySession
 
 const getStaffNotificationByID = `-- name: GetStaffNotificationByID :one
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE id = ?1
 `
@@ -395,6 +404,7 @@ func (q *Queries) GetStaffNotificationByID(ctx context.Context, id int64) (Staff
 		&i.Message,
 		&i.RelatedSessionID,
 		&i.RelatedReservationID,
+		&i.RelatedClinicSessionID,
 		&i.TargetStaffID,
 		&i.Read,
 		&i.CreatedAt,
@@ -780,7 +790,8 @@ func (q *Queries) ListOpenPlaySessionsApproachingCutoff(ctx context.Context, arg
 
 const listStaffNotifications = `-- name: ListStaffNotifications :many
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE facility_id = ?1
 ORDER BY created_at DESC
@@ -809,6 +820,7 @@ func (q *Queries) ListStaffNotifications(ctx context.Context, arg ListStaffNotif
 			&i.Message,
 			&i.RelatedSessionID,
 			&i.RelatedReservationID,
+			&i.RelatedClinicSessionID,
 			&i.TargetStaffID,
 			&i.Read,
 			&i.CreatedAt,
@@ -829,7 +841,8 @@ func (q *Queries) ListStaffNotifications(ctx context.Context, arg ListStaffNotif
 
 const listStaffNotificationsForFacilityOrCorporate = `-- name: ListStaffNotificationsForFacilityOrCorporate :many
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE ?1 IS NULL
    OR facility_id = ?1
@@ -859,6 +872,7 @@ func (q *Queries) ListStaffNotificationsForFacilityOrCorporate(ctx context.Conte
 			&i.Message,
 			&i.RelatedSessionID,
 			&i.RelatedReservationID,
+			&i.RelatedClinicSessionID,
 			&i.TargetStaffID,
 			&i.Read,
 			&i.CreatedAt,
@@ -879,7 +893,8 @@ func (q *Queries) ListStaffNotificationsForFacilityOrCorporate(ctx context.Conte
 
 const listStaffNotificationsForStaff = `-- name: ListStaffNotificationsForStaff :many
 SELECT id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 FROM staff_notifications
 WHERE target_staff_id = ?1
 ORDER BY created_at DESC
@@ -908,6 +923,7 @@ func (q *Queries) ListStaffNotificationsForStaff(ctx context.Context, arg ListSt
 			&i.Message,
 			&i.RelatedSessionID,
 			&i.RelatedReservationID,
+			&i.RelatedClinicSessionID,
 			&i.TargetStaffID,
 			&i.Read,
 			&i.CreatedAt,
@@ -933,7 +949,8 @@ SET read = 1,
 WHERE id = ?1
   AND facility_id = ?2
 RETURNING id, facility_id, notification_type, message, related_session_id,
-    related_reservation_id, target_staff_id, read, created_at, updated_at
+    related_reservation_id, related_clinic_session_id, target_staff_id, read,
+    created_at, updated_at
 `
 
 type MarkStaffNotificationAsReadParams struct {
@@ -951,6 +968,7 @@ func (q *Queries) MarkStaffNotificationAsRead(ctx context.Context, arg MarkStaff
 		&i.Message,
 		&i.RelatedSessionID,
 		&i.RelatedReservationID,
+		&i.RelatedClinicSessionID,
 		&i.TargetStaffID,
 		&i.Read,
 		&i.CreatedAt,
