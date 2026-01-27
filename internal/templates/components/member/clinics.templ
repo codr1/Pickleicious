@@ -1,0 +1,108 @@
+package member
+
+import (
+	"fmt"
+
+	"github.com/codr1/Pickleicious/internal/templates/components/clinics"
+)
+
+templ MemberClinics(data clinics.ClinicListData) {
+	<div
+		id="member-clinics"
+		class="bg-background rounded-lg shadow-sm border border-border p-6"
+		hx-get="/member/clinics"
+		hx-trigger="refreshMemberClinics from:body"
+		hx-swap="outerHTML">
+		<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+			<h2 class="text-xl font-bold text-foreground">Clinics</h2>
+			<p class="text-sm text-muted-foreground">Sign up for upcoming clinics.</p>
+		</div>
+		if len(data.Upcoming) == 0 {
+			<p class="mt-4 text-muted-foreground">No clinics available yet.</p>
+		} else {
+			<div class="mt-6 space-y-6">
+				<div>
+					<h3 class="text-lg font-semibold text-foreground">Upcoming</h3>
+					<div class="mt-3 space-y-3">
+						for _, session := range data.Upcoming {
+							<div class="rounded-lg border border-border bg-background p-4 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+								<div class="space-y-1">
+									<p class="text-foreground font-medium">{session.Name}</p>
+									if session.Description != "" {
+										<p class="text-sm text-muted-foreground">{session.Description}</p>
+									}
+									<p class="text-sm text-muted-foreground">
+										{session.StartTime.Format("Jan 2, 2006 3:04 PM")} - {session.EndTime.Format("3:04 PM")}
+									</p>
+									<p class="text-sm text-muted-foreground">Coach: {session.ProName()}</p>
+									<p class="text-sm text-muted-foreground">Price: {session.PriceDisplay()}</p>
+									<p class="text-sm text-muted-foreground">Enrollment: {session.EnrollmentSummary()}</p>
+									if session.WaitlistCount > 0 {
+										<p class="text-sm text-muted-foreground">Waitlist: {session.WaitlistSummary()}</p>
+									}
+									if session.UserStatus == clinics.EnrollmentStatusEnrolled {
+										<span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">Enrolled</span>
+									} else if session.UserStatus == clinics.EnrollmentStatusWaitlisted {
+										<span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">Waitlisted</span>
+									}
+								</div>
+								<div class="flex items-center gap-2">
+									if session.UserStatus == clinics.EnrollmentStatusEnrolled || session.UserStatus == clinics.EnrollmentStatusWaitlisted {
+										<button
+											type="button"
+											class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100"
+											hx-delete={fmt.Sprintf("/member/clinics/%d/enroll", session.ID)}
+											hx-confirm="Cancel this clinic enrollment?"
+											hx-on::response-error="handleMemberClinicsError(event)"
+											hx-swap="none">
+											Cancel
+										</button>
+									} else {
+										<button
+											type="button"
+											class="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+											hx-post={fmt.Sprintf("/member/clinics/%d/enroll", session.ID)}
+											hx-on::response-error="handleMemberClinicsError(event)"
+											hx-swap="none">
+											if session.IsFull {
+												Join waitlist
+											} else {
+												Enroll
+											}
+										</button>
+									}
+								</div>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+		}
+		<script>
+			(function () {
+				if (window.handleMemberClinicsError) {
+					return;
+				}
+
+				window.handleMemberClinicsError = function (event) {
+					if (!event || !event.detail || !event.detail.xhr) {
+						return;
+					}
+					if (event.detail.xhr.status !== 409) {
+						return;
+					}
+					const modal = document.getElementById("modal");
+					if (!modal) {
+						return;
+					}
+					const responseText = event.detail.xhr.responseText || "";
+					if (window.htmx && window.htmx.swap) {
+						window.htmx.swap(modal, responseText, { swapStyle: "innerHTML" });
+						return;
+					}
+					modal.innerHTML = responseText;
+				};
+			})();
+		</script>
+	</div>
+}

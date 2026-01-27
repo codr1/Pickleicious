@@ -16,6 +16,8 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	clinictempl "github.com/codr1/Pickleicious/internal/templates/components/clinics"
+	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 )
 
 const clinicEnrollmentBelowMinimumNotification = "clinic_enrollment_below_minimum"
@@ -90,6 +92,7 @@ func HandleListAvailableClinics(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().In(facilityLoc)
 	clinics := make([]memberClinicSummary, 0, len(sessions))
+	clinicCards := make([]clinictempl.ClinicSessionCard, 0, len(sessions))
 	for _, session := range sessions {
 		if session.EnrollmentStatus != "open" {
 			continue
@@ -147,11 +150,14 @@ func HandleListAvailableClinics(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var description *string
+		descriptionText := ""
 		if clinicType.Description.Valid {
-			desc := clinicType.Description.String
+			desc := strings.TrimSpace(clinicType.Description.String)
 			description = &desc
+			descriptionText = desc
 		}
 
+		endLocal := session.EndTime.In(facilityLoc)
 		clinics = append(clinics, memberClinicSummary{
 			ID:               session.ID,
 			ClinicTypeID:     clinicType.ID,
@@ -163,13 +169,41 @@ func HandleListAvailableClinics(w http.ResponseWriter, r *http.Request) {
 			ProFirstName:     proFirstName,
 			ProLastName:      proLastName,
 			StartTime:        startLocal.Format(memberBookingTimeLayout),
-			EndTime:          session.EndTime.In(facilityLoc).Format(memberBookingTimeLayout),
+			EndTime:          endLocal.Format(memberBookingTimeLayout),
 			EnrollmentStatus: session.EnrollmentStatus,
 			EnrolledCount:    enrolledCount,
 			WaitlistCount:    waitlistCount,
 			IsFull:           enrolledCount >= clinicType.MaxParticipants,
 			UserStatus:       userStatus,
 		})
+
+		clinicCards = append(clinicCards, clinictempl.ClinicSessionCard{
+			ID:              session.ID,
+			Name:            clinicType.Name,
+			Description:     descriptionText,
+			ProFirstName:    proFirstName,
+			ProLastName:     proLastName,
+			StartTime:       startLocal,
+			EndTime:         endLocal,
+			MinParticipants: clinicType.MinParticipants,
+			MaxParticipants: clinicType.MaxParticipants,
+			EnrolledCount:   enrolledCount,
+			WaitlistCount:   waitlistCount,
+			PriceCents:      clinicType.PriceCents,
+			IsFull:          enrolledCount >= clinicType.MaxParticipants,
+			UserStatus:      toEnrollmentStatus(userStatus),
+		})
+	}
+
+	acceptHeader := strings.ToLower(r.Header.Get("Accept"))
+	wantsHTML := apiutil.IsHTMXRequest(r) || strings.Contains(acceptHeader, "text/html")
+	wantsJSON := strings.Contains(acceptHeader, "application/json")
+	if wantsHTML && (!wantsJSON || apiutil.IsHTMXRequest(r)) {
+		component := membertempl.MemberClinics(clinictempl.ClinicListData{Upcoming: clinicCards})
+		if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render member clinics", "Failed to render clinics") {
+			return
+		}
+		return
 	}
 
 	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"clinics": clinics}); err != nil {
@@ -586,4 +620,17 @@ func parseClinicSessionID(r *http.Request) (int64, error) {
 		return 0, fmt.Errorf("invalid clinic ID")
 	}
 	return id, nil
+}
+
+func toEnrollmentStatus(status string) clinictempl.EnrollmentStatus {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "enrolled":
+		return clinictempl.EnrollmentStatusEnrolled
+	case "waitlisted":
+		return clinictempl.EnrollmentStatusWaitlisted
+	case "cancelled":
+		return clinictempl.EnrollmentStatusCancelled
+	default:
+		return clinictempl.EnrollmentStatusNone
+	}
 }

@@ -13,6 +13,7 @@ const (
 	calendarEndHour     = 22
 	calendarSlotHeight  = 48.0
 	defaultResvColorHex = "#6B7280"
+	clinicResvColorHex  = "#8D6E63"
 )
 
 type CalendarData struct {
@@ -125,7 +126,7 @@ templ Calendar(data CalendarData) {
 									for _, reservation := range reservationsForCourt(data.Reservations, court.CourtNumber) {
 										<div
 											class="absolute left-1 right-1 rounded text-xs font-medium text-white px-2 py-1 shadow z-10 cursor-pointer"
-											style={ fmt.Sprintf("%s background-color: %s;", reservationBlockStyle(reservation, data.DisplayDate), reservationColor(reservation.TypeColor)) }
+											style={ fmt.Sprintf("%s background-color: %s;", reservationBlockStyle(reservation, data.DisplayDate), reservationColorFor(reservation)) }
 											hx-get={ fmt.Sprintf("/api/v1/reservations/%d/edit", reservation.ID) }
 											hx-target="#modal">
 											<span class="inline-flex items-center gap-1">
@@ -218,4 +219,12 @@ func reservationColor(value string) string {
 		return defaultResvColorHex
 	}
 	return trimmed
+}
+
+func reservationColorFor(reservation CalendarReservation) string {
+	color := reservationColor(reservation.TypeColor)
+	if strings.EqualFold(strings.TrimSpace(reservation.TypeName), "CLINIC") && color == defaultResvColorHex {
+		return clinicResvColorHex
+	}
+	return color
 }
