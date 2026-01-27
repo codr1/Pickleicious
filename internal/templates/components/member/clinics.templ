@@ -88,14 +88,23 @@ templ MemberClinics(data clinics.ClinicListData) {
 					if (!event || !event.detail || !event.detail.xhr) {
 						return;
 					}
-					if (event.detail.xhr.status !== 409) {
-						return;
-					}
 					const modal = document.getElementById("modal");
 					if (!modal) {
 						return;
 					}
 					const responseText = event.detail.xhr.responseText || "";
+					if (event.detail.xhr.status !== 409) {
+						const genericError = responseText || "<p class='text-red-600 p-4'>An error occurred. Please try again.</p>";
+						if (window.htmx && window.htmx.swap) {
+							window.htmx.swap(modal, genericError, { swapStyle: "innerHTML" });
+						} else {
+							modal.innerHTML = genericError;
+						}
+						if (window.console && window.console.error) {
+							window.console.error("Member clinic request failed", event.detail.xhr.status, responseText);
+						}
+						return;
+					}
 					if (window.htmx && window.htmx.swap) {
 						window.htmx.swap(modal, responseText, { swapStyle: "innerHTML" });
 						return;

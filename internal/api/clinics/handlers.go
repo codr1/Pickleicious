@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
@@ -216,23 +217,24 @@ func HandleClinicSessionCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startTime, endTime, err := parseClinicTimes(req.StartTime, req.EndTime)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), clinicQueryTimeout)
 	defer cancel()
 
-	exists, err := facilityExists(ctx, q, facilityID)
+	facility, err := q.GetFacilityByID(ctx, facilityID)
 	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to validate facility")
-		http.Error(w, "Failed to validate facility", http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Facility not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
+		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
 		return
 	}
-	if !exists {
-		http.Error(w, "Facility not found", http.StatusNotFound)
+	facilityLoc := loadFacilityLocation(logger, facility.Timezone)
+
+	startTime, endTime, err := parseClinicTimes(req.StartTime, req.EndTime, facilityLoc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -366,6 +368,18 @@ func HandleClinicSessionUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), clinicQueryTimeout)
 	defer cancel()
 
+	facility, err := q.GetFacilityByID(ctx, facilityID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Facility not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility")
+		http.Error(w, "Failed to load facility", http.StatusInternalServerError)
+		return
+	}
+	facilityLoc := loadFacilityLocation(logger, facility.Timezone)
+
 	_, err = q.GetClinicSession(ctx, dbgen.GetClinicSessionParams{
 		ID:         clinicID,
 		FacilityID: facilityID,
@@ -386,7 +400,7 @@ func HandleClinicSessionUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startTime, endTime, err := parseClinicTimes(req.StartTime, req.EndTime)
+	startTime, endTime, err := parseClinicTimes(req.StartTime, req.EndTime, facilityLoc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -648,12 +662,12 @@ func validEnrollmentStatus(status string) bool {
 	}
 }
 
-func parseClinicTimes(startValue, endValue string) (time.Time, time.Time, error) {
-	startTime, err := parseClinicTime(startValue)
+func parseClinicTimes(startValue, endValue string, loc *time.Location) (time.Time, time.Time, error) {
+	startTime, err := parseClinicTime(startValue, loc)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
-	endTime, err := parseClinicTime(endValue)
+	endTime, err := parseClinicTime(endValue, loc)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
@@ -663,17 +677,21 @@ func parseClinicTimes(startValue, endValue string) (time.Time, time.Time, error)
 	return startTime, endTime, nil
 }
 
-func parseClinicTime(value string) (time.Time, error) {
+func parseClinicTime(value string, loc *time.Location) (time.Time, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return time.Time{}, fmt.Errorf("time value is required")
 	}
-	layouts := []string{timeLayoutDatetimeLocal, time.RFC3339}
-	for _, layout := range layouts {
-		parsed, err := time.Parse(layout, value)
-		if err == nil {
-			return parsed, nil
-		}
+	if loc == nil {
+		loc = time.Local
+	}
+	parsed, err := time.ParseInLocation(timeLayoutDatetimeLocal, value, loc)
+	if err == nil {
+		return parsed.In(time.UTC), nil
+	}
+	parsed, err = time.Parse(time.RFC3339, value)
+	if err == nil {
+		return parsed, nil
 	}
 	return time.Time{}, fmt.Errorf("invalid time format")
 }
@@ -705,6 +723,18 @@ func ensureProForFacility(ctx context.Context, q *dbgen.Queries, facilityID, pro
 
 func isActiveStaffStatus(status string) bool {
 	return strings.EqualFold(status, "active")
+}
+
+func loadFacilityLocation(logger *zerolog.Logger, timezone string) *time.Location {
+	if timezone == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		logger.Error().Err(err).Str("timezone", timezone).Msg("Failed to load facility timezone")
+		return time.Local
+	}
+	return loc
 }
 
 func facilityIDFromRequest(r *http.Request) (int64, error) {

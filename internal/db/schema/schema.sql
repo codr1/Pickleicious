@@ -363,7 +363,9 @@ CREATE TABLE clinic_enrollments (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (status IN ('enrolled', 'waitlisted', 'cancelled')),
+    CHECK (position >= 1),
     UNIQUE (clinic_session_id, user_id),
+    UNIQUE (clinic_session_id, position),
     FOREIGN KEY (clinic_session_id) REFERENCES clinic_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );

@@ -14,6 +14,7 @@ const (
 	calendarSlotHeight  = 48.0
 	defaultResvColorHex = "#6B7280"
 	clinicResvColorHex  = "#8D6E63"
+	clinicTypeName      = "CLINIC"
 )
 
 type CalendarData struct {
@@ -223,7 +224,7 @@ func reservationColor(value string) string {
 
 func reservationColorFor(reservation CalendarReservation) string {
 	color := reservationColor(reservation.TypeColor)
-	if strings.EqualFold(strings.TrimSpace(reservation.TypeName), "CLINIC") && color == defaultResvColorHex {
+	if strings.EqualFold(strings.TrimSpace(reservation.TypeName), clinicTypeName) && color == defaultResvColorHex {
 		return clinicResvColorHex
 	}
 	return color

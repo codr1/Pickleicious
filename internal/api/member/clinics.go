@@ -20,7 +20,10 @@ import (
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 )
 
-const clinicEnrollmentBelowMinimumNotification = "clinic_enrollment_below_minimum"
+const (
+	clinicEnrollmentBelowMinimumNotification = "clinic_enrollment_below_minimum"
+	clinicEnrollmentPositionMaxRetries       = 3
+)
 
 type memberClinicSummary struct {
 	ID               int64   `json:"id"`
@@ -74,6 +77,8 @@ func HandleListAvailableClinics(w http.ResponseWriter, r *http.Request) {
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to load facility configuration", http.StatusInternalServerError)
+		return
 	} else if facility.Timezone != "" {
 		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
 		if loadErr != nil {
@@ -254,16 +259,17 @@ func HandleClinicEnroll(w http.ResponseWriter, r *http.Request) {
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
-	} else {
-		maxMemberReservations = facility.MaxMemberReservations
-		lessonMinNoticeHours = facility.LessonMinNoticeHours
-		if facility.Timezone != "" {
-			loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
-			if loadErr != nil {
-				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
-			} else {
-				facilityLoc = loadedLoc
-			}
+		http.Error(w, "Failed to load facility configuration", http.StatusInternalServerError)
+		return
+	}
+	maxMemberReservations = facility.MaxMemberReservations
+	lessonMinNoticeHours = facility.LessonMinNoticeHours
+	if facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr != nil {
+			logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone")
+		} else {
+			facilityLoc = loadedLoc
 		}
 	}
 
@@ -324,56 +330,71 @@ func HandleClinicEnroll(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Clinic is not available"}
 		}
 
-		enrollments, err := qtx.ListEnrollmentsForClinic(ctx, dbgen.ListEnrollmentsForClinicParams{
-			ClinicSessionID: session.ID,
-			FacilityID:      session.FacilityID,
-		})
-		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check clinic enrollment", Err: err}
-		}
-
-		var existing *dbgen.ClinicEnrollment
-		enrolledCount := int64(0)
-		for i := range enrollments {
-			if enrollments[i].Status == "enrolled" {
-				enrolledCount++
-			}
-			if enrollments[i].UserID == user.ID {
-				existing = &enrollments[i]
-			}
-		}
-
-		if existing != nil && existing.Status != "cancelled" {
-			return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already enrolled"}
-		}
-
-		targetStatus := "enrolled"
-		if enrolledCount >= clinicType.MaxParticipants {
-			targetStatus = "waitlisted"
-		}
-
-		if existing != nil {
-			enrollment, err = qtx.UpdateEnrollmentStatus(ctx, dbgen.UpdateEnrollmentStatusParams{
-				ID:         existing.ID,
-				FacilityID: *user.HomeFacilityID,
-				Status:     targetStatus,
+		var targetStatus string
+		var enrolledCount int64
+		for attempt := 0; attempt < clinicEnrollmentPositionMaxRetries; attempt++ {
+			enrollments, err := qtx.ListEnrollmentsForClinic(ctx, dbgen.ListEnrollmentsForClinicParams{
+				ClinicSessionID: session.ID,
+				FacilityID:      session.FacilityID,
 			})
 			if err != nil {
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to update clinic enrollment", Err: err}
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check clinic enrollment", Err: err}
 			}
-		} else {
+
+			var existing *dbgen.ClinicEnrollment
+			enrolledCount = 0
+			for i := range enrollments {
+				if enrollments[i].Status == "enrolled" {
+					enrolledCount++
+				}
+				if enrollments[i].UserID == user.ID {
+					existing = &enrollments[i]
+				}
+			}
+
+			if existing != nil && existing.Status != "cancelled" {
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already enrolled"}
+			}
+
+			targetStatus = "enrolled"
+			if enrolledCount >= clinicType.MaxParticipants {
+				targetStatus = "waitlisted"
+			}
+
+			if existing != nil {
+				enrollment, err = qtx.UpdateEnrollmentStatus(ctx, dbgen.UpdateEnrollmentStatusParams{
+					ID:         existing.ID,
+					FacilityID: *user.HomeFacilityID,
+					Status:     targetStatus,
+				})
+				if err != nil {
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to update clinic enrollment", Err: err}
+				}
+				break
+			}
+
 			enrollment, err = qtx.CreateClinicEnrollment(ctx, dbgen.CreateClinicEnrollmentParams{
 				ClinicSessionID: session.ID,
 				UserID:          user.ID,
 				Status:          targetStatus,
 				FacilityID:      session.FacilityID,
 			})
-			if err != nil {
-				if apiutil.IsSQLiteUniqueViolation(err) {
-					return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already enrolled", Err: err}
-				}
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to enroll in clinic", Err: err}
+			if err == nil {
+				break
 			}
+			if apiutil.IsSQLiteUniqueViolation(err) {
+				if isClinicEnrollmentPositionConflict(err) {
+					if attempt < clinicEnrollmentPositionMaxRetries-1 {
+						continue
+					}
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to enroll in clinic", Err: err}
+				}
+				return apiutil.HandlerError{Status: http.StatusConflict, Message: "Already enrolled", Err: err}
+			}
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to enroll in clinic", Err: err}
+		}
+		if enrollment.ID == 0 {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to enroll in clinic"}
 		}
 
 		if targetStatus == "enrolled" {
@@ -477,6 +498,8 @@ func HandleClinicCancel(w http.ResponseWriter, r *http.Request) {
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
+		http.Error(w, "Failed to load facility configuration", http.StatusInternalServerError)
+		return
 	} else if facility.Timezone != "" {
 		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
 		if loadErr != nil {
@@ -620,6 +643,15 @@ func parseClinicSessionID(r *http.Request) (int64, error) {
 		return 0, fmt.Errorf("invalid clinic ID")
 	}
 	return id, nil
+}
+
+func isClinicEnrollmentPositionConflict(err error) bool {
+	if !apiutil.IsSQLiteUniqueViolation(err) {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "clinic_enrollments.clinic_session_id, clinic_enrollments.position") ||
+		strings.Contains(message, "clinic_enrollments.position")
 }
 
 func toEnrollmentStatus(status string) clinictempl.EnrollmentStatus {
