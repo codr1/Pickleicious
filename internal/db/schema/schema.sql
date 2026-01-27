@@ -254,7 +254,7 @@ CREATE TABLE staff_notifications (
     FOREIGN KEY (facility_id) REFERENCES facilities(id),
     FOREIGN KEY (related_session_id) REFERENCES open_play_sessions(id),
     FOREIGN KEY (related_reservation_id) REFERENCES reservations(id),
-    FOREIGN KEY (related_clinic_session_id) REFERENCES clinic_sessions(id),
+    FOREIGN KEY (related_clinic_session_id) REFERENCES clinic_sessions(id) ON DELETE SET NULL,
     FOREIGN KEY (target_staff_id) REFERENCES staff(id)
 );
 
@@ -342,10 +342,10 @@ CREATE TABLE clinic_sessions (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (start_time < end_time),
     CHECK (enrollment_status IN ('open', 'closed')),
-    FOREIGN KEY (clinic_type_id) REFERENCES clinic_types(id),
-    FOREIGN KEY (facility_id) REFERENCES facilities(id),
-    FOREIGN KEY (pro_id) REFERENCES staff(id),
-    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    FOREIGN KEY (clinic_type_id) REFERENCES clinic_types(id) ON DELETE RESTRICT,
+    FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE RESTRICT,
+    FOREIGN KEY (pro_id) REFERENCES staff(id) ON DELETE RESTRICT,
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT
 );
 
 CREATE INDEX idx_clinic_sessions_facility_id ON clinic_sessions(facility_id);

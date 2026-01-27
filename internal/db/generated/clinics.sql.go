@@ -329,7 +329,7 @@ FROM clinic_enrollments e
 JOIN clinic_sessions s ON s.id = e.clinic_session_id
 WHERE s.id = ?1
   AND s.facility_id = ?2
-  AND e.status != 'cancelled'
+  AND e.status = 'enrolled'
 `
 
 type GetEnrollmentCountParams struct {

@@ -145,7 +145,7 @@ FROM clinic_enrollments e
 JOIN clinic_sessions s ON s.id = e.clinic_session_id
 WHERE s.id = @clinic_session_id
   AND s.facility_id = @facility_id
-  AND e.status != 'cancelled';
+  AND e.status = 'enrolled';
 
 -- name: UpdateEnrollmentStatus :one
 UPDATE clinic_enrollments

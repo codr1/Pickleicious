@@ -342,10 +342,34 @@ func HandleClinicSessionUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req, err := decodeClinicSessionRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	facilityID, err := resolveFacilityID(r, req.FacilityID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	if err := validateFacilityMatch(r, req.FacilityID, facilityID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), clinicQueryTimeout)
 	defer cancel()
 
-	existing, err := q.GetClinicSessionByID(ctx, clinicID)
+	_, err = q.GetClinicSession(ctx, dbgen.GetClinicSessionParams{
+		ID:         clinicID,
+		FacilityID: facilityID,
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "Clinic session not found", http.StatusNotFound)
@@ -353,22 +377,6 @@ func HandleClinicSessionUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Error().Err(err).Int64("clinic_session_id", clinicID).Msg("Failed to fetch clinic session")
 		http.Error(w, "Failed to fetch clinic session", http.StatusInternalServerError)
-		return
-	}
-	facilityID := existing.FacilityID
-
-	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
-		return
-	}
-
-	req, err := decodeClinicSessionRequest(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err := validateFacilityMatch(r, req.FacilityID, facilityID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	req.FacilityID = facilityID

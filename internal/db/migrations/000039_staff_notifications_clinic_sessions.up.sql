@@ -16,7 +16,7 @@ CREATE TABLE staff_notifications_new (
     FOREIGN KEY (facility_id) REFERENCES facilities(id),
     FOREIGN KEY (related_session_id) REFERENCES open_play_sessions(id),
     FOREIGN KEY (related_reservation_id) REFERENCES reservations(id),
-    FOREIGN KEY (related_clinic_session_id) REFERENCES clinic_sessions(id),
+    FOREIGN KEY (related_clinic_session_id) REFERENCES clinic_sessions(id) ON DELETE SET NULL,
     FOREIGN KEY (target_staff_id) REFERENCES staff(id)
 );
 
