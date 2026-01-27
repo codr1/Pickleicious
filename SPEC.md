@@ -124,6 +124,25 @@ The application follows a layered architecture with clear separation between HTT
 
 ### Facilities and Organizations
 
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      ORGANIZATION                            │
+│  (Corporate entity - e.g., "PicklePlex Holdings")           │
+│  - Custom Cognito configuration                              │
+│  - Custom domain (organization.pickleadmin.com)             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   FACILITY A    │ │   FACILITY B    │ │   FACILITY C    │
+│ (Location 1)    │ │ (Location 2)    │ │ (Location 3)    │
+│ - Own courts    │ │ - Own courts    │ │ - Own courts    │
+│ - Own hours     │ │ - Own hours     │ │ - Own hours     │
+│ - Own theme     │ │ - Own theme     │ │ - Own theme     │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
 A pickleball business may operate multiple facilities under one organization. Each facility is a physical location with its own courts, operating hours, staff, and members. Think of the organization as the business entity (Ace Pickleball Inc.) and facilities as individual clubs (Ace Pickleball Downtown, Ace Pickleball Westside).
 
 Each facility operates in its own timezone and sets its own hours. A facility might be open 6am-10pm on weekdays but only 8am-6pm on Sundays. These hours constrain when courts can be reserved and when open play sessions can run.
@@ -302,6 +321,14 @@ Organization (corporate entity)
 | visit_pack_types | Pack definitions per facility (name, price, visit count, validity) |
 | visit_packs | Purchased packs owned by users (visits remaining, expiration) |
 | visit_pack_redemptions | Log of pack usage (links pack, facility, optional reservation) |
+
+### Clinic System
+
+| Table | Purpose |
+|-------|---------|
+| clinic_types | Clinic templates per facility (name, description, min/max participants, price, status) |
+| clinic_sessions | Scheduled clinic instances (links clinic_type, pro, times, enrollment_status) |
+| clinic_enrollments | Member enrollments (user_id, clinic_session_id, status: enrolled/waitlisted/cancelled) |
 
 ### Key Constraints
 
@@ -777,6 +804,102 @@ When a session is cancelled or courts are reallocated, staff receive in-app noti
 - "Evening Open Play scaled from 2 to 3 courts - 22 participants"
 
 This allows staff to inform affected members and adjust operations.
+
+---
+
+## Group Clinics
+
+Clinics are scheduled group instruction sessions led by a teaching pro. Unlike open play (drop-in rotation) or lessons (one-on-one), clinics are structured group classes with defined participant limits and pricing.
+
+### Clinic Types
+
+Clinic types are templates that define the characteristics of a clinic offering:
+
+| Field | Description |
+|-------|-------------|
+| name | Display name (e.g., "Beginner Dinking Clinic") |
+| description | Optional detailed description |
+| min_participants | Minimum enrollment for session to run |
+| max_participants | Maximum capacity |
+| price_cents | Price per participant in cents |
+| status | draft, active, inactive, archived |
+
+Only clinic types with status "active" are available for member enrollment.
+
+### Clinic Sessions
+
+A clinic session is a scheduled instance of a clinic type:
+
+| Field | Description |
+|-------|-------------|
+| clinic_type_id | Reference to the clinic template |
+| pro_id | Teaching pro assigned to run the session |
+| start_time | Session start datetime |
+| end_time | Session end datetime |
+| enrollment_status | open or closed |
+| created_by_user_id | Staff who created the session |
+
+Sessions with enrollment_status "open" accept new enrollments. Staff can close enrollment manually.
+
+### Enrollment States
+
+Member enrollments track participation with these statuses:
+
+| Status | Description |
+|--------|-------------|
+| enrolled | Confirmed participant (within max_participants) |
+| waitlisted | Overflow beyond max_participants, auto-promoted on cancellation |
+| cancelled | Member cancelled their enrollment |
+
+### Enrollment Flow
+
+1. Member views available clinics at their home facility
+2. System shows sessions with enrollment_status "open" and start_time in future
+3. Member enrolls in a session
+4. If enrolled_count < max_participants: status = "enrolled"
+5. If enrolled_count >= max_participants: status = "waitlisted"
+6. Enrollment counts toward member's max_member_reservations limit
+
+### Waitlist Promotion
+
+When an enrolled member cancels:
+
+1. First waitlisted member (by enrollment time) is auto-promoted to "enrolled"
+2. Promoted member moves from waitlist to confirmed roster
+3. If cancellation drops enrolled count below min_participants, staff notification is created
+
+### Staff Management
+
+Staff can manage clinics through the admin interface:
+
+| Operation | Description |
+|-----------|-------------|
+| Create clinic type | Define new clinic template for facility |
+| List clinic types | View all clinic templates at facility |
+| Create session | Schedule a clinic instance with pro and times |
+| Update session | Modify session details (pro, times, enrollment status) |
+| Cancel session | Remove session (deletes session record) |
+| View roster | See enrolled and waitlisted members |
+
+### Clinic Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Facility scope | Clinic types and sessions belong to one facility |
+| Pro validation | Pro must have role "pro" and be active at the facility |
+| Clinic type status | Only "active" types shown to members |
+| Future sessions only | Members can only enroll in sessions with start_time in future |
+| Enrollment status | Must be "open" to accept new enrollments |
+| Advance notice | Respects facility's lesson_min_notice_hours setting |
+| Reservation limit | Enrollments count toward max_member_reservations |
+
+### Staff Notifications
+
+Staff are notified when enrollment drops below minimum:
+
+- Notification type: `clinic_enrollment_below_minimum`
+- Message includes clinic name, date/time, and current vs minimum enrollment
+- Created when an enrolled member cancels and remaining count < min_participants
 
 ---
 
@@ -1552,6 +1675,9 @@ Authorization failures are logged with facility_id and user_id.
 | GET | `/member/openplay` | List upcoming open play sessions |
 | POST | `/member/openplay/{id}` | Sign up for open play session |
 | DELETE | `/member/openplay/{id}` | Cancel open play signup |
+| GET | `/member/clinics` | List available clinics at home facility |
+| POST | `/member/clinics/{id}/enroll` | Enroll in clinic session |
+| DELETE | `/member/clinics/{id}/enroll` | Cancel clinic enrollment |
 | GET | `/api/v1/member/reservations/widget` | Reservations widget data |
 
 ### Courts and Calendar
@@ -1613,6 +1739,18 @@ Authorization failures are logged with facility_id and user_id.
 | PUT | `/api/v1/leagues/{id}/matches/{match_id}/result` | Record match result |
 | GET | `/api/v1/leagues/{id}/standings` | Get league standings |
 | GET | `/api/v1/leagues/{id}/standings/export` | Export standings CSV |
+
+### Clinics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/clinic-types` | List clinic types by facility |
+| POST | `/api/v1/clinic-types` | Create clinic type |
+| GET | `/api/v1/clinics` | List clinic sessions by facility |
+| POST | `/api/v1/clinics` | Create clinic session |
+| PUT | `/api/v1/clinics/{id}` | Update clinic session |
+| DELETE | `/api/v1/clinics/{id}` | Cancel clinic session |
+| GET | `/api/v1/clinics/{id}/roster` | View clinic enrollment roster |
 
 ### Themes
 
