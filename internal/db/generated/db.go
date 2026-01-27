@@ -36,8 +36,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.addReservationCourtStmt, err = db.PrepareContext(ctx, addReservationCourt); err != nil {
 		return nil, fmt.Errorf("error preparing query AddReservationCourt: %w", err)
 	}
+	if q.addTeamMemberStmt, err = db.PrepareContext(ctx, addTeamMember); err != nil {
+		return nil, fmt.Errorf("error preparing query AddTeamMember: %w", err)
+	}
 	if q.advanceWaitlistOfferStmt, err = db.PrepareContext(ctx, advanceWaitlistOffer); err != nil {
 		return nil, fmt.Errorf("error preparing query AdvanceWaitlistOffer: %w", err)
+	}
+	if q.assignFreeAgentToTeamStmt, err = db.PrepareContext(ctx, assignFreeAgentToTeam); err != nil {
+		return nil, fmt.Errorf("error preparing query AssignFreeAgentToTeam: %w", err)
 	}
 	if q.countActiveMemberReservationsStmt, err = db.PrepareContext(ctx, countActiveMemberReservations); err != nil {
 		return nil, fmt.Errorf("error preparing query CountActiveMemberReservations: %w", err)
@@ -83,6 +89,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.createFacilityVisitStmt, err = db.PrepareContext(ctx, createFacilityVisit); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateFacilityVisit: %w", err)
+	}
+	if q.createLeagueStmt, err = db.PrepareContext(ctx, createLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLeague: %w", err)
+	}
+	if q.createLeagueMatchStmt, err = db.PrepareContext(ctx, createLeagueMatch); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLeagueMatch: %w", err)
+	}
+	if q.createLeagueTeamStmt, err = db.PrepareContext(ctx, createLeagueTeam); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLeagueTeam: %w", err)
 	}
 	if q.createLessonCancelledNotificationStmt, err = db.PrepareContext(ctx, createLessonCancelledNotification); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateLessonCancelledNotification: %w", err)
@@ -143,6 +158,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.deleteCancellationPolicyTierStmt, err = db.PrepareContext(ctx, deleteCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteCancellationPolicyTier: %w", err)
+	}
+	if q.deleteLeagueStmt, err = db.PrepareContext(ctx, deleteLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteLeague: %w", err)
+	}
+	if q.deleteLeagueMatchesByLeagueIDStmt, err = db.PrepareContext(ctx, deleteLeagueMatchesByLeagueID); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteLeagueMatchesByLeagueID: %w", err)
 	}
 	if q.deleteMemberStmt, err = db.PrepareContext(ctx, deleteMember); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteMember: %w", err)
@@ -224,6 +245,21 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getLatestCancellationByReservationIDStmt, err = db.PrepareContext(ctx, getLatestCancellationByReservationID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLatestCancellationByReservationID: %w", err)
+	}
+	if q.getLeagueStmt, err = db.PrepareContext(ctx, getLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeague: %w", err)
+	}
+	if q.getLeagueMatchStmt, err = db.PrepareContext(ctx, getLeagueMatch); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueMatch: %w", err)
+	}
+	if q.getLeagueStandingsDataStmt, err = db.PrepareContext(ctx, getLeagueStandingsData); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueStandingsData: %w", err)
+	}
+	if q.getLeagueTeamStmt, err = db.PrepareContext(ctx, getLeagueTeam); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueTeam: %w", err)
+	}
+	if q.getLeagueWithFacilityTimezoneStmt, err = db.PrepareContext(ctx, getLeagueWithFacilityTimezone); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLeagueWithFacilityTimezone: %w", err)
 	}
 	if q.getMemberBillingStmt, err = db.PrepareContext(ctx, getMemberBilling); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMemberBilling: %w", err)
@@ -369,6 +405,21 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listFacilityThemesStmt, err = db.PrepareContext(ctx, listFacilityThemes); err != nil {
 		return nil, fmt.Errorf("error preparing query ListFacilityThemes: %w", err)
 	}
+	if q.listFreeAgentsByLeagueStmt, err = db.PrepareContext(ctx, listFreeAgentsByLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query ListFreeAgentsByLeague: %w", err)
+	}
+	if q.listLeagueMatchesStmt, err = db.PrepareContext(ctx, listLeagueMatches); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLeagueMatches: %w", err)
+	}
+	if q.listLeagueMatchesWithReservationsStmt, err = db.PrepareContext(ctx, listLeagueMatchesWithReservations); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLeagueMatchesWithReservations: %w", err)
+	}
+	if q.listLeagueTeamsStmt, err = db.PrepareContext(ctx, listLeagueTeams); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLeagueTeams: %w", err)
+	}
+	if q.listLeaguesByFacilityStmt, err = db.PrepareContext(ctx, listLeaguesByFacility); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLeaguesByFacility: %w", err)
+	}
 	if q.listMatchingPendingWaitlistsForCancelledSlotStmt, err = db.PrepareContext(ctx, listMatchingPendingWaitlistsForCancelledSlot); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMatchingPendingWaitlistsForCancelledSlot: %w", err)
 	}
@@ -447,6 +498,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listSystemThemesStmt, err = db.PrepareContext(ctx, listSystemThemes); err != nil {
 		return nil, fmt.Errorf("error preparing query ListSystemThemes: %w", err)
 	}
+	if q.listTeamMembersStmt, err = db.PrepareContext(ctx, listTeamMembers); err != nil {
+		return nil, fmt.Errorf("error preparing query ListTeamMembers: %w", err)
+	}
 	if q.listTodayVisitsByFacilityStmt, err = db.PrepareContext(ctx, listTodayVisitsByFacility); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTodayVisitsByFacility: %w", err)
 	}
@@ -483,6 +537,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.removeReservationCourtStmt, err = db.PrepareContext(ctx, removeReservationCourt); err != nil {
 		return nil, fmt.Errorf("error preparing query RemoveReservationCourt: %w", err)
 	}
+	if q.removeTeamMemberStmt, err = db.PrepareContext(ctx, removeTeamMember); err != nil {
+		return nil, fmt.Errorf("error preparing query RemoveTeamMember: %w", err)
+	}
 	if q.restoreMemberStmt, err = db.PrepareContext(ctx, restoreMember); err != nil {
 		return nil, fmt.Errorf("error preparing query RestoreMember: %w", err)
 	}
@@ -503,6 +560,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateFacilityVisitActivityStmt, err = db.PrepareContext(ctx, updateFacilityVisitActivity); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateFacilityVisitActivity: %w", err)
+	}
+	if q.updateLeagueStmt, err = db.PrepareContext(ctx, updateLeague); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateLeague: %w", err)
+	}
+	if q.updateLeagueTeamStmt, err = db.PrepareContext(ctx, updateLeagueTeam); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateLeagueTeam: %w", err)
+	}
+	if q.updateMatchResultStmt, err = db.PrepareContext(ctx, updateMatchResult); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateMatchResult: %w", err)
 	}
 	if q.updateMemberStmt, err = db.PrepareContext(ctx, updateMember); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMember: %w", err)
@@ -530,6 +596,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateStaffUserStmt, err = db.PrepareContext(ctx, updateStaffUser); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateStaffUser: %w", err)
+	}
+	if q.updateTeamCaptainStmt, err = db.PrepareContext(ctx, updateTeamCaptain); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateTeamCaptain: %w", err)
 	}
 	if q.updateThemeStmt, err = db.PrepareContext(ctx, updateTheme); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateTheme: %w", err)
@@ -583,9 +652,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing addReservationCourtStmt: %w", cerr)
 		}
 	}
+	if q.addTeamMemberStmt != nil {
+		if cerr := q.addTeamMemberStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing addTeamMemberStmt: %w", cerr)
+		}
+	}
 	if q.advanceWaitlistOfferStmt != nil {
 		if cerr := q.advanceWaitlistOfferStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing advanceWaitlistOfferStmt: %w", cerr)
+		}
+	}
+	if q.assignFreeAgentToTeamStmt != nil {
+		if cerr := q.assignFreeAgentToTeamStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing assignFreeAgentToTeamStmt: %w", cerr)
 		}
 	}
 	if q.countActiveMemberReservationsStmt != nil {
@@ -661,6 +740,21 @@ func (q *Queries) Close() error {
 	if q.createFacilityVisitStmt != nil {
 		if cerr := q.createFacilityVisitStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createFacilityVisitStmt: %w", cerr)
+		}
+	}
+	if q.createLeagueStmt != nil {
+		if cerr := q.createLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLeagueStmt: %w", cerr)
+		}
+	}
+	if q.createLeagueMatchStmt != nil {
+		if cerr := q.createLeagueMatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLeagueMatchStmt: %w", cerr)
+		}
+	}
+	if q.createLeagueTeamStmt != nil {
+		if cerr := q.createLeagueTeamStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLeagueTeamStmt: %w", cerr)
 		}
 	}
 	if q.createLessonCancelledNotificationStmt != nil {
@@ -761,6 +855,16 @@ func (q *Queries) Close() error {
 	if q.deleteCancellationPolicyTierStmt != nil {
 		if cerr := q.deleteCancellationPolicyTierStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteCancellationPolicyTierStmt: %w", cerr)
+		}
+	}
+	if q.deleteLeagueStmt != nil {
+		if cerr := q.deleteLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteLeagueStmt: %w", cerr)
+		}
+	}
+	if q.deleteLeagueMatchesByLeagueIDStmt != nil {
+		if cerr := q.deleteLeagueMatchesByLeagueIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteLeagueMatchesByLeagueIDStmt: %w", cerr)
 		}
 	}
 	if q.deleteMemberStmt != nil {
@@ -896,6 +1000,31 @@ func (q *Queries) Close() error {
 	if q.getLatestCancellationByReservationIDStmt != nil {
 		if cerr := q.getLatestCancellationByReservationIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLatestCancellationByReservationIDStmt: %w", cerr)
+		}
+	}
+	if q.getLeagueStmt != nil {
+		if cerr := q.getLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueStmt: %w", cerr)
+		}
+	}
+	if q.getLeagueMatchStmt != nil {
+		if cerr := q.getLeagueMatchStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueMatchStmt: %w", cerr)
+		}
+	}
+	if q.getLeagueStandingsDataStmt != nil {
+		if cerr := q.getLeagueStandingsDataStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueStandingsDataStmt: %w", cerr)
+		}
+	}
+	if q.getLeagueTeamStmt != nil {
+		if cerr := q.getLeagueTeamStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueTeamStmt: %w", cerr)
+		}
+	}
+	if q.getLeagueWithFacilityTimezoneStmt != nil {
+		if cerr := q.getLeagueWithFacilityTimezoneStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLeagueWithFacilityTimezoneStmt: %w", cerr)
 		}
 	}
 	if q.getMemberBillingStmt != nil {
@@ -1138,6 +1267,31 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listFacilityThemesStmt: %w", cerr)
 		}
 	}
+	if q.listFreeAgentsByLeagueStmt != nil {
+		if cerr := q.listFreeAgentsByLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listFreeAgentsByLeagueStmt: %w", cerr)
+		}
+	}
+	if q.listLeagueMatchesStmt != nil {
+		if cerr := q.listLeagueMatchesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLeagueMatchesStmt: %w", cerr)
+		}
+	}
+	if q.listLeagueMatchesWithReservationsStmt != nil {
+		if cerr := q.listLeagueMatchesWithReservationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLeagueMatchesWithReservationsStmt: %w", cerr)
+		}
+	}
+	if q.listLeagueTeamsStmt != nil {
+		if cerr := q.listLeagueTeamsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLeagueTeamsStmt: %w", cerr)
+		}
+	}
+	if q.listLeaguesByFacilityStmt != nil {
+		if cerr := q.listLeaguesByFacilityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLeaguesByFacilityStmt: %w", cerr)
+		}
+	}
 	if q.listMatchingPendingWaitlistsForCancelledSlotStmt != nil {
 		if cerr := q.listMatchingPendingWaitlistsForCancelledSlotStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listMatchingPendingWaitlistsForCancelledSlotStmt: %w", cerr)
@@ -1268,6 +1422,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listSystemThemesStmt: %w", cerr)
 		}
 	}
+	if q.listTeamMembersStmt != nil {
+		if cerr := q.listTeamMembersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listTeamMembersStmt: %w", cerr)
+		}
+	}
 	if q.listTodayVisitsByFacilityStmt != nil {
 		if cerr := q.listTodayVisitsByFacilityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listTodayVisitsByFacilityStmt: %w", cerr)
@@ -1328,6 +1487,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing removeReservationCourtStmt: %w", cerr)
 		}
 	}
+	if q.removeTeamMemberStmt != nil {
+		if cerr := q.removeTeamMemberStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing removeTeamMemberStmt: %w", cerr)
+		}
+	}
 	if q.restoreMemberStmt != nil {
 		if cerr := q.restoreMemberStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing restoreMemberStmt: %w", cerr)
@@ -1361,6 +1525,21 @@ func (q *Queries) Close() error {
 	if q.updateFacilityVisitActivityStmt != nil {
 		if cerr := q.updateFacilityVisitActivityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateFacilityVisitActivityStmt: %w", cerr)
+		}
+	}
+	if q.updateLeagueStmt != nil {
+		if cerr := q.updateLeagueStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateLeagueStmt: %w", cerr)
+		}
+	}
+	if q.updateLeagueTeamStmt != nil {
+		if cerr := q.updateLeagueTeamStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateLeagueTeamStmt: %w", cerr)
+		}
+	}
+	if q.updateMatchResultStmt != nil {
+		if cerr := q.updateMatchResultStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateMatchResultStmt: %w", cerr)
 		}
 	}
 	if q.updateMemberStmt != nil {
@@ -1406,6 +1585,11 @@ func (q *Queries) Close() error {
 	if q.updateStaffUserStmt != nil {
 		if cerr := q.updateStaffUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateStaffUserStmt: %w", cerr)
+		}
+	}
+	if q.updateTeamCaptainStmt != nil {
+		if cerr := q.updateTeamCaptainStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateTeamCaptainStmt: %w", cerr)
 		}
 	}
 	if q.updateThemeStmt != nil {
@@ -1496,7 +1680,9 @@ type Queries struct {
 	addOpenPlayParticipantStmt                       *sql.Stmt
 	addParticipantStmt                               *sql.Stmt
 	addReservationCourtStmt                          *sql.Stmt
+	addTeamMemberStmt                                *sql.Stmt
 	advanceWaitlistOfferStmt                         *sql.Stmt
+	assignFreeAgentToTeamStmt                        *sql.Stmt
 	countActiveMemberReservationsStmt                *sql.Stmt
 	countCheckinsByFacilityInRangeStmt               *sql.Stmt
 	countFacilityThemeNameStmt                       *sql.Stmt
@@ -1512,6 +1698,9 @@ type Queries struct {
 	createCancellationPolicyTierStmt                 *sql.Stmt
 	createCourtStmt                                  *sql.Stmt
 	createFacilityVisitStmt                          *sql.Stmt
+	createLeagueStmt                                 *sql.Stmt
+	createLeagueMatchStmt                            *sql.Stmt
+	createLeagueTeamStmt                             *sql.Stmt
 	createLessonCancelledNotificationStmt            *sql.Stmt
 	createMemberStmt                                 *sql.Stmt
 	createOpenPlayAuditLogStmt                       *sql.Stmt
@@ -1532,6 +1721,8 @@ type Queries struct {
 	deactivateVisitPackTypeStmt                      *sql.Stmt
 	decrementVisitPackVisitStmt                      *sql.Stmt
 	deleteCancellationPolicyTierStmt                 *sql.Stmt
+	deleteLeagueStmt                                 *sql.Stmt
+	deleteLeagueMatchesByLeagueIDStmt                *sql.Stmt
 	deleteMemberStmt                                 *sql.Stmt
 	deleteOpenPlayRuleStmt                           *sql.Stmt
 	deleteOperatingHoursStmt                         *sql.Stmt
@@ -1559,6 +1750,11 @@ type Queries struct {
 	getFacilityHoursStmt                             *sql.Stmt
 	getFutureProSessionsByStaffIDStmt                *sql.Stmt
 	getLatestCancellationByReservationIDStmt         *sql.Stmt
+	getLeagueStmt                                    *sql.Stmt
+	getLeagueMatchStmt                               *sql.Stmt
+	getLeagueStandingsDataStmt                       *sql.Stmt
+	getLeagueTeamStmt                                *sql.Stmt
+	getLeagueWithFacilityTimezoneStmt                *sql.Stmt
 	getMemberBillingStmt                             *sql.Stmt
 	getMemberByEmailStmt                             *sql.Stmt
 	getMemberByEmailIncludeDeletedStmt               *sql.Stmt
@@ -1607,6 +1803,11 @@ type Queries struct {
 	listExpiredOffersStmt                            *sql.Stmt
 	listFacilitiesStmt                               *sql.Stmt
 	listFacilityThemesStmt                           *sql.Stmt
+	listFreeAgentsByLeagueStmt                       *sql.Stmt
+	listLeagueMatchesStmt                            *sql.Stmt
+	listLeagueMatchesWithReservationsStmt            *sql.Stmt
+	listLeagueTeamsStmt                              *sql.Stmt
+	listLeaguesByFacilityStmt                        *sql.Stmt
 	listMatchingPendingWaitlistsForCancelledSlotStmt *sql.Stmt
 	listMemberUpcomingOpenPlaySessionsStmt           *sql.Stmt
 	listMembersStmt                                  *sql.Stmt
@@ -1633,6 +1834,7 @@ type Queries struct {
 	listStaffNotificationsForFacilityOrCorporateStmt *sql.Stmt
 	listStaffNotificationsForStaffStmt               *sql.Stmt
 	listSystemThemesStmt                             *sql.Stmt
+	listTeamMembersStmt                              *sql.Stmt
 	listTodayVisitsByFacilityStmt                    *sql.Stmt
 	listVisitPackTypesStmt                           *sql.Stmt
 	listWaitlistsByFacilityStmt                      *sql.Stmt
@@ -1645,6 +1847,7 @@ type Queries struct {
 	removeOpenPlayParticipantStmt                    *sql.Stmt
 	removeParticipantStmt                            *sql.Stmt
 	removeReservationCourtStmt                       *sql.Stmt
+	removeTeamMemberStmt                             *sql.Stmt
 	restoreMemberStmt                                *sql.Stmt
 	searchMembersStmt                                *sql.Stmt
 	updateBillingInfoStmt                            *sql.Stmt
@@ -1652,6 +1855,9 @@ type Queries struct {
 	updateCourtStatusStmt                            *sql.Stmt
 	updateFacilityBookingConfigStmt                  *sql.Stmt
 	updateFacilityVisitActivityStmt                  *sql.Stmt
+	updateLeagueStmt                                 *sql.Stmt
+	updateLeagueTeamStmt                             *sql.Stmt
+	updateMatchResultStmt                            *sql.Stmt
 	updateMemberStmt                                 *sql.Stmt
 	updateMemberEmailStmt                            *sql.Stmt
 	updateOpenPlayRuleStmt                           *sql.Stmt
@@ -1661,6 +1867,7 @@ type Queries struct {
 	updateSessionAutoScaleOverrideStmt               *sql.Stmt
 	updateStaffStmt                                  *sql.Stmt
 	updateStaffUserStmt                              *sql.Stmt
+	updateTeamCaptainStmt                            *sql.Stmt
 	updateThemeStmt                                  *sql.Stmt
 	updateUserCognitoStatusStmt                      *sql.Stmt
 	updateUserStatusStmt                             *sql.Stmt
@@ -1680,7 +1887,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		addOpenPlayParticipantStmt:                       q.addOpenPlayParticipantStmt,
 		addParticipantStmt:                               q.addParticipantStmt,
 		addReservationCourtStmt:                          q.addReservationCourtStmt,
+		addTeamMemberStmt:                                q.addTeamMemberStmt,
 		advanceWaitlistOfferStmt:                         q.advanceWaitlistOfferStmt,
+		assignFreeAgentToTeamStmt:                        q.assignFreeAgentToTeamStmt,
 		countActiveMemberReservationsStmt:                q.countActiveMemberReservationsStmt,
 		countCheckinsByFacilityInRangeStmt:               q.countCheckinsByFacilityInRangeStmt,
 		countFacilityThemeNameStmt:                       q.countFacilityThemeNameStmt,
@@ -1696,6 +1905,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createCancellationPolicyTierStmt:                 q.createCancellationPolicyTierStmt,
 		createCourtStmt:                                  q.createCourtStmt,
 		createFacilityVisitStmt:                          q.createFacilityVisitStmt,
+		createLeagueStmt:                                 q.createLeagueStmt,
+		createLeagueMatchStmt:                            q.createLeagueMatchStmt,
+		createLeagueTeamStmt:                             q.createLeagueTeamStmt,
 		createLessonCancelledNotificationStmt:            q.createLessonCancelledNotificationStmt,
 		createMemberStmt:                                 q.createMemberStmt,
 		createOpenPlayAuditLogStmt:                       q.createOpenPlayAuditLogStmt,
@@ -1716,6 +1928,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deactivateVisitPackTypeStmt:                      q.deactivateVisitPackTypeStmt,
 		decrementVisitPackVisitStmt:                      q.decrementVisitPackVisitStmt,
 		deleteCancellationPolicyTierStmt:                 q.deleteCancellationPolicyTierStmt,
+		deleteLeagueStmt:                                 q.deleteLeagueStmt,
+		deleteLeagueMatchesByLeagueIDStmt:                q.deleteLeagueMatchesByLeagueIDStmt,
 		deleteMemberStmt:                                 q.deleteMemberStmt,
 		deleteOpenPlayRuleStmt:                           q.deleteOpenPlayRuleStmt,
 		deleteOperatingHoursStmt:                         q.deleteOperatingHoursStmt,
@@ -1743,6 +1957,11 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getFacilityHoursStmt:                             q.getFacilityHoursStmt,
 		getFutureProSessionsByStaffIDStmt:                q.getFutureProSessionsByStaffIDStmt,
 		getLatestCancellationByReservationIDStmt:         q.getLatestCancellationByReservationIDStmt,
+		getLeagueStmt:                                    q.getLeagueStmt,
+		getLeagueMatchStmt:                               q.getLeagueMatchStmt,
+		getLeagueStandingsDataStmt:                       q.getLeagueStandingsDataStmt,
+		getLeagueTeamStmt:                                q.getLeagueTeamStmt,
+		getLeagueWithFacilityTimezoneStmt:                q.getLeagueWithFacilityTimezoneStmt,
 		getMemberBillingStmt:                             q.getMemberBillingStmt,
 		getMemberByEmailStmt:                             q.getMemberByEmailStmt,
 		getMemberByEmailIncludeDeletedStmt:               q.getMemberByEmailIncludeDeletedStmt,
@@ -1791,6 +2010,11 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listExpiredOffersStmt:                            q.listExpiredOffersStmt,
 		listFacilitiesStmt:                               q.listFacilitiesStmt,
 		listFacilityThemesStmt:                           q.listFacilityThemesStmt,
+		listFreeAgentsByLeagueStmt:                       q.listFreeAgentsByLeagueStmt,
+		listLeagueMatchesStmt:                            q.listLeagueMatchesStmt,
+		listLeagueMatchesWithReservationsStmt:            q.listLeagueMatchesWithReservationsStmt,
+		listLeagueTeamsStmt:                              q.listLeagueTeamsStmt,
+		listLeaguesByFacilityStmt:                        q.listLeaguesByFacilityStmt,
 		listMatchingPendingWaitlistsForCancelledSlotStmt: q.listMatchingPendingWaitlistsForCancelledSlotStmt,
 		listMemberUpcomingOpenPlaySessionsStmt:           q.listMemberUpcomingOpenPlaySessionsStmt,
 		listMembersStmt:                                  q.listMembersStmt,
@@ -1817,6 +2041,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listStaffNotificationsForFacilityOrCorporateStmt: q.listStaffNotificationsForFacilityOrCorporateStmt,
 		listStaffNotificationsForStaffStmt:               q.listStaffNotificationsForStaffStmt,
 		listSystemThemesStmt:                             q.listSystemThemesStmt,
+		listTeamMembersStmt:                              q.listTeamMembersStmt,
 		listTodayVisitsByFacilityStmt:                    q.listTodayVisitsByFacilityStmt,
 		listVisitPackTypesStmt:                           q.listVisitPackTypesStmt,
 		listWaitlistsByFacilityStmt:                      q.listWaitlistsByFacilityStmt,
@@ -1829,6 +2054,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		removeOpenPlayParticipantStmt:                    q.removeOpenPlayParticipantStmt,
 		removeParticipantStmt:                            q.removeParticipantStmt,
 		removeReservationCourtStmt:                       q.removeReservationCourtStmt,
+		removeTeamMemberStmt:                             q.removeTeamMemberStmt,
 		restoreMemberStmt:                                q.restoreMemberStmt,
 		searchMembersStmt:                                q.searchMembersStmt,
 		updateBillingInfoStmt:                            q.updateBillingInfoStmt,
@@ -1836,6 +2062,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateCourtStatusStmt:                            q.updateCourtStatusStmt,
 		updateFacilityBookingConfigStmt:                  q.updateFacilityBookingConfigStmt,
 		updateFacilityVisitActivityStmt:                  q.updateFacilityVisitActivityStmt,
+		updateLeagueStmt:                                 q.updateLeagueStmt,
+		updateLeagueTeamStmt:                             q.updateLeagueTeamStmt,
+		updateMatchResultStmt:                            q.updateMatchResultStmt,
 		updateMemberStmt:                                 q.updateMemberStmt,
 		updateMemberEmailStmt:                            q.updateMemberEmailStmt,
 		updateOpenPlayRuleStmt:                           q.updateOpenPlayRuleStmt,
@@ -1845,6 +2074,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateSessionAutoScaleOverrideStmt:               q.updateSessionAutoScaleOverrideStmt,
 		updateStaffStmt:                                  q.updateStaffStmt,
 		updateStaffUserStmt:                              q.updateStaffUserStmt,
+		updateTeamCaptainStmt:                            q.updateTeamCaptainStmt,
 		updateThemeStmt:                                  q.updateThemeStmt,
 		updateUserCognitoStatusStmt:                      q.updateUserCognitoStatusStmt,
 		updateUserStatusStmt:                             q.updateUserStatusStmt,

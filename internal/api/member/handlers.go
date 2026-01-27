@@ -1615,11 +1615,11 @@ func buildMemberBookingSlots(
 	weekday := int64(baseDate.Weekday())
 	for _, hour := range hours {
 		if hour.DayOfWeek == weekday {
-			opensAtRaw := formatOperatingHourValue(hour.OpensAt)
+			opensAtRaw := apiutil.FormatOperatingHourValue(hour.OpensAt)
 			if strings.TrimSpace(opensAtRaw) != "" {
 				opensAt = opensAtRaw
 			}
-			closesAtRaw := formatOperatingHourValue(hour.ClosesAt)
+			closesAtRaw := apiutil.FormatOperatingHourValue(hour.ClosesAt)
 			if strings.TrimSpace(closesAtRaw) != "" {
 				closesAt = closesAtRaw
 			}
@@ -1699,22 +1699,6 @@ func parseBookingTimeOfDay(raw string, field string) (time.Time, error) {
 		}
 	}
 	return parsed, nil
-}
-
-func formatOperatingHourValue(value interface{}) string {
-	switch typed := value.(type) {
-	case time.Time:
-		return typed.Format("15:04")
-	case []byte:
-		return string(typed)
-	case string:
-		return typed
-	default:
-		if value == nil {
-			return ""
-		}
-		return fmt.Sprint(value)
-	}
 }
 
 func parseMemberBookingTime(raw string, field string, loc *time.Location) (time.Time, error) {

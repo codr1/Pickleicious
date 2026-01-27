@@ -15,7 +15,9 @@ type Querier interface {
 	AddOpenPlayParticipant(ctx context.Context, arg AddOpenPlayParticipantParams) (ReservationParticipant, error)
 	AddParticipant(ctx context.Context, arg AddParticipantParams) error
 	AddReservationCourt(ctx context.Context, arg AddReservationCourtParams) error
+	AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (LeagueTeamMember, error)
 	AdvanceWaitlistOffer(ctx context.Context, arg AdvanceWaitlistOfferParams) (WaitlistOffer, error)
+	AssignFreeAgentToTeam(ctx context.Context, arg AssignFreeAgentToTeamParams) (LeagueTeamMember, error)
 	CountActiveMemberReservations(ctx context.Context, arg CountActiveMemberReservationsParams) (int64, error)
 	CountCheckinsByFacilityInRange(ctx context.Context, arg CountCheckinsByFacilityInRangeParams) (int64, error)
 	CountFacilityThemeName(ctx context.Context, arg CountFacilityThemeNameParams) (int64, error)
@@ -32,6 +34,10 @@ type Querier interface {
 	CreateCourt(ctx context.Context, arg CreateCourtParams) (Court, error)
 	// internal/db/queries/facility_visits.sql
 	CreateFacilityVisit(ctx context.Context, arg CreateFacilityVisitParams) (FacilityVisit, error)
+	// internal/db/queries/leagues.sql
+	CreateLeague(ctx context.Context, arg CreateLeagueParams) (League, error)
+	CreateLeagueMatch(ctx context.Context, arg CreateLeagueMatchParams) (LeagueMatch, error)
+	CreateLeagueTeam(ctx context.Context, arg CreateLeagueTeamParams) (LeagueTeam, error)
 	CreateLessonCancelledNotification(ctx context.Context, arg CreateLessonCancelledNotificationParams) (StaffNotification, error)
 	CreateMember(ctx context.Context, arg CreateMemberParams) (int64, error)
 	CreateOpenPlayAuditLog(ctx context.Context, arg CreateOpenPlayAuditLogParams) (OpenPlayAuditLog, error)
@@ -54,6 +60,8 @@ type Querier interface {
 	DeactivateVisitPackType(ctx context.Context, arg DeactivateVisitPackTypeParams) (VisitPackType, error)
 	DecrementVisitPackVisit(ctx context.Context, id int64) (VisitPack, error)
 	DeleteCancellationPolicyTier(ctx context.Context, arg DeleteCancellationPolicyTierParams) (int64, error)
+	DeleteLeague(ctx context.Context, id int64) (int64, error)
+	DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error)
 	DeleteMember(ctx context.Context, id int64) error
 	DeleteOpenPlayRule(ctx context.Context, arg DeleteOpenPlayRuleParams) (int64, error)
 	DeleteOperatingHours(ctx context.Context, arg DeleteOperatingHoursParams) (int64, error)
@@ -86,6 +94,11 @@ type Querier interface {
 	GetFacilityHours(ctx context.Context, facilityID int64) ([]OperatingHour, error)
 	GetFutureProSessionsByStaffID(ctx context.Context, arg GetFutureProSessionsByStaffIDParams) ([]GetFutureProSessionsByStaffIDRow, error)
 	GetLatestCancellationByReservationID(ctx context.Context, reservationID int64) (ReservationCancellation, error)
+	GetLeague(ctx context.Context, id int64) (League, error)
+	GetLeagueMatch(ctx context.Context, arg GetLeagueMatchParams) (LeagueMatch, error)
+	GetLeagueStandingsData(ctx context.Context, leagueID int64) ([]GetLeagueStandingsDataRow, error)
+	GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, error)
+	GetLeagueWithFacilityTimezone(ctx context.Context, id int64) (GetLeagueWithFacilityTimezoneRow, error)
 	GetMemberBilling(ctx context.Context, userID int64) (GetMemberBillingRow, error)
 	GetMemberByEmail(ctx context.Context, email sql.NullString) (User, error)
 	GetMemberByEmailIncludeDeleted(ctx context.Context, email sql.NullString) (User, error)
@@ -138,6 +151,11 @@ type Querier interface {
 	// internal/db/queries/facilities.sql
 	ListFacilities(ctx context.Context) ([]Facility, error)
 	ListFacilityThemes(ctx context.Context, facilityID sql.NullInt64) ([]Theme, error)
+	ListFreeAgentsByLeague(ctx context.Context, leagueID int64) ([]ListFreeAgentsByLeagueRow, error)
+	ListLeagueMatches(ctx context.Context, leagueID int64) ([]LeagueMatch, error)
+	ListLeagueMatchesWithReservations(ctx context.Context, leagueID int64) ([]ListLeagueMatchesWithReservationsRow, error)
+	ListLeagueTeams(ctx context.Context, leagueID int64) ([]LeagueTeam, error)
+	ListLeaguesByFacility(ctx context.Context, facilityID int64) ([]League, error)
 	ListMatchingPendingWaitlistsForCancelledSlot(ctx context.Context, arg ListMatchingPendingWaitlistsForCancelledSlotParams) ([]Waitlist, error)
 	// Empty facility_ids intentionally yields zero rows (caller should prefilter).
 	ListMemberUpcomingOpenPlaySessions(ctx context.Context, arg ListMemberUpcomingOpenPlaySessionsParams) ([]ListMemberUpcomingOpenPlaySessionsRow, error)
@@ -170,6 +188,7 @@ type Querier interface {
 	ListStaffNotificationsForFacilityOrCorporate(ctx context.Context, arg ListStaffNotificationsForFacilityOrCorporateParams) ([]StaffNotification, error)
 	ListStaffNotificationsForStaff(ctx context.Context, arg ListStaffNotificationsForStaffParams) ([]StaffNotification, error)
 	ListSystemThemes(ctx context.Context) ([]Theme, error)
+	ListTeamMembers(ctx context.Context, leagueTeamID int64) ([]LeagueTeamMember, error)
 	ListTodayVisitsByFacility(ctx context.Context, arg ListTodayVisitsByFacilityParams) ([]FacilityVisit, error)
 	ListVisitPackTypes(ctx context.Context, facilityID int64) ([]VisitPackType, error)
 	ListWaitlistsByFacility(ctx context.Context, facilityID int64) ([]Waitlist, error)
@@ -182,6 +201,7 @@ type Querier interface {
 	RemoveOpenPlayParticipant(ctx context.Context, arg RemoveOpenPlayParticipantParams) (int64, error)
 	RemoveParticipant(ctx context.Context, arg RemoveParticipantParams) error
 	RemoveReservationCourt(ctx context.Context, arg RemoveReservationCourtParams) error
+	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
 	RestoreMember(ctx context.Context, id int64) error
 	SearchMembers(ctx context.Context, arg SearchMembersParams) ([]SearchMembersRow, error)
 	UpdateBillingInfo(ctx context.Context, arg UpdateBillingInfoParams) (UserBilling, error)
@@ -189,6 +209,9 @@ type Querier interface {
 	UpdateCourtStatus(ctx context.Context, arg UpdateCourtStatusParams) (Court, error)
 	UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFacilityBookingConfigParams) (Facility, error)
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)
+	UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (League, error)
+	UpdateLeagueTeam(ctx context.Context, arg UpdateLeagueTeamParams) (LeagueTeam, error)
+	UpdateMatchResult(ctx context.Context, arg UpdateMatchResultParams) (LeagueMatch, error)
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) error
 	UpdateMemberEmail(ctx context.Context, arg UpdateMemberEmailParams) (User, error)
 	UpdateOpenPlayRule(ctx context.Context, arg UpdateOpenPlayRuleParams) (OpenPlayRule, error)
@@ -198,6 +221,7 @@ type Querier interface {
 	UpdateSessionAutoScaleOverride(ctx context.Context, arg UpdateSessionAutoScaleOverrideParams) (OpenPlaySession, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) error
 	UpdateStaffUser(ctx context.Context, arg UpdateStaffUserParams) error
+	UpdateTeamCaptain(ctx context.Context, arg UpdateTeamCaptainParams) (LeagueTeam, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUserCognitoStatus(ctx context.Context, arg UpdateUserCognitoStatusParams) error
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error

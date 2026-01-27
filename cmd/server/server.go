@@ -18,6 +18,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/checkin"
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/dashboard"
+	"github.com/codr1/Pickleicious/internal/api/leagues"
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
@@ -82,6 +83,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	waitlist.InitHandlers(database)
 
 	staff.InitHandlers(database)
+	leagues.InitHandlers(database)
 
 	if err := scheduler.Init(); err != nil {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
@@ -376,6 +378,55 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+
+	// League routes
+	mux.HandleFunc("/leagues", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleLeaguesPage,
+	}))
+	mux.HandleFunc("/api/v1/leagues", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  leagues.HandleLeaguesList,
+		http.MethodPost: leagues.HandleLeagueCreate,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:    leagues.HandleLeagueDetail,
+		http.MethodPut:    leagues.HandleLeagueUpdate,
+		http.MethodDelete: leagues.HandleLeagueDelete,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  leagues.HandleListLeagueTeams,
+		http.MethodPost: leagues.HandleTeamCreate,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams/{team_id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleTeamDetail,
+		http.MethodPut: leagues.HandleTeamUpdate,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams/{team_id}/members", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleAddTeamMember,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/teams/{team_id}/members/{user_id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodDelete: leagues.HandleRemoveTeamMember,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/free-agents", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleListFreeAgents,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/free-agents/{user_id}/assign", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleAssignFreeAgent,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/schedule/generate", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleGenerateSchedule,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/schedule/regenerate", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: leagues.HandleRegenerateSchedule,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/matches/{match_id}/result", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut: leagues.HandleRecordMatchResult,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/standings", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleLeagueStandings,
+	}))
+	mux.HandleFunc("/api/v1/leagues/{id}/standings/export", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: leagues.HandleExportStandingsCSV,
+	}))
 
 	// Court routes
 	mux.HandleFunc("/courts", courts.HandleCourtsPage)
