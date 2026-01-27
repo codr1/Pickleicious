@@ -8,7 +8,112 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 )
+
+const createClinicEnrollment = `-- name: CreateClinicEnrollment :one
+INSERT INTO clinic_enrollments (
+    clinic_session_id,
+    user_id,
+    status,
+    position
+) SELECT
+    ?1,
+    ?2,
+    ?3,
+    COALESCE(MAX(e.position), 0) + 1
+FROM clinic_sessions s
+LEFT JOIN clinic_enrollments e ON e.clinic_session_id = s.id
+WHERE s.id = ?1
+  AND s.facility_id = ?4
+GROUP BY s.id
+RETURNING id, clinic_session_id, user_id, status, position, created_at, updated_at
+`
+
+type CreateClinicEnrollmentParams struct {
+	ClinicSessionID int64  `json:"clinicSessionId"`
+	UserID          int64  `json:"userId"`
+	Status          string `json:"status"`
+	FacilityID      int64  `json:"facilityId"`
+}
+
+func (q *Queries) CreateClinicEnrollment(ctx context.Context, arg CreateClinicEnrollmentParams) (ClinicEnrollment, error) {
+	row := q.queryRow(ctx, q.createClinicEnrollmentStmt, createClinicEnrollment,
+		arg.ClinicSessionID,
+		arg.UserID,
+		arg.Status,
+		arg.FacilityID,
+	)
+	var i ClinicEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.ClinicSessionID,
+		&i.UserID,
+		&i.Status,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createClinicSession = `-- name: CreateClinicSession :one
+INSERT INTO clinic_sessions (
+    clinic_type_id,
+    facility_id,
+    pro_id,
+    start_time,
+    end_time,
+    enrollment_status,
+    created_by_user_id
+) VALUES (
+    ?1,
+    ?2,
+    ?3,
+    ?4,
+    ?5,
+    ?6,
+    ?7
+)
+RETURNING id, clinic_type_id, facility_id, pro_id, start_time, end_time,
+    enrollment_status, created_by_user_id, created_at, updated_at
+`
+
+type CreateClinicSessionParams struct {
+	ClinicTypeID     int64     `json:"clinicTypeId"`
+	FacilityID       int64     `json:"facilityId"`
+	ProID            int64     `json:"proId"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	EnrollmentStatus string    `json:"enrollmentStatus"`
+	CreatedByUserID  int64     `json:"createdByUserId"`
+}
+
+func (q *Queries) CreateClinicSession(ctx context.Context, arg CreateClinicSessionParams) (ClinicSession, error) {
+	row := q.queryRow(ctx, q.createClinicSessionStmt, createClinicSession,
+		arg.ClinicTypeID,
+		arg.FacilityID,
+		arg.ProID,
+		arg.StartTime,
+		arg.EndTime,
+		arg.EnrollmentStatus,
+		arg.CreatedByUserID,
+	)
+	var i ClinicSession
+	err := row.Scan(
+		&i.ID,
+		&i.ClinicTypeID,
+		&i.FacilityID,
+		&i.ProID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.EnrollmentStatus,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
 
 const createClinicType = `-- name: CreateClinicType :one
 
@@ -70,6 +175,29 @@ func (q *Queries) CreateClinicType(ctx context.Context, arg CreateClinicTypePara
 	return i, err
 }
 
+const deleteClinicEnrollment = `-- name: DeleteClinicEnrollment :execrows
+DELETE FROM clinic_enrollments
+WHERE clinic_enrollments.id = ?1
+  AND clinic_session_id IN (
+      SELECT id
+      FROM clinic_sessions
+      WHERE facility_id = ?2
+  )
+`
+
+type DeleteClinicEnrollmentParams struct {
+	ID         int64 `json:"id"`
+	FacilityID int64 `json:"facilityId"`
+}
+
+func (q *Queries) DeleteClinicEnrollment(ctx context.Context, arg DeleteClinicEnrollmentParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteClinicEnrollmentStmt, deleteClinicEnrollment, arg.ID, arg.FacilityID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteClinicType = `-- name: DeleteClinicType :execrows
 DELETE FROM clinic_types
 WHERE id = ?1
@@ -87,6 +215,37 @@ func (q *Queries) DeleteClinicType(ctx context.Context, arg DeleteClinicTypePara
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const getClinicSession = `-- name: GetClinicSession :one
+SELECT id, clinic_type_id, facility_id, pro_id, start_time, end_time,
+    enrollment_status, created_by_user_id, created_at, updated_at
+FROM clinic_sessions
+WHERE id = ?1
+  AND facility_id = ?2
+`
+
+type GetClinicSessionParams struct {
+	ID         int64 `json:"id"`
+	FacilityID int64 `json:"facilityId"`
+}
+
+func (q *Queries) GetClinicSession(ctx context.Context, arg GetClinicSessionParams) (ClinicSession, error) {
+	row := q.queryRow(ctx, q.getClinicSessionStmt, getClinicSession, arg.ID, arg.FacilityID)
+	var i ClinicSession
+	err := row.Scan(
+		&i.ID,
+		&i.ClinicTypeID,
+		&i.FacilityID,
+		&i.ProID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.EnrollmentStatus,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getClinicType = `-- name: GetClinicType :one
@@ -118,6 +277,69 @@ func (q *Queries) GetClinicType(ctx context.Context, arg GetClinicTypeParams) (C
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getEnrollmentCount = `-- name: GetEnrollmentCount :one
+SELECT COUNT(*) AS count
+FROM clinic_enrollments e
+JOIN clinic_sessions s ON s.id = e.clinic_session_id
+WHERE s.id = ?1
+  AND s.facility_id = ?2
+  AND e.status != 'cancelled'
+`
+
+type GetEnrollmentCountParams struct {
+	ClinicSessionID int64 `json:"clinicSessionId"`
+	FacilityID      int64 `json:"facilityId"`
+}
+
+func (q *Queries) GetEnrollmentCount(ctx context.Context, arg GetEnrollmentCountParams) (int64, error) {
+	row := q.queryRow(ctx, q.getEnrollmentCountStmt, getEnrollmentCount, arg.ClinicSessionID, arg.FacilityID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const listClinicSessionsByFacility = `-- name: ListClinicSessionsByFacility :many
+SELECT id, clinic_type_id, facility_id, pro_id, start_time, end_time,
+    enrollment_status, created_by_user_id, created_at, updated_at
+FROM clinic_sessions
+WHERE facility_id = ?1
+ORDER BY start_time
+`
+
+func (q *Queries) ListClinicSessionsByFacility(ctx context.Context, facilityID int64) ([]ClinicSession, error) {
+	rows, err := q.query(ctx, q.listClinicSessionsByFacilityStmt, listClinicSessionsByFacility, facilityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClinicSession
+	for rows.Next() {
+		var i ClinicSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClinicTypeID,
+			&i.FacilityID,
+			&i.ProID,
+			&i.StartTime,
+			&i.EndTime,
+			&i.EnrollmentStatus,
+			&i.CreatedByUserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listClinicTypesByFacility = `-- name: ListClinicTypesByFacility :many
@@ -160,6 +382,101 @@ func (q *Queries) ListClinicTypesByFacility(ctx context.Context, facilityID int6
 		return nil, err
 	}
 	return items, nil
+}
+
+const listEnrollmentsForClinic = `-- name: ListEnrollmentsForClinic :many
+SELECT e.id, e.clinic_session_id, e.user_id, e.status, e.position, e.created_at, e.updated_at
+FROM clinic_enrollments e
+JOIN clinic_sessions s ON s.id = e.clinic_session_id
+WHERE s.id = ?1
+  AND s.facility_id = ?2
+ORDER BY e.position, e.created_at
+`
+
+type ListEnrollmentsForClinicParams struct {
+	ClinicSessionID int64 `json:"clinicSessionId"`
+	FacilityID      int64 `json:"facilityId"`
+}
+
+func (q *Queries) ListEnrollmentsForClinic(ctx context.Context, arg ListEnrollmentsForClinicParams) ([]ClinicEnrollment, error) {
+	rows, err := q.query(ctx, q.listEnrollmentsForClinicStmt, listEnrollmentsForClinic, arg.ClinicSessionID, arg.FacilityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClinicEnrollment
+	for rows.Next() {
+		var i ClinicEnrollment
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClinicSessionID,
+			&i.UserID,
+			&i.Status,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateClinicSession = `-- name: UpdateClinicSession :one
+UPDATE clinic_sessions
+SET clinic_type_id = ?1,
+    pro_id = ?2,
+    start_time = ?3,
+    end_time = ?4,
+    enrollment_status = ?5,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?6
+  AND facility_id = ?7
+RETURNING id, clinic_type_id, facility_id, pro_id, start_time, end_time,
+    enrollment_status, created_by_user_id, created_at, updated_at
+`
+
+type UpdateClinicSessionParams struct {
+	ClinicTypeID     int64     `json:"clinicTypeId"`
+	ProID            int64     `json:"proId"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	EnrollmentStatus string    `json:"enrollmentStatus"`
+	ID               int64     `json:"id"`
+	FacilityID       int64     `json:"facilityId"`
+}
+
+func (q *Queries) UpdateClinicSession(ctx context.Context, arg UpdateClinicSessionParams) (ClinicSession, error) {
+	row := q.queryRow(ctx, q.updateClinicSessionStmt, updateClinicSession,
+		arg.ClinicTypeID,
+		arg.ProID,
+		arg.StartTime,
+		arg.EndTime,
+		arg.EnrollmentStatus,
+		arg.ID,
+		arg.FacilityID,
+	)
+	var i ClinicSession
+	err := row.Scan(
+		&i.ID,
+		&i.ClinicTypeID,
+		&i.FacilityID,
+		&i.ProID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.EnrollmentStatus,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateClinicType = `-- name: UpdateClinicType :one
@@ -209,6 +526,40 @@ func (q *Queries) UpdateClinicType(ctx context.Context, arg UpdateClinicTypePara
 		&i.MaxParticipants,
 		&i.PriceCents,
 		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateEnrollmentStatus = `-- name: UpdateEnrollmentStatus :one
+UPDATE clinic_enrollments
+SET status = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE clinic_enrollments.id = ?2
+  AND clinic_session_id IN (
+      SELECT id
+      FROM clinic_sessions
+      WHERE facility_id = ?3
+  )
+RETURNING id, clinic_session_id, user_id, status, position, created_at, updated_at
+`
+
+type UpdateEnrollmentStatusParams struct {
+	Status     string `json:"status"`
+	ID         int64  `json:"id"`
+	FacilityID int64  `json:"facilityId"`
+}
+
+func (q *Queries) UpdateEnrollmentStatus(ctx context.Context, arg UpdateEnrollmentStatusParams) (ClinicEnrollment, error) {
+	row := q.queryRow(ctx, q.updateEnrollmentStatusStmt, updateEnrollmentStatus, arg.Status, arg.ID, arg.FacilityID)
+	var i ClinicEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.ClinicSessionID,
+		&i.UserID,
+		&i.Status,
+		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

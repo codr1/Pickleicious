@@ -19,6 +19,29 @@ type CancellationPolicyTier struct {
 	UpdatedAt         time.Time     `json:"updatedAt"`
 }
 
+type ClinicEnrollment struct {
+	ID              int64     `json:"id"`
+	ClinicSessionID int64     `json:"clinicSessionId"`
+	UserID          int64     `json:"userId"`
+	Status          string    `json:"status"`
+	Position        int64     `json:"position"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type ClinicSession struct {
+	ID               int64     `json:"id"`
+	ClinicTypeID     int64     `json:"clinicTypeId"`
+	FacilityID       int64     `json:"facilityId"`
+	ProID            int64     `json:"proId"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	EnrollmentStatus string    `json:"enrollmentStatus"`
+	CreatedByUserID  int64     `json:"createdByUserId"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
 type ClinicType struct {
 	ID              int64          `json:"id"`
 	FacilityID      int64          `json:"facilityId"`
