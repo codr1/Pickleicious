@@ -31,6 +31,8 @@ type Querier interface {
 	CountUnreadStaffNotifications(ctx context.Context, facilityID interface{}) (int64, error)
 	CountVisitPackTypesByFacility(ctx context.Context, facilityID int64) (int64, error)
 	CreateCancellationPolicyTier(ctx context.Context, arg CreateCancellationPolicyTierParams) (CancellationPolicyTier, error)
+	// internal/db/queries/clinics.sql
+	CreateClinicType(ctx context.Context, arg CreateClinicTypeParams) (ClinicType, error)
 	CreateCourt(ctx context.Context, arg CreateCourtParams) (Court, error)
 	// internal/db/queries/facility_visits.sql
 	CreateFacilityVisit(ctx context.Context, arg CreateFacilityVisitParams) (FacilityVisit, error)
@@ -60,6 +62,7 @@ type Querier interface {
 	DeactivateVisitPackType(ctx context.Context, arg DeactivateVisitPackTypeParams) (VisitPackType, error)
 	DecrementVisitPackVisit(ctx context.Context, id int64) (VisitPack, error)
 	DeleteCancellationPolicyTier(ctx context.Context, arg DeleteCancellationPolicyTierParams) (int64, error)
+	DeleteClinicType(ctx context.Context, arg DeleteClinicTypeParams) (int64, error)
 	DeleteLeague(ctx context.Context, id int64) (int64, error)
 	DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error)
 	DeleteMember(ctx context.Context, id int64) error
@@ -84,6 +87,7 @@ type Querier interface {
 	GetBookedCourtHours(ctx context.Context, arg GetBookedCourtHoursParams) (float64, error)
 	GetCancellationMetricsInRange(ctx context.Context, arg GetCancellationMetricsInRangeParams) (GetCancellationMetricsInRangeRow, error)
 	GetCancellationPolicyTier(ctx context.Context, arg GetCancellationPolicyTierParams) (CancellationPolicyTier, error)
+	GetClinicType(ctx context.Context, arg GetClinicTypeParams) (ClinicType, error)
 	// internal/db/queries/cognito.sql
 	GetCognitoConfig(ctx context.Context, organizationID int64) (CognitoConfig, error)
 	// internal/db/queries/courts.sql
@@ -145,6 +149,7 @@ type Querier interface {
 	ListActiveVisitPacksForUserByOrganization(ctx context.Context, arg ListActiveVisitPacksForUserByOrganizationParams) ([]VisitPack, error)
 	ListAvailableCourts(ctx context.Context, arg ListAvailableCourtsParams) ([]ListAvailableCourtsRow, error)
 	ListCancellationPolicyTiers(ctx context.Context, arg ListCancellationPolicyTiersParams) ([]CancellationPolicyTier, error)
+	ListClinicTypesByFacility(ctx context.Context, facilityID int64) ([]ClinicType, error)
 	ListCourts(ctx context.Context, facilityID int64) ([]Court, error)
 	ListDistinctFacilitiesWithScheduledSessions(ctx context.Context, comparisonTime time.Time) ([]int64, error)
 	ListExpiredOffers(ctx context.Context, comparisonTime time.Time) ([]ListExpiredOffersRow, error)
@@ -206,6 +211,7 @@ type Querier interface {
 	SearchMembers(ctx context.Context, arg SearchMembersParams) ([]SearchMembersRow, error)
 	UpdateBillingInfo(ctx context.Context, arg UpdateBillingInfoParams) (UserBilling, error)
 	UpdateCancellationPolicyTier(ctx context.Context, arg UpdateCancellationPolicyTierParams) (CancellationPolicyTier, error)
+	UpdateClinicType(ctx context.Context, arg UpdateClinicTypeParams) (ClinicType, error)
 	UpdateCourtStatus(ctx context.Context, arg UpdateCourtStatusParams) (Court, error)
 	UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFacilityBookingConfigParams) (Facility, error)
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)

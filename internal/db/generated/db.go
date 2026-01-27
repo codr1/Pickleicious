@@ -84,6 +84,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createCancellationPolicyTierStmt, err = db.PrepareContext(ctx, createCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateCancellationPolicyTier: %w", err)
 	}
+	if q.createClinicTypeStmt, err = db.PrepareContext(ctx, createClinicType); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateClinicType: %w", err)
+	}
 	if q.createCourtStmt, err = db.PrepareContext(ctx, createCourt); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateCourt: %w", err)
 	}
@@ -159,6 +162,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteCancellationPolicyTierStmt, err = db.PrepareContext(ctx, deleteCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteCancellationPolicyTier: %w", err)
 	}
+	if q.deleteClinicTypeStmt, err = db.PrepareContext(ctx, deleteClinicType); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteClinicType: %w", err)
+	}
 	if q.deleteLeagueStmt, err = db.PrepareContext(ctx, deleteLeague); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteLeague: %w", err)
 	}
@@ -224,6 +230,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getCancellationPolicyTierStmt, err = db.PrepareContext(ctx, getCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCancellationPolicyTier: %w", err)
+	}
+	if q.getClinicTypeStmt, err = db.PrepareContext(ctx, getClinicType); err != nil {
+		return nil, fmt.Errorf("error preparing query GetClinicType: %w", err)
 	}
 	if q.getCognitoConfigStmt, err = db.PrepareContext(ctx, getCognitoConfig); err != nil {
 		return nil, fmt.Errorf("error preparing query GetCognitoConfig: %w", err)
@@ -390,6 +399,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listCancellationPolicyTiersStmt, err = db.PrepareContext(ctx, listCancellationPolicyTiers); err != nil {
 		return nil, fmt.Errorf("error preparing query ListCancellationPolicyTiers: %w", err)
 	}
+	if q.listClinicTypesByFacilityStmt, err = db.PrepareContext(ctx, listClinicTypesByFacility); err != nil {
+		return nil, fmt.Errorf("error preparing query ListClinicTypesByFacility: %w", err)
+	}
 	if q.listCourtsStmt, err = db.PrepareContext(ctx, listCourts); err != nil {
 		return nil, fmt.Errorf("error preparing query ListCourts: %w", err)
 	}
@@ -551,6 +563,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateCancellationPolicyTierStmt, err = db.PrepareContext(ctx, updateCancellationPolicyTier); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateCancellationPolicyTier: %w", err)
+	}
+	if q.updateClinicTypeStmt, err = db.PrepareContext(ctx, updateClinicType); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateClinicType: %w", err)
 	}
 	if q.updateCourtStatusStmt, err = db.PrepareContext(ctx, updateCourtStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateCourtStatus: %w", err)
@@ -732,6 +747,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createCancellationPolicyTierStmt: %w", cerr)
 		}
 	}
+	if q.createClinicTypeStmt != nil {
+		if cerr := q.createClinicTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createClinicTypeStmt: %w", cerr)
+		}
+	}
 	if q.createCourtStmt != nil {
 		if cerr := q.createCourtStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createCourtStmt: %w", cerr)
@@ -857,6 +877,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteCancellationPolicyTierStmt: %w", cerr)
 		}
 	}
+	if q.deleteClinicTypeStmt != nil {
+		if cerr := q.deleteClinicTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteClinicTypeStmt: %w", cerr)
+		}
+	}
 	if q.deleteLeagueStmt != nil {
 		if cerr := q.deleteLeagueStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteLeagueStmt: %w", cerr)
@@ -965,6 +990,11 @@ func (q *Queries) Close() error {
 	if q.getCancellationPolicyTierStmt != nil {
 		if cerr := q.getCancellationPolicyTierStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getCancellationPolicyTierStmt: %w", cerr)
+		}
+	}
+	if q.getClinicTypeStmt != nil {
+		if cerr := q.getClinicTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getClinicTypeStmt: %w", cerr)
 		}
 	}
 	if q.getCognitoConfigStmt != nil {
@@ -1242,6 +1272,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listCancellationPolicyTiersStmt: %w", cerr)
 		}
 	}
+	if q.listClinicTypesByFacilityStmt != nil {
+		if cerr := q.listClinicTypesByFacilityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listClinicTypesByFacilityStmt: %w", cerr)
+		}
+	}
 	if q.listCourtsStmt != nil {
 		if cerr := q.listCourtsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listCourtsStmt: %w", cerr)
@@ -1512,6 +1547,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateCancellationPolicyTierStmt: %w", cerr)
 		}
 	}
+	if q.updateClinicTypeStmt != nil {
+		if cerr := q.updateClinicTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateClinicTypeStmt: %w", cerr)
+		}
+	}
 	if q.updateCourtStatusStmt != nil {
 		if cerr := q.updateCourtStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateCourtStatusStmt: %w", cerr)
@@ -1696,6 +1736,7 @@ type Queries struct {
 	countUnreadStaffNotificationsStmt                *sql.Stmt
 	countVisitPackTypesByFacilityStmt                *sql.Stmt
 	createCancellationPolicyTierStmt                 *sql.Stmt
+	createClinicTypeStmt                             *sql.Stmt
 	createCourtStmt                                  *sql.Stmt
 	createFacilityVisitStmt                          *sql.Stmt
 	createLeagueStmt                                 *sql.Stmt
@@ -1721,6 +1762,7 @@ type Queries struct {
 	deactivateVisitPackTypeStmt                      *sql.Stmt
 	decrementVisitPackVisitStmt                      *sql.Stmt
 	deleteCancellationPolicyTierStmt                 *sql.Stmt
+	deleteClinicTypeStmt                             *sql.Stmt
 	deleteLeagueStmt                                 *sql.Stmt
 	deleteLeagueMatchesByLeagueIDStmt                *sql.Stmt
 	deleteMemberStmt                                 *sql.Stmt
@@ -1743,6 +1785,7 @@ type Queries struct {
 	getBookedCourtHoursStmt                          *sql.Stmt
 	getCancellationMetricsInRangeStmt                *sql.Stmt
 	getCancellationPolicyTierStmt                    *sql.Stmt
+	getClinicTypeStmt                                *sql.Stmt
 	getCognitoConfigStmt                             *sql.Stmt
 	getCourtStmt                                     *sql.Stmt
 	getCreatedMemberStmt                             *sql.Stmt
@@ -1798,6 +1841,7 @@ type Queries struct {
 	listActiveVisitPacksForUserByOrganizationStmt    *sql.Stmt
 	listAvailableCourtsStmt                          *sql.Stmt
 	listCancellationPolicyTiersStmt                  *sql.Stmt
+	listClinicTypesByFacilityStmt                    *sql.Stmt
 	listCourtsStmt                                   *sql.Stmt
 	listDistinctFacilitiesWithScheduledSessionsStmt  *sql.Stmt
 	listExpiredOffersStmt                            *sql.Stmt
@@ -1852,6 +1896,7 @@ type Queries struct {
 	searchMembersStmt                                *sql.Stmt
 	updateBillingInfoStmt                            *sql.Stmt
 	updateCancellationPolicyTierStmt                 *sql.Stmt
+	updateClinicTypeStmt                             *sql.Stmt
 	updateCourtStatusStmt                            *sql.Stmt
 	updateFacilityBookingConfigStmt                  *sql.Stmt
 	updateFacilityVisitActivityStmt                  *sql.Stmt
@@ -1903,6 +1948,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		countUnreadStaffNotificationsStmt:                q.countUnreadStaffNotificationsStmt,
 		countVisitPackTypesByFacilityStmt:                q.countVisitPackTypesByFacilityStmt,
 		createCancellationPolicyTierStmt:                 q.createCancellationPolicyTierStmt,
+		createClinicTypeStmt:                             q.createClinicTypeStmt,
 		createCourtStmt:                                  q.createCourtStmt,
 		createFacilityVisitStmt:                          q.createFacilityVisitStmt,
 		createLeagueStmt:                                 q.createLeagueStmt,
@@ -1928,6 +1974,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deactivateVisitPackTypeStmt:                      q.deactivateVisitPackTypeStmt,
 		decrementVisitPackVisitStmt:                      q.decrementVisitPackVisitStmt,
 		deleteCancellationPolicyTierStmt:                 q.deleteCancellationPolicyTierStmt,
+		deleteClinicTypeStmt:                             q.deleteClinicTypeStmt,
 		deleteLeagueStmt:                                 q.deleteLeagueStmt,
 		deleteLeagueMatchesByLeagueIDStmt:                q.deleteLeagueMatchesByLeagueIDStmt,
 		deleteMemberStmt:                                 q.deleteMemberStmt,
@@ -1950,6 +1997,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getBookedCourtHoursStmt:                          q.getBookedCourtHoursStmt,
 		getCancellationMetricsInRangeStmt:                q.getCancellationMetricsInRangeStmt,
 		getCancellationPolicyTierStmt:                    q.getCancellationPolicyTierStmt,
+		getClinicTypeStmt:                                q.getClinicTypeStmt,
 		getCognitoConfigStmt:                             q.getCognitoConfigStmt,
 		getCourtStmt:                                     q.getCourtStmt,
 		getCreatedMemberStmt:                             q.getCreatedMemberStmt,
@@ -2005,6 +2053,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listActiveVisitPacksForUserByOrganizationStmt:    q.listActiveVisitPacksForUserByOrganizationStmt,
 		listAvailableCourtsStmt:                          q.listAvailableCourtsStmt,
 		listCancellationPolicyTiersStmt:                  q.listCancellationPolicyTiersStmt,
+		listClinicTypesByFacilityStmt:                    q.listClinicTypesByFacilityStmt,
 		listCourtsStmt:                                   q.listCourtsStmt,
 		listDistinctFacilitiesWithScheduledSessionsStmt:  q.listDistinctFacilitiesWithScheduledSessionsStmt,
 		listExpiredOffersStmt:                            q.listExpiredOffersStmt,
@@ -2059,6 +2108,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		searchMembersStmt:                                q.searchMembersStmt,
 		updateBillingInfoStmt:                            q.updateBillingInfoStmt,
 		updateCancellationPolicyTierStmt:                 q.updateCancellationPolicyTierStmt,
+		updateClinicTypeStmt:                             q.updateClinicTypeStmt,
 		updateCourtStatusStmt:                            q.updateCourtStatusStmt,
 		updateFacilityBookingConfigStmt:                  q.updateFacilityBookingConfigStmt,
 		updateFacilityVisitActivityStmt:                  q.updateFacilityVisitActivityStmt,

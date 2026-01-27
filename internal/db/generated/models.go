@@ -19,6 +19,19 @@ type CancellationPolicyTier struct {
 	UpdatedAt         time.Time     `json:"updatedAt"`
 }
 
+type ClinicType struct {
+	ID              int64          `json:"id"`
+	FacilityID      int64          `json:"facilityId"`
+	Name            string         `json:"name"`
+	Description     sql.NullString `json:"description"`
+	MinParticipants int64          `json:"minParticipants"`
+	MaxParticipants int64          `json:"maxParticipants"`
+	PriceCents      int64          `json:"priceCents"`
+	Status          string         `json:"status"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+}
+
 type CognitoConfig struct {
 	ID             int64     `json:"id"`
 	OrganizationID int64     `json:"organizationId"`
