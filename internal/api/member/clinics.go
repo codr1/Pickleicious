@@ -580,10 +580,10 @@ func HandleClinicCancel(w http.ResponseWriter, r *http.Request) {
 					clinicType.MinParticipants,
 				)
 				if _, err := qtx.CreateStaffNotification(ctx, dbgen.CreateStaffNotificationParams{
-					FacilityID:       session.FacilityID,
-					NotificationType: clinicEnrollmentBelowMinimumNotification,
-					Message:          message,
-					RelatedSessionID: sql.NullInt64{Int64: session.ID, Valid: true},
+					FacilityID:             session.FacilityID,
+					NotificationType:       clinicEnrollmentBelowMinimumNotification,
+					Message:                message,
+					RelatedClinicSessionID: sql.NullInt64{Int64: session.ID, Valid: true},
 				}); err != nil {
 					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to notify staff", Err: err}
 				}

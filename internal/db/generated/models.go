@@ -294,16 +294,17 @@ type Staff struct {
 }
 
 type StaffNotification struct {
-	ID                   int64         `json:"id"`
-	FacilityID           int64         `json:"facilityId"`
-	NotificationType     string        `json:"notificationType"`
-	Message              string        `json:"message"`
-	RelatedSessionID     sql.NullInt64 `json:"relatedSessionId"`
-	RelatedReservationID sql.NullInt64 `json:"relatedReservationId"`
-	TargetStaffID        sql.NullInt64 `json:"targetStaffId"`
-	Read                 bool          `json:"read"`
-	CreatedAt            time.Time     `json:"createdAt"`
-	UpdatedAt            time.Time     `json:"updatedAt"`
+	ID                     int64         `json:"id"`
+	FacilityID             int64         `json:"facilityId"`
+	NotificationType       string        `json:"notificationType"`
+	Message                string        `json:"message"`
+	RelatedSessionID       sql.NullInt64 `json:"relatedSessionId"`
+	RelatedReservationID   sql.NullInt64 `json:"relatedReservationId"`
+	RelatedClinicSessionID sql.NullInt64 `json:"relatedClinicSessionId"`
+	TargetStaffID          sql.NullInt64 `json:"targetStaffId"`
+	Read                   bool          `json:"read"`
+	CreatedAt              time.Time     `json:"createdAt"`
+	UpdatedAt              time.Time     `json:"updatedAt"`
 }
 
 type Theme struct {

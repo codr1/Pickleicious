@@ -34,7 +34,7 @@ const (
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
 	if database == nil {
-		return
+		log.Fatal().Msg("clinics.InitHandlers called with nil database")
 	}
 	queriesOnce.Do(func() {
 		queries = database.Queries
@@ -683,7 +683,13 @@ func ensureProForFacility(ctx context.Context, q *dbgen.Queries, facilityID, pro
 	if err != nil {
 		return err
 	}
-	if !strings.EqualFold(pro.Role, "pro") || !pro.HomeFacilityID.Valid || pro.HomeFacilityID.Int64 != facilityID || !isActiveStaffStatus(pro.UserStatus) {
+	if !strings.EqualFold(pro.Role, "pro") {
+		return sql.ErrNoRows
+	}
+	if !pro.HomeFacilityID.Valid || pro.HomeFacilityID.Int64 != facilityID {
+		return sql.ErrNoRows
+	}
+	if !isActiveStaffStatus(pro.UserStatus) {
 		return sql.ErrNoRows
 	}
 	return nil
