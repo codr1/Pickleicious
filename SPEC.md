@@ -983,6 +983,149 @@ Dashboard access requires staff authentication. Staff can only view metrics for 
 
 ---
 
+## League Management
+
+Leagues enable facilities to organize competitive team play over a season. A league defines a time period, team roster rules, and generates a match schedule for participating teams.
+
+### League Lifecycle
+
+| Status | Description |
+|--------|-------------|
+| draft | Initial state, configuring league settings |
+| registration | Teams can register and rosters are open |
+| active | Season in progress, rosters locked (if configured) |
+| completed | Season ended, standings finalized |
+
+### League Configuration
+
+| Field | Description |
+|-------|-------------|
+| name | League display name |
+| format | Match format (e.g., "singles", "doubles") |
+| start_date | Season start date |
+| end_date | Season end date |
+| division_config | JSON configuration for divisions |
+| min_team_size | Minimum players per team roster |
+| max_team_size | Maximum players per team roster |
+| roster_lock_date | Optional date after which rosters cannot change |
+
+### Teams
+
+Teams belong to a single league. Each team has a captain (user_id) responsible for roster management.
+
+| Field | Description |
+|-------|-------------|
+| name | Team name (unique within league) |
+| captain_user_id | User responsible for team |
+| status | active or inactive |
+
+Team names must be unique within a league. Captain assignment can be changed but requires the new captain to exist as a user.
+
+### Team Members
+
+| Field | Description |
+|-------|-------------|
+| league_team_id | Team the member belongs to |
+| user_id | The player |
+| is_free_agent | Whether member was assigned as a free agent |
+
+Members can belong to one team per league. The captain does not automatically become a team member—they must be explicitly added.
+
+### Free Agents
+
+Players can register as free agents for a league without joining a team. Staff can assign free agents to teams needing additional players.
+
+| Operation | Description |
+|-----------|-------------|
+| List free agents | View unassigned players in a league |
+| Assign to team | Move free agent to a team roster |
+
+### Roster Lock
+
+When `roster_lock_date` is set and that date passes (evaluated in the facility's timezone), roster modifications are blocked:
+
+- Cannot add team members
+- Cannot remove team members
+- Cannot assign free agents to teams
+
+### Schedule Generation
+
+The scheduler generates round-robin matches for all teams:
+
+| Feature | Description |
+|---------|-------------|
+| Round-robin | Each team plays every other team |
+| Home/away | Alternating home and away designations |
+| Bye handling | Odd team counts get bye weeks |
+| Regeneration | Can regenerate schedule (clears existing matches) |
+
+Matches are created with status "scheduled" and include home_team_id, away_team_id, and scheduled_date.
+
+### Match Results
+
+| Field | Description |
+|-------|-------------|
+| home_score | Points scored by home team |
+| away_score | Points scored by away team |
+| status | scheduled, in_progress, completed |
+
+Results can only be recorded for matches in "scheduled" or "in_progress" status. Recording a result sets status to "completed".
+
+### Standings
+
+Standings are calculated from completed matches:
+
+| Metric | Description |
+|--------|-------------|
+| Wins | Matches where team scored higher |
+| Losses | Matches where team scored lower |
+| Points For | Total points scored |
+| Points Against | Total points conceded |
+| Point Differential | Points for minus points against |
+
+Teams are ranked by: wins (desc), point differential (desc), points for (desc).
+
+### Standings Export
+
+Standings can be exported to CSV format for offline analysis or distribution. The export includes rank, team name, matches played, wins, losses, and point statistics.
+
+### League Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Facility scope | Leagues belong to one facility |
+| Unique team names | Team names unique within a league |
+| Captain validation | Captain must exist as a user |
+| Team size limits | Roster respects min/max team size |
+| Single team per league | A user can only be on one team per league |
+| Roster lock enforcement | Roster changes blocked after lock date |
+| Match result validation | Scores must be non-negative |
+
+### League Operations
+
+| Operation | Endpoint | Notes |
+|-----------|----------|-------|
+| List leagues | GET `/api/v1/leagues` | Requires facility_id |
+| Create league | POST `/api/v1/leagues` | Staff only |
+| Get league | GET `/api/v1/leagues/{id}` | League detail |
+| Update league | PUT `/api/v1/leagues/{id}` | Staff only |
+| Delete league | DELETE `/api/v1/leagues/{id}` | Staff only |
+| List teams | GET `/api/v1/leagues/{id}/teams` | Teams in league |
+| Create team | POST `/api/v1/leagues/{id}/teams` | Staff only |
+| Get team | GET `/api/v1/leagues/{id}/teams/{team_id}` | Team with members |
+| Update team | PUT `/api/v1/leagues/{id}/teams/{team_id}` | Staff only |
+| Add member | POST `/api/v1/leagues/{id}/teams/{team_id}/members` | Respects roster lock |
+| Remove member | DELETE `/api/v1/leagues/{id}/teams/{team_id}/members/{user_id}` | Respects roster lock |
+| List free agents | GET `/api/v1/leagues/{id}/free-agents` | Unassigned players |
+| Assign free agent | POST `/api/v1/leagues/{id}/free-agents/{user_id}/assign` | Respects roster lock |
+| Generate schedule | POST `/api/v1/leagues/{id}/schedule/generate` | Creates matches |
+| Regenerate schedule | POST `/api/v1/leagues/{id}/schedule/regenerate` | Clears and recreates |
+| Record result | PUT `/api/v1/leagues/{id}/matches/{match_id}/result` | Updates match |
+| Get standings | GET `/api/v1/leagues/{id}/standings` | Calculated standings |
+| Export standings | GET `/api/v1/leagues/{id}/standings/export` | CSV download |
+
+---
+
 ## Theming and Branding
 
 Each facility can have its own visual identity. The member check-in screen at Downtown looks different from Westside because they chose different themes.
@@ -1446,6 +1589,30 @@ Authorization failures are logged with facility_id and user_id.
 | POST | `/api/v1/open-play-sessions/{id}/participants` | Add participant |
 | DELETE | `/api/v1/open-play-sessions/{id}/participants/{user_id}` | Remove participant |
 | PUT | `/api/v1/open-play-sessions/{id}/auto-scale` | Toggle auto-scale override |
+
+### Leagues
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/leagues` | Leagues page |
+| GET | `/api/v1/leagues` | List leagues by facility |
+| POST | `/api/v1/leagues` | Create league |
+| GET | `/api/v1/leagues/{id}` | League detail |
+| PUT | `/api/v1/leagues/{id}` | Update league |
+| DELETE | `/api/v1/leagues/{id}` | Delete league |
+| GET | `/api/v1/leagues/{id}/teams` | List teams in league |
+| POST | `/api/v1/leagues/{id}/teams` | Create team |
+| GET | `/api/v1/leagues/{id}/teams/{team_id}` | Team detail with members |
+| PUT | `/api/v1/leagues/{id}/teams/{team_id}` | Update team |
+| POST | `/api/v1/leagues/{id}/teams/{team_id}/members` | Add team member |
+| DELETE | `/api/v1/leagues/{id}/teams/{team_id}/members/{user_id}` | Remove team member |
+| GET | `/api/v1/leagues/{id}/free-agents` | List free agents |
+| POST | `/api/v1/leagues/{id}/free-agents/{user_id}/assign` | Assign free agent to team |
+| POST | `/api/v1/leagues/{id}/schedule/generate` | Generate match schedule |
+| POST | `/api/v1/leagues/{id}/schedule/regenerate` | Regenerate schedule |
+| PUT | `/api/v1/leagues/{id}/matches/{match_id}/result` | Record match result |
+| GET | `/api/v1/leagues/{id}/standings` | Get league standings |
+| GET | `/api/v1/leagues/{id}/standings/export` | Export standings CSV |
 
 ### Themes
 
@@ -2290,6 +2457,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
 | Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
 | Visit Pack Management | Complete | Pack type CRUD, pack sales, redemption at booking, cross-facility support |
+| League Management | Complete | League CRUD, team management, roster controls, schedule generation, match results, standings |
 | Reporting Dashboard | Complete | Utilization metrics, booking counts by type, cancellation rates, check-in counts, date range filtering |
 
 ### Partial Implementation
@@ -2333,6 +2501,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | **Court** | Bookable playing surface |
 | **Reservation** | Time block on one or more courts |
 | **Open Play** | Drop-in session with rotation rules |
+| **League** | Competitive season with teams and scheduled matches |
 | **Theme** | Color scheme for facility branding |
 | **Waiver** | Liability agreement required for play |
 | **Waitlist** | Queue for members awaiting slot availability |

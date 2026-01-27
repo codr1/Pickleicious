@@ -687,18 +687,6 @@ This section documents features that are standard in competing pickleball/sports
 
 ### 9.5 League & Tournament Management
 
-<!-- BEGIN WIP: STORY-0042 -->
-**League Features:**
-
-| Feature | Description |
-|---------|-------------|
-| League Creation | Name, format, schedule, rules |
-| Team Management | Create/manage teams, rosters |
-| Division Support | Skill-based divisions |
-| Schedule Generation | Auto-generate match schedules |
-| Standings Tracking | Points, wins, losses, ties |
-| Playoff Brackets | Auto-generate from standings |
-<!-- END WIP -->
 
 **Tournament Features:**
 | Feature | Description |
@@ -710,16 +698,6 @@ This section documents features that are standard in competing pickleball/sports
 | Live Brackets | Real-time bracket updates |
 | Prize Management | Track and award prizes |
 
-<!-- BEGIN WIP: STORY-0042 -->
-**Registration:**
-| Feature | Description |
-|---------|-------------|
-| Online Registration | Self-service sign-up |
-| Team Registration | Register as team or individual |
-| Waitlist | When league is full |
-| Payment Integration | Collect fees at registration |
-| Skill Verification | DUPR or self-reported level |
-<!-- END WIP -->
 
 ### 9.6 DUPR Integration & Player Ratings
 
