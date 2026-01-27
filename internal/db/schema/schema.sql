@@ -445,7 +445,7 @@ CREATE TABLE league_teams (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (league_id) REFERENCES leagues(id) ON DELETE CASCADE,
-    FOREIGN KEY (captain_user_id) REFERENCES users(id),
+    FOREIGN KEY (captain_user_id) REFERENCES users(id) ON DELETE RESTRICT,
     UNIQUE (league_id, name)
 );
 

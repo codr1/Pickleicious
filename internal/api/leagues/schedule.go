@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -354,10 +355,16 @@ func parseNullableInt64(value interface{}) (int64, bool) {
 	case int8:
 		return int64(v), true
 	case uint64:
+		if v > math.MaxInt64 {
+			return 0, false
+		}
 		return int64(v), true
 	case uint32:
 		return int64(v), true
 	case uint:
+		if v > math.MaxInt64 {
+			return 0, false
+		}
 		return int64(v), true
 	case []byte:
 		if len(v) == 0 {

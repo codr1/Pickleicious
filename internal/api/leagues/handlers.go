@@ -187,10 +187,7 @@ func HandleLeaguesList(w http.ResponseWriter, r *http.Request) {
 		if !apiutil.RenderHTMLComponent(r.Context(), w, component, nil, "Failed to render leagues list", "Failed to render list") {
 			return
 		}
-		return
-	}
-
-	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"leagues": leagues}); err != nil {
+	} else if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"leagues": leagues}); err != nil {
 		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to write leagues response")
 	}
 }
@@ -665,7 +662,8 @@ func HandleTeamUpdate(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
 
 	q := loadQueries()
-	if q == nil {
+	db := loadDB()
+	if q == nil || db == nil {
 		logger.Error().Msg("Database queries not initialized")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -738,7 +736,16 @@ func HandleTeamUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := q.UpdateLeagueTeam(ctx, dbgen.UpdateLeagueTeamParams{
+	tx, err := db.BeginTx(ctx)
+	if err != nil {
+		logger.Error().Err(err).Int64("team_id", teamID).Msg("Failed to start team update transaction")
+		http.Error(w, "Failed to update team", http.StatusInternalServerError)
+		return
+	}
+
+	txQueries := q.WithTx(tx)
+
+	updated, err := txQueries.UpdateLeagueTeam(ctx, dbgen.UpdateLeagueTeamParams{
 		ID:       teamID,
 		LeagueID: leagueID,
 		Name:     input.Name,
@@ -746,29 +753,55 @@ func HandleTeamUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				logger.Error().Err(rbErr).Int64("team_id", teamID).Msg("Failed to rollback team update")
+				http.Error(w, "Failed to update team", http.StatusInternalServerError)
+				return
+			}
 			http.Error(w, "Team not found", http.StatusNotFound)
 			return
 		}
 		logger.Error().Err(err).Int64("team_id", teamID).Msg("Failed to update team")
+		if rbErr := tx.Rollback(); rbErr != nil {
+			logger.Error().Err(rbErr).Int64("team_id", teamID).Msg("Failed to rollback team update")
+			http.Error(w, "Failed to update team", http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, "Failed to update team", http.StatusInternalServerError)
 		return
 	}
 
 	if input.CaptainUserID != team.CaptainUserID {
-		updated, err = q.UpdateTeamCaptain(ctx, dbgen.UpdateTeamCaptainParams{
+		updated, err = txQueries.UpdateTeamCaptain(ctx, dbgen.UpdateTeamCaptainParams{
 			ID:            teamID,
 			LeagueID:      leagueID,
 			CaptainUserID: input.CaptainUserID,
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				if rbErr := tx.Rollback(); rbErr != nil {
+					logger.Error().Err(rbErr).Int64("team_id", teamID).Msg("Failed to rollback team update")
+					http.Error(w, "Failed to update team", http.StatusInternalServerError)
+					return
+				}
 				http.Error(w, "Team not found", http.StatusNotFound)
 				return
 			}
 			logger.Error().Err(err).Int64("team_id", teamID).Msg("Failed to update team captain")
+			if rbErr := tx.Rollback(); rbErr != nil {
+				logger.Error().Err(rbErr).Int64("team_id", teamID).Msg("Failed to rollback team update")
+				http.Error(w, "Failed to update team", http.StatusInternalServerError)
+				return
+			}
 			http.Error(w, "Failed to update team", http.StatusInternalServerError)
 			return
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		logger.Error().Err(err).Int64("team_id", teamID).Msg("Failed to commit team update")
+		http.Error(w, "Failed to update team", http.StatusInternalServerError)
+		return
 	}
 
 	if err := apiutil.WriteJSON(w, http.StatusOK, updated); err != nil {
