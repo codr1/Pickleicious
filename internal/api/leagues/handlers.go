@@ -529,6 +529,11 @@ func HandleTeamCreate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "League not found", http.StatusNotFound)
 			return
 		}
+		if apiutil.IsSQLiteUniqueViolation(err) {
+			logger.Warn().Err(err).Int64("league_id", leagueID).Str("name", input.Name).Msg("Team name already exists in league")
+			http.Error(w, "Team name already exists in league", http.StatusConflict)
+			return
+		}
 		logger.Error().Err(err).Int64("league_id", leagueID).Msg("Failed to create team")
 		http.Error(w, "Failed to create team", http.StatusInternalServerError)
 		return
@@ -759,6 +764,16 @@ func HandleTeamUpdate(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			http.Error(w, "Team not found", http.StatusNotFound)
+			return
+		}
+		if apiutil.IsSQLiteUniqueViolation(err) {
+			logger.Warn().Err(err).Int64("league_id", leagueID).Str("name", input.Name).Msg("Team name already exists in league")
+			if rbErr := tx.Rollback(); rbErr != nil {
+				logger.Error().Err(rbErr).Int64("team_id", teamID).Msg("Failed to rollback team update")
+				http.Error(w, "Failed to update team", http.StatusInternalServerError)
+				return
+			}
+			http.Error(w, "Team name already exists in league", http.StatusConflict)
 			return
 		}
 		logger.Error().Err(err).Int64("team_id", teamID).Msg("Failed to update team")
@@ -1300,6 +1315,19 @@ func HandleLeagueStandings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func sanitizeCSVField(value string) string {
+	trimmed := strings.TrimLeft(value, " \t\r\n")
+	if trimmed == "" {
+		return value
+	}
+	switch trimmed[0] {
+	case '=', '+', '-', '@':
+		return "'" + value
+	default:
+		return value
+	}
+}
+
 // GET /api/v1/leagues/{id}/standings/export
 func HandleExportStandingsCSV(w http.ResponseWriter, r *http.Request) {
 	logger := log.Ctx(r.Context())
@@ -1362,7 +1390,7 @@ func HandleExportStandingsCSV(w http.ResponseWriter, r *http.Request) {
 	for idx, entry := range standings {
 		record := []string{
 			strconv.Itoa(idx + 1),
-			entry.TeamName,
+			sanitizeCSVField(entry.TeamName),
 			strconv.Itoa(entry.MatchesPlayed),
 			strconv.Itoa(entry.Wins),
 			strconv.Itoa(entry.Losses),
