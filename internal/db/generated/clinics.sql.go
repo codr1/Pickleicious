@@ -198,6 +198,25 @@ func (q *Queries) DeleteClinicEnrollment(ctx context.Context, arg DeleteClinicEn
 	return result.RowsAffected()
 }
 
+const deleteClinicSession = `-- name: DeleteClinicSession :execrows
+DELETE FROM clinic_sessions
+WHERE id = ?1
+  AND facility_id = ?2
+`
+
+type DeleteClinicSessionParams struct {
+	ID         int64 `json:"id"`
+	FacilityID int64 `json:"facilityId"`
+}
+
+func (q *Queries) DeleteClinicSession(ctx context.Context, arg DeleteClinicSessionParams) (int64, error) {
+	result, err := q.exec(ctx, q.deleteClinicSessionStmt, deleteClinicSession, arg.ID, arg.FacilityID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteClinicType = `-- name: DeleteClinicType :execrows
 DELETE FROM clinic_types
 WHERE id = ?1
@@ -232,6 +251,31 @@ type GetClinicSessionParams struct {
 
 func (q *Queries) GetClinicSession(ctx context.Context, arg GetClinicSessionParams) (ClinicSession, error) {
 	row := q.queryRow(ctx, q.getClinicSessionStmt, getClinicSession, arg.ID, arg.FacilityID)
+	var i ClinicSession
+	err := row.Scan(
+		&i.ID,
+		&i.ClinicTypeID,
+		&i.FacilityID,
+		&i.ProID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.EnrollmentStatus,
+		&i.CreatedByUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getClinicSessionByID = `-- name: GetClinicSessionByID :one
+SELECT id, clinic_type_id, facility_id, pro_id, start_time, end_time,
+    enrollment_status, created_by_user_id, created_at, updated_at
+FROM clinic_sessions
+WHERE id = ?1
+`
+
+func (q *Queries) GetClinicSessionByID(ctx context.Context, id int64) (ClinicSession, error) {
+	row := q.queryRow(ctx, q.getClinicSessionByIDStmt, getClinicSessionByID, id)
 	var i ClinicSession
 	err := row.Scan(
 		&i.ID,

@@ -75,6 +75,12 @@ INSERT INTO clinic_sessions (
 RETURNING id, clinic_type_id, facility_id, pro_id, start_time, end_time,
     enrollment_status, created_by_user_id, created_at, updated_at;
 
+-- name: GetClinicSessionByID :one
+SELECT id, clinic_type_id, facility_id, pro_id, start_time, end_time,
+    enrollment_status, created_by_user_id, created_at, updated_at
+FROM clinic_sessions
+WHERE id = @id;
+
 -- name: GetClinicSession :one
 SELECT id, clinic_type_id, facility_id, pro_id, start_time, end_time,
     enrollment_status, created_by_user_id, created_at, updated_at
@@ -101,6 +107,11 @@ WHERE id = @id
   AND facility_id = @facility_id
 RETURNING id, clinic_type_id, facility_id, pro_id, start_time, end_time,
     enrollment_status, created_by_user_id, created_at, updated_at;
+
+-- name: DeleteClinicSession :execrows
+DELETE FROM clinic_sessions
+WHERE id = @id
+  AND facility_id = @facility_id;
 
 -- name: CreateClinicEnrollment :one
 INSERT INTO clinic_enrollments (

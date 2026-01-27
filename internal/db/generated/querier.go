@@ -65,6 +65,7 @@ type Querier interface {
 	DecrementVisitPackVisit(ctx context.Context, id int64) (VisitPack, error)
 	DeleteCancellationPolicyTier(ctx context.Context, arg DeleteCancellationPolicyTierParams) (int64, error)
 	DeleteClinicEnrollment(ctx context.Context, arg DeleteClinicEnrollmentParams) (int64, error)
+	DeleteClinicSession(ctx context.Context, arg DeleteClinicSessionParams) (int64, error)
 	DeleteClinicType(ctx context.Context, arg DeleteClinicTypeParams) (int64, error)
 	DeleteLeague(ctx context.Context, id int64) (int64, error)
 	DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error)
@@ -91,6 +92,7 @@ type Querier interface {
 	GetCancellationMetricsInRange(ctx context.Context, arg GetCancellationMetricsInRangeParams) (GetCancellationMetricsInRangeRow, error)
 	GetCancellationPolicyTier(ctx context.Context, arg GetCancellationPolicyTierParams) (CancellationPolicyTier, error)
 	GetClinicSession(ctx context.Context, arg GetClinicSessionParams) (ClinicSession, error)
+	GetClinicSessionByID(ctx context.Context, id int64) (ClinicSession, error)
 	GetClinicType(ctx context.Context, arg GetClinicTypeParams) (ClinicType, error)
 	// internal/db/queries/cognito.sql
 	GetCognitoConfig(ctx context.Context, organizationID int64) (CognitoConfig, error)

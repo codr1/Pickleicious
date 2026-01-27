@@ -171,6 +171,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteClinicEnrollmentStmt, err = db.PrepareContext(ctx, deleteClinicEnrollment); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteClinicEnrollment: %w", err)
 	}
+	if q.deleteClinicSessionStmt, err = db.PrepareContext(ctx, deleteClinicSession); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteClinicSession: %w", err)
+	}
 	if q.deleteClinicTypeStmt, err = db.PrepareContext(ctx, deleteClinicType); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteClinicType: %w", err)
 	}
@@ -242,6 +245,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getClinicSessionStmt, err = db.PrepareContext(ctx, getClinicSession); err != nil {
 		return nil, fmt.Errorf("error preparing query GetClinicSession: %w", err)
+	}
+	if q.getClinicSessionByIDStmt, err = db.PrepareContext(ctx, getClinicSessionByID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetClinicSessionByID: %w", err)
 	}
 	if q.getClinicTypeStmt, err = db.PrepareContext(ctx, getClinicType); err != nil {
 		return nil, fmt.Errorf("error preparing query GetClinicType: %w", err)
@@ -919,6 +925,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteClinicEnrollmentStmt: %w", cerr)
 		}
 	}
+	if q.deleteClinicSessionStmt != nil {
+		if cerr := q.deleteClinicSessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteClinicSessionStmt: %w", cerr)
+		}
+	}
 	if q.deleteClinicTypeStmt != nil {
 		if cerr := q.deleteClinicTypeStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteClinicTypeStmt: %w", cerr)
@@ -1037,6 +1048,11 @@ func (q *Queries) Close() error {
 	if q.getClinicSessionStmt != nil {
 		if cerr := q.getClinicSessionStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getClinicSessionStmt: %w", cerr)
+		}
+	}
+	if q.getClinicSessionByIDStmt != nil {
+		if cerr := q.getClinicSessionByIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getClinicSessionByIDStmt: %w", cerr)
 		}
 	}
 	if q.getClinicTypeStmt != nil {
@@ -1837,6 +1853,7 @@ type Queries struct {
 	decrementVisitPackVisitStmt                      *sql.Stmt
 	deleteCancellationPolicyTierStmt                 *sql.Stmt
 	deleteClinicEnrollmentStmt                       *sql.Stmt
+	deleteClinicSessionStmt                          *sql.Stmt
 	deleteClinicTypeStmt                             *sql.Stmt
 	deleteLeagueStmt                                 *sql.Stmt
 	deleteLeagueMatchesByLeagueIDStmt                *sql.Stmt
@@ -1861,6 +1878,7 @@ type Queries struct {
 	getCancellationMetricsInRangeStmt                *sql.Stmt
 	getCancellationPolicyTierStmt                    *sql.Stmt
 	getClinicSessionStmt                             *sql.Stmt
+	getClinicSessionByIDStmt                         *sql.Stmt
 	getClinicTypeStmt                                *sql.Stmt
 	getCognitoConfigStmt                             *sql.Stmt
 	getCourtStmt                                     *sql.Stmt
@@ -2058,6 +2076,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		decrementVisitPackVisitStmt:                      q.decrementVisitPackVisitStmt,
 		deleteCancellationPolicyTierStmt:                 q.deleteCancellationPolicyTierStmt,
 		deleteClinicEnrollmentStmt:                       q.deleteClinicEnrollmentStmt,
+		deleteClinicSessionStmt:                          q.deleteClinicSessionStmt,
 		deleteClinicTypeStmt:                             q.deleteClinicTypeStmt,
 		deleteLeagueStmt:                                 q.deleteLeagueStmt,
 		deleteLeagueMatchesByLeagueIDStmt:                q.deleteLeagueMatchesByLeagueIDStmt,
@@ -2082,6 +2101,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getCancellationMetricsInRangeStmt:                q.getCancellationMetricsInRangeStmt,
 		getCancellationPolicyTierStmt:                    q.getCancellationPolicyTierStmt,
 		getClinicSessionStmt:                             q.getClinicSessionStmt,
+		getClinicSessionByIDStmt:                         q.getClinicSessionByIDStmt,
 		getClinicTypeStmt:                                q.getClinicTypeStmt,
 		getCognitoConfigStmt:                             q.getCognitoConfigStmt,
 		getCourtStmt:                                     q.getCourtStmt,
