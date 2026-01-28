@@ -241,6 +241,7 @@ type Querier interface {
 	UpdateTeamCaptain(ctx context.Context, arg UpdateTeamCaptainParams) (LeagueTeam, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUserCognitoStatus(ctx context.Context, arg UpdateUserCognitoStatusParams) error
+	UpdateUserPasswordHash(ctx context.Context, arg UpdateUserPasswordHashParams) error
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
 	UpdateVisitPackType(ctx context.Context, arg UpdateVisitPackTypeParams) (VisitPackType, error)
 	UpdateWaitlistStatus(ctx context.Context, arg UpdateWaitlistStatusParams) (Waitlist, error)

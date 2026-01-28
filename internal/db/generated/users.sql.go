@@ -218,6 +218,23 @@ func (q *Queries) UpdateUserCognitoStatus(ctx context.Context, arg UpdateUserCog
 	return err
 }
 
+const updateUserPasswordHash = `-- name: UpdateUserPasswordHash :exec
+UPDATE users
+SET password_hash = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2
+`
+
+type UpdateUserPasswordHashParams struct {
+	PasswordHash sql.NullString `json:"passwordHash"`
+	ID           int64          `json:"id"`
+}
+
+func (q *Queries) UpdateUserPasswordHash(ctx context.Context, arg UpdateUserPasswordHashParams) error {
+	_, err := q.exec(ctx, q.updateUserPasswordHashStmt, updateUserPasswordHash, arg.PasswordHash, arg.ID)
+	return err
+}
+
 const updateUserStatus = `-- name: UpdateUserStatus :exec
 UPDATE users
 SET status = ?1,
