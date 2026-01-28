@@ -152,6 +152,39 @@ type LeagueTeamMember struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
+type LessonPackage struct {
+	ID               int64     `json:"id"`
+	PackTypeID       int64     `json:"packTypeId"`
+	UserID           int64     `json:"userId"`
+	PurchaseDate     time.Time `json:"purchaseDate"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+	LessonsRemaining int64     `json:"lessonsRemaining"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+type LessonPackageRedemption struct {
+	ID              int64         `json:"id"`
+	LessonPackageID int64         `json:"lessonPackageId"`
+	FacilityID      int64         `json:"facilityId"`
+	RedeemedAt      time.Time     `json:"redeemedAt"`
+	ReservationID   sql.NullInt64 `json:"reservationId"`
+	CreatedAt       time.Time     `json:"createdAt"`
+}
+
+type LessonPackageType struct {
+	ID          int64     `json:"id"`
+	FacilityID  int64     `json:"facilityId"`
+	Name        string    `json:"name"`
+	PriceCents  int64     `json:"priceCents"`
+	LessonCount int64     `json:"lessonCount"`
+	ValidDays   int64     `json:"validDays"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type OpenPlayAuditLog struct {
 	ID          int64          `json:"id"`
 	SessionID   int64          `json:"sessionId"`
