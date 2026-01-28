@@ -488,6 +488,7 @@ This section documents features that are standard in competing pickleball/sports
 
 ### 8.2 Communication System
 
+<!-- BEGIN WIP: STORY-0046 -->
 **Automated Notifications:**
 | Trigger | Channels | Content |
 |---------|----------|---------|
@@ -496,6 +497,7 @@ This section documents features that are standard in competing pickleball/sports
 | Payment Receipt | Email | Transaction confirmation |
 | Membership Renewal | Email | Upcoming renewal reminder |
 | Waiver Expiration | Email | Waiver renewal needed |
+<!-- END WIP -->
 
 **Marketing & Engagement:**
 
@@ -834,11 +836,13 @@ A self-service marketplace where members discover and book coaches directly, red
 | Bank Feeds | Direct bank reconciliation |
 
 **Communication:**
+<!-- BEGIN WIP: STORY-0046 -->
 | Integration | Description |
 |-------------|-------------|
 | Twilio | SMS notifications |
 | SendGrid | Transactional email |
 | Mailchimp | Marketing campaigns |
+<!-- END WIP -->
 
 **Other:**
 | Integration | Description |
