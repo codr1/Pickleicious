@@ -28,6 +28,7 @@ const (
 	lessonPackQueryTimeout = 5 * time.Second
 	maxLessonPackTypes     = 1000
 	lessonPackTypeIDParam  = "id"
+	userIDParam            = "id"
 )
 
 var (
@@ -42,6 +43,8 @@ type lessonPackQueries interface {
 	CreateLessonPackageType(ctx context.Context, arg dbgen.CreateLessonPackageTypeParams) (dbgen.LessonPackageType, error)
 	DeactivateLessonPackageType(ctx context.Context, arg dbgen.DeactivateLessonPackageTypeParams) (dbgen.LessonPackageType, error)
 	GetLessonPackageType(ctx context.Context, arg dbgen.GetLessonPackageTypeParams) (dbgen.LessonPackageType, error)
+	ListActiveLessonPackagesForUser(ctx context.Context, arg dbgen.ListActiveLessonPackagesForUserParams) ([]dbgen.LessonPackage, error)
+	ListActiveLessonPackagesForUserByFacility(ctx context.Context, arg dbgen.ListActiveLessonPackagesForUserByFacilityParams) ([]dbgen.LessonPackage, error)
 	ListLessonPackageTypes(ctx context.Context, facilityID int64) ([]dbgen.LessonPackageType, error)
 	UpdateLessonPackageType(ctx context.Context, arg dbgen.UpdateLessonPackageTypeParams) (dbgen.LessonPackageType, error)
 }
@@ -438,6 +441,71 @@ func HandleLessonPackageSale(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GET /api/v1/users/{id}/lesson-packages
+func HandleListUserLessonPackages(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	userID, err := userIDFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	requestUser := authz.UserFromContext(r.Context())
+	if requestUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var facilityID *int64
+	if requestUser.IsStaff {
+		facilityIDValue, err := apiutil.FacilityIDFromQuery(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if !apiutil.RequireFacilityAccess(w, r, facilityIDValue) {
+			return
+		}
+		facilityID = &facilityIDValue
+	} else if requestUser.ID != userID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), lessonPackQueryTimeout)
+	defer cancel()
+
+	var lessonPackages []dbgen.LessonPackage
+	if facilityID != nil {
+		lessonPackages, err = q.ListActiveLessonPackagesForUserByFacility(ctx, dbgen.ListActiveLessonPackagesForUserByFacilityParams{
+			UserID:         userID,
+			FacilityID:     *facilityID,
+			ComparisonTime: time.Now(),
+		})
+	} else {
+		lessonPackages, err = q.ListActiveLessonPackagesForUser(ctx, dbgen.ListActiveLessonPackagesForUserParams{
+			UserID:         userID,
+			ComparisonTime: time.Now(),
+		})
+	}
+	if err != nil {
+		logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to list lesson packages")
+		http.Error(w, "Failed to load lesson packages", http.StatusInternalServerError)
+		return
+	}
+
+	if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"lessonPackages": lessonPackages}); err != nil {
+		logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to write lesson packages response")
+	}
+}
+
 func lessonPackageTypesPageComponent(facilityID int64) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
 		if _, err := io.WriteString(w, `<div class="space-y-6">`); err != nil {
@@ -651,6 +719,18 @@ func lessonPackTypeIDFromRequest(r *http.Request) (int64, error) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value <= 0 {
 		return 0, fmt.Errorf("invalid lesson package type ID")
+	}
+	return value, nil
+}
+
+func userIDFromRequest(r *http.Request) (int64, error) {
+	raw := strings.TrimSpace(r.PathValue(userIDParam))
+	if raw == "" {
+		return 0, fmt.Errorf("invalid user ID")
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid user ID")
 	}
 	return value, nil
 }
