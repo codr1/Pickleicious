@@ -591,6 +591,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	mux.HandleFunc("/api/v1/lesson-packages", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: lessonpacks.HandleLessonPackageSale,
 	}))
+	mux.HandleFunc("/api/v1/users/{id}/lesson-packages", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet: lessonpacks.HandleListUserLessonPackages,
+	}))
 
 	// Operating hours admin page
 	mux.HandleFunc("/admin/operating-hours", operatinghours.HandleOperatingHoursPage)
