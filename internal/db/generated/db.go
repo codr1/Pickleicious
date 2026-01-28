@@ -60,6 +60,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countFacilityThemesStmt, err = db.PrepareContext(ctx, countFacilityThemes); err != nil {
 		return nil, fmt.Errorf("error preparing query CountFacilityThemes: %w", err)
 	}
+	if q.countLessonPackageTypesByFacilityStmt, err = db.PrepareContext(ctx, countLessonPackageTypesByFacility); err != nil {
+		return nil, fmt.Errorf("error preparing query CountLessonPackageTypesByFacility: %w", err)
+	}
 	if q.countOpenPlayReservationsForSessionStmt, err = db.PrepareContext(ctx, countOpenPlayReservationsForSession); err != nil {
 		return nil, fmt.Errorf("error preparing query CountOpenPlayReservationsForSession: %w", err)
 	}
@@ -111,6 +114,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createLessonCancelledNotificationStmt, err = db.PrepareContext(ctx, createLessonCancelledNotification); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateLessonCancelledNotification: %w", err)
 	}
+	if q.createLessonPackageStmt, err = db.PrepareContext(ctx, createLessonPackage); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLessonPackage: %w", err)
+	}
+	if q.createLessonPackageRedemptionStmt, err = db.PrepareContext(ctx, createLessonPackageRedemption); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLessonPackageRedemption: %w", err)
+	}
+	if q.createLessonPackageTypeStmt, err = db.PrepareContext(ctx, createLessonPackageType); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateLessonPackageType: %w", err)
+	}
 	if q.createMemberStmt, err = db.PrepareContext(ctx, createMember); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateMember: %w", err)
 	}
@@ -159,8 +171,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createWaitlistOfferStmt, err = db.PrepareContext(ctx, createWaitlistOffer); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateWaitlistOffer: %w", err)
 	}
+	if q.deactivateLessonPackageTypeStmt, err = db.PrepareContext(ctx, deactivateLessonPackageType); err != nil {
+		return nil, fmt.Errorf("error preparing query DeactivateLessonPackageType: %w", err)
+	}
 	if q.deactivateVisitPackTypeStmt, err = db.PrepareContext(ctx, deactivateVisitPackType); err != nil {
 		return nil, fmt.Errorf("error preparing query DeactivateVisitPackType: %w", err)
+	}
+	if q.decrementLessonPackageLessonStmt, err = db.PrepareContext(ctx, decrementLessonPackageLesson); err != nil {
+		return nil, fmt.Errorf("error preparing query DecrementLessonPackageLesson: %w", err)
 	}
 	if q.decrementVisitPackVisitStmt, err = db.PrepareContext(ctx, decrementVisitPackVisit); err != nil {
 		return nil, fmt.Errorf("error preparing query DecrementVisitPackVisit: %w", err)
@@ -291,6 +309,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getLeagueWithFacilityTimezoneStmt, err = db.PrepareContext(ctx, getLeagueWithFacilityTimezone); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLeagueWithFacilityTimezone: %w", err)
 	}
+	if q.getLessonPackageStmt, err = db.PrepareContext(ctx, getLessonPackage); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLessonPackage: %w", err)
+	}
+	if q.getLessonPackageRedemptionInfoStmt, err = db.PrepareContext(ctx, getLessonPackageRedemptionInfo); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLessonPackageRedemptionInfo: %w", err)
+	}
+	if q.getLessonPackageTypeStmt, err = db.PrepareContext(ctx, getLessonPackageType); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLessonPackageType: %w", err)
+	}
 	if q.getMemberBillingStmt, err = db.PrepareContext(ctx, getMemberBilling); err != nil {
 		return nil, fmt.Errorf("error preparing query GetMemberBilling: %w", err)
 	}
@@ -405,6 +432,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.isMemberOpenPlayParticipantStmt, err = db.PrepareContext(ctx, isMemberOpenPlayParticipant); err != nil {
 		return nil, fmt.Errorf("error preparing query IsMemberOpenPlayParticipant: %w", err)
 	}
+	if q.listActiveLessonPackagesForUserStmt, err = db.PrepareContext(ctx, listActiveLessonPackagesForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query ListActiveLessonPackagesForUser: %w", err)
+	}
+	if q.listActiveLessonPackagesForUserByFacilityStmt, err = db.PrepareContext(ctx, listActiveLessonPackagesForUserByFacility); err != nil {
+		return nil, fmt.Errorf("error preparing query ListActiveLessonPackagesForUserByFacility: %w", err)
+	}
+	if q.listActiveLessonPackagesForUserByOrganizationStmt, err = db.PrepareContext(ctx, listActiveLessonPackagesForUserByOrganization); err != nil {
+		return nil, fmt.Errorf("error preparing query ListActiveLessonPackagesForUserByOrganization: %w", err)
+	}
 	if q.listActiveVisitPacksForUserStmt, err = db.PrepareContext(ctx, listActiveVisitPacksForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query ListActiveVisitPacksForUser: %w", err)
 	}
@@ -458,6 +494,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listLeaguesByFacilityStmt, err = db.PrepareContext(ctx, listLeaguesByFacility); err != nil {
 		return nil, fmt.Errorf("error preparing query ListLeaguesByFacility: %w", err)
+	}
+	if q.listLessonPackageTypesStmt, err = db.PrepareContext(ctx, listLessonPackageTypes); err != nil {
+		return nil, fmt.Errorf("error preparing query ListLessonPackageTypes: %w", err)
 	}
 	if q.listMatchingPendingWaitlistsForCancelledSlotStmt, err = db.PrepareContext(ctx, listMatchingPendingWaitlistsForCancelledSlot); err != nil {
 		return nil, fmt.Errorf("error preparing query ListMatchingPendingWaitlistsForCancelledSlot: %w", err)
@@ -615,6 +654,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateLeagueTeamStmt, err = db.PrepareContext(ctx, updateLeagueTeam); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateLeagueTeam: %w", err)
 	}
+	if q.updateLessonPackageTypeStmt, err = db.PrepareContext(ctx, updateLessonPackageType); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateLessonPackageType: %w", err)
+	}
 	if q.updateMatchResultStmt, err = db.PrepareContext(ctx, updateMatchResult); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateMatchResult: %w", err)
 	}
@@ -743,6 +785,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing countFacilityThemesStmt: %w", cerr)
 		}
 	}
+	if q.countLessonPackageTypesByFacilityStmt != nil {
+		if cerr := q.countLessonPackageTypesByFacilityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countLessonPackageTypesByFacilityStmt: %w", cerr)
+		}
+	}
 	if q.countOpenPlayReservationsForSessionStmt != nil {
 		if cerr := q.countOpenPlayReservationsForSessionStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countOpenPlayReservationsForSessionStmt: %w", cerr)
@@ -828,6 +875,21 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createLessonCancelledNotificationStmt: %w", cerr)
 		}
 	}
+	if q.createLessonPackageStmt != nil {
+		if cerr := q.createLessonPackageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLessonPackageStmt: %w", cerr)
+		}
+	}
+	if q.createLessonPackageRedemptionStmt != nil {
+		if cerr := q.createLessonPackageRedemptionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLessonPackageRedemptionStmt: %w", cerr)
+		}
+	}
+	if q.createLessonPackageTypeStmt != nil {
+		if cerr := q.createLessonPackageTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createLessonPackageTypeStmt: %w", cerr)
+		}
+	}
 	if q.createMemberStmt != nil {
 		if cerr := q.createMemberStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createMemberStmt: %w", cerr)
@@ -908,9 +970,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createWaitlistOfferStmt: %w", cerr)
 		}
 	}
+	if q.deactivateLessonPackageTypeStmt != nil {
+		if cerr := q.deactivateLessonPackageTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deactivateLessonPackageTypeStmt: %w", cerr)
+		}
+	}
 	if q.deactivateVisitPackTypeStmt != nil {
 		if cerr := q.deactivateVisitPackTypeStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deactivateVisitPackTypeStmt: %w", cerr)
+		}
+	}
+	if q.decrementLessonPackageLessonStmt != nil {
+		if cerr := q.decrementLessonPackageLessonStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing decrementLessonPackageLessonStmt: %w", cerr)
 		}
 	}
 	if q.decrementVisitPackVisitStmt != nil {
@@ -1128,6 +1200,21 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLeagueWithFacilityTimezoneStmt: %w", cerr)
 		}
 	}
+	if q.getLessonPackageStmt != nil {
+		if cerr := q.getLessonPackageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLessonPackageStmt: %w", cerr)
+		}
+	}
+	if q.getLessonPackageRedemptionInfoStmt != nil {
+		if cerr := q.getLessonPackageRedemptionInfoStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLessonPackageRedemptionInfoStmt: %w", cerr)
+		}
+	}
+	if q.getLessonPackageTypeStmt != nil {
+		if cerr := q.getLessonPackageTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLessonPackageTypeStmt: %w", cerr)
+		}
+	}
 	if q.getMemberBillingStmt != nil {
 		if cerr := q.getMemberBillingStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getMemberBillingStmt: %w", cerr)
@@ -1318,6 +1405,21 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing isMemberOpenPlayParticipantStmt: %w", cerr)
 		}
 	}
+	if q.listActiveLessonPackagesForUserStmt != nil {
+		if cerr := q.listActiveLessonPackagesForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listActiveLessonPackagesForUserStmt: %w", cerr)
+		}
+	}
+	if q.listActiveLessonPackagesForUserByFacilityStmt != nil {
+		if cerr := q.listActiveLessonPackagesForUserByFacilityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listActiveLessonPackagesForUserByFacilityStmt: %w", cerr)
+		}
+	}
+	if q.listActiveLessonPackagesForUserByOrganizationStmt != nil {
+		if cerr := q.listActiveLessonPackagesForUserByOrganizationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listActiveLessonPackagesForUserByOrganizationStmt: %w", cerr)
+		}
+	}
 	if q.listActiveVisitPacksForUserStmt != nil {
 		if cerr := q.listActiveVisitPacksForUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listActiveVisitPacksForUserStmt: %w", cerr)
@@ -1406,6 +1508,11 @@ func (q *Queries) Close() error {
 	if q.listLeaguesByFacilityStmt != nil {
 		if cerr := q.listLeaguesByFacilityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listLeaguesByFacilityStmt: %w", cerr)
+		}
+	}
+	if q.listLessonPackageTypesStmt != nil {
+		if cerr := q.listLessonPackageTypesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listLessonPackageTypesStmt: %w", cerr)
 		}
 	}
 	if q.listMatchingPendingWaitlistsForCancelledSlotStmt != nil {
@@ -1668,6 +1775,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateLeagueTeamStmt: %w", cerr)
 		}
 	}
+	if q.updateLessonPackageTypeStmt != nil {
+		if cerr := q.updateLessonPackageTypeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateLessonPackageTypeStmt: %w", cerr)
+		}
+	}
 	if q.updateMatchResultStmt != nil {
 		if cerr := q.updateMatchResultStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateMatchResultStmt: %w", cerr)
@@ -1810,449 +1922,477 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                               DBTX
-	tx                                               *sql.Tx
-	acceptOfferStmt                                  *sql.Stmt
-	addOpenPlayParticipantStmt                       *sql.Stmt
-	addParticipantStmt                               *sql.Stmt
-	addReservationCourtStmt                          *sql.Stmt
-	addTeamMemberStmt                                *sql.Stmt
-	advanceWaitlistOfferStmt                         *sql.Stmt
-	assignFreeAgentToTeamStmt                        *sql.Stmt
-	countActiveMemberReservationsStmt                *sql.Stmt
-	countCheckinsByFacilityInRangeStmt               *sql.Stmt
-	countFacilityThemeNameStmt                       *sql.Stmt
-	countFacilityThemeNameExcludingIDStmt            *sql.Stmt
-	countFacilityThemesStmt                          *sql.Stmt
-	countOpenPlayReservationsForSessionStmt          *sql.Stmt
-	countReservationParticipantsStmt                 *sql.Stmt
-	countReservationsByTypeInRangeStmt               *sql.Stmt
-	countScheduledVsCompletedReservationsStmt        *sql.Stmt
-	countThemeUsageStmt                              *sql.Stmt
-	countUnreadStaffNotificationsStmt                *sql.Stmt
-	countVisitPackTypesByFacilityStmt                *sql.Stmt
-	createCancellationPolicyTierStmt                 *sql.Stmt
-	createClinicEnrollmentStmt                       *sql.Stmt
-	createClinicSessionStmt                          *sql.Stmt
-	createClinicTypeStmt                             *sql.Stmt
-	createCourtStmt                                  *sql.Stmt
-	createFacilityVisitStmt                          *sql.Stmt
-	createLeagueStmt                                 *sql.Stmt
-	createLeagueMatchStmt                            *sql.Stmt
-	createLeagueTeamStmt                             *sql.Stmt
-	createLessonCancelledNotificationStmt            *sql.Stmt
-	createMemberStmt                                 *sql.Stmt
-	createOpenPlayAuditLogStmt                       *sql.Stmt
-	createOpenPlayRuleStmt                           *sql.Stmt
-	createOpenPlaySessionStmt                        *sql.Stmt
-	createPhotoStmt                                  *sql.Stmt
-	createProUnavailabilityStmt                      *sql.Stmt
-	createReservationStmt                            *sql.Stmt
-	createStaffStmt                                  *sql.Stmt
-	createStaffNotificationStmt                      *sql.Stmt
-	createStaffUserStmt                              *sql.Stmt
-	createThemeStmt                                  *sql.Stmt
-	createVisitPackStmt                              *sql.Stmt
-	createVisitPackRedemptionStmt                    *sql.Stmt
-	createVisitPackTypeStmt                          *sql.Stmt
-	createWaitlistEntryStmt                          *sql.Stmt
-	createWaitlistOfferStmt                          *sql.Stmt
-	deactivateVisitPackTypeStmt                      *sql.Stmt
-	decrementVisitPackVisitStmt                      *sql.Stmt
-	deleteCancellationPolicyTierStmt                 *sql.Stmt
-	deleteClinicEnrollmentStmt                       *sql.Stmt
-	deleteClinicSessionStmt                          *sql.Stmt
-	deleteClinicTypeStmt                             *sql.Stmt
-	deleteLeagueStmt                                 *sql.Stmt
-	deleteLeagueMatchesByLeagueIDStmt                *sql.Stmt
-	deleteMemberStmt                                 *sql.Stmt
-	deleteOpenPlayRuleStmt                           *sql.Stmt
-	deleteOperatingHoursStmt                         *sql.Stmt
-	deletePastWaitlistEntriesStmt                    *sql.Stmt
-	deletePhotoStmt                                  *sql.Stmt
-	deleteProUnavailabilityStmt                      *sql.Stmt
-	deleteReservationStmt                            *sql.Stmt
-	deleteReservationCourtsByReservationIDStmt       *sql.Stmt
-	deleteReservationParticipantsByReservationIDStmt *sql.Stmt
-	deleteStaffStmt                                  *sql.Stmt
-	deleteThemeStmt                                  *sql.Stmt
-	deleteWaitlistEntryStmt                          *sql.Stmt
-	expireOfferStmt                                  *sql.Stmt
-	facilityExistsStmt                               *sql.Stmt
-	getActiveThemeIDStmt                             *sql.Stmt
-	getApplicableCancellationTierStmt                *sql.Stmt
-	getAvailableCourtHoursStmt                       *sql.Stmt
-	getBookedCourtHoursStmt                          *sql.Stmt
-	getCancellationMetricsInRangeStmt                *sql.Stmt
-	getCancellationPolicyTierStmt                    *sql.Stmt
-	getClinicSessionStmt                             *sql.Stmt
-	getClinicSessionByIDStmt                         *sql.Stmt
-	getClinicTypeStmt                                *sql.Stmt
-	getCognitoConfigStmt                             *sql.Stmt
-	getCourtStmt                                     *sql.Stmt
-	getCreatedMemberStmt                             *sql.Stmt
-	getEnrollmentCountStmt                           *sql.Stmt
-	getFacilityByIDStmt                              *sql.Stmt
-	getFacilityHoursStmt                             *sql.Stmt
-	getFutureProSessionsByStaffIDStmt                *sql.Stmt
-	getLatestCancellationByReservationIDStmt         *sql.Stmt
-	getLeagueStmt                                    *sql.Stmt
-	getLeagueMatchStmt                               *sql.Stmt
-	getLeagueStandingsDataStmt                       *sql.Stmt
-	getLeagueTeamStmt                                *sql.Stmt
-	getLeagueWithFacilityTimezoneStmt                *sql.Stmt
-	getMemberBillingStmt                             *sql.Stmt
-	getMemberByEmailStmt                             *sql.Stmt
-	getMemberByEmailIncludeDeletedStmt               *sql.Stmt
-	getMemberByIDStmt                                *sql.Stmt
-	getMemberPhotoStmt                               *sql.Stmt
-	getMemberTodayActivitiesStmt                     *sql.Stmt
-	getOpenPlayReservationIDStmt                     *sql.Stmt
-	getOpenPlayRuleStmt                              *sql.Stmt
-	getOpenPlaySessionStmt                           *sql.Stmt
-	getOrganizationByIDStmt                          *sql.Stmt
-	getOrganizationBySlugStmt                        *sql.Stmt
-	getOrganizationCrossFacilitySettingStmt          *sql.Stmt
-	getPendingOfferStmt                              *sql.Stmt
-	getPhotoStmt                                     *sql.Stmt
-	getProLessonSlotsStmt                            *sql.Stmt
-	getProUnavailabilityByIDStmt                     *sql.Stmt
-	getReservationStmt                               *sql.Stmt
-	getReservationByIDStmt                           *sql.Stmt
-	getReservationTypeStmt                           *sql.Stmt
-	getReservationTypeByNameStmt                     *sql.Stmt
-	getReservationTypeNameByReservationIDStmt        *sql.Stmt
-	getRestoredMemberStmt                            *sql.Stmt
-	getStaffByEmailStmt                              *sql.Stmt
-	getStaffByIDStmt                                 *sql.Stmt
-	getStaffByPhoneStmt                              *sql.Stmt
-	getStaffByUserIDStmt                             *sql.Stmt
-	getStaffNotificationByIDStmt                     *sql.Stmt
-	getThemeStmt                                     *sql.Stmt
-	getUpdatedMemberStmt                             *sql.Stmt
-	getUserByEmailStmt                               *sql.Stmt
-	getUserByIDStmt                                  *sql.Stmt
-	getUserByPhoneStmt                               *sql.Stmt
-	getVisitPackStmt                                 *sql.Stmt
-	getVisitPackRedemptionInfoStmt                   *sql.Stmt
-	getVisitPackTypeStmt                             *sql.Stmt
-	getWaitlistConfigStmt                            *sql.Stmt
-	getWaitlistEntryStmt                             *sql.Stmt
-	isMemberOpenPlayParticipantStmt                  *sql.Stmt
-	listActiveVisitPacksForUserStmt                  *sql.Stmt
-	listActiveVisitPacksForUserByFacilityStmt        *sql.Stmt
-	listActiveVisitPacksForUserByOrganizationStmt    *sql.Stmt
-	listAvailableCourtsStmt                          *sql.Stmt
-	listCancellationPolicyTiersStmt                  *sql.Stmt
-	listClinicSessionsByFacilityStmt                 *sql.Stmt
-	listClinicTypesByFacilityStmt                    *sql.Stmt
-	listCourtsStmt                                   *sql.Stmt
-	listDistinctFacilitiesWithScheduledSessionsStmt  *sql.Stmt
-	listEnrollmentsForClinicStmt                     *sql.Stmt
-	listExpiredOffersStmt                            *sql.Stmt
-	listFacilitiesStmt                               *sql.Stmt
-	listFacilityThemesStmt                           *sql.Stmt
-	listFreeAgentsByLeagueStmt                       *sql.Stmt
-	listLeagueMatchesStmt                            *sql.Stmt
-	listLeagueMatchesWithReservationsStmt            *sql.Stmt
-	listLeagueTeamsStmt                              *sql.Stmt
-	listLeaguesByFacilityStmt                        *sql.Stmt
-	listMatchingPendingWaitlistsForCancelledSlotStmt *sql.Stmt
-	listMemberUpcomingOpenPlaySessionsStmt           *sql.Stmt
-	listMembersStmt                                  *sql.Stmt
-	listOpenPlayAuditLogStmt                         *sql.Stmt
-	listOpenPlayParticipantsStmt                     *sql.Stmt
-	listOpenPlayRulesStmt                            *sql.Stmt
-	listOpenPlaySessionsStmt                         *sql.Stmt
-	listOpenPlaySessionsApproachingCutoffStmt        *sql.Stmt
-	listOrganizationsStmt                            *sql.Stmt
-	listParticipantsForReservationStmt               *sql.Stmt
-	listProUnavailabilityByFacilityAndDateRangeStmt  *sql.Stmt
-	listProUnavailabilityByProIDStmt                 *sql.Stmt
-	listProsByFacilityStmt                           *sql.Stmt
-	listRecentVisitsByUserStmt                       *sql.Stmt
-	listReservationCourtsStmt                        *sql.Stmt
-	listReservationCourtsByDateRangeStmt             *sql.Stmt
-	listReservationTypesStmt                         *sql.Stmt
-	listReservationsByDateRangeStmt                  *sql.Stmt
-	listReservationsByUserIDStmt                     *sql.Stmt
-	listStaffStmt                                    *sql.Stmt
-	listStaffByFacilityStmt                          *sql.Stmt
-	listStaffByRoleStmt                              *sql.Stmt
-	listStaffNotificationsStmt                       *sql.Stmt
-	listStaffNotificationsForFacilityOrCorporateStmt *sql.Stmt
-	listStaffNotificationsForStaffStmt               *sql.Stmt
-	listSystemThemesStmt                             *sql.Stmt
-	listTeamMembersStmt                              *sql.Stmt
-	listTodayVisitsByFacilityStmt                    *sql.Stmt
-	listVisitPackTypesStmt                           *sql.Stmt
-	listWaitlistsByFacilityStmt                      *sql.Stmt
-	listWaitlistsByUserStmt                          *sql.Stmt
-	listWaitlistsByUserAndFacilityStmt               *sql.Stmt
-	listWaitlistsForSlotStmt                         *sql.Stmt
-	logCancellationStmt                              *sql.Stmt
-	markStaffNotificationAsReadStmt                  *sql.Stmt
-	operatingHoursExistsStmt                         *sql.Stmt
-	removeOpenPlayParticipantStmt                    *sql.Stmt
-	removeParticipantStmt                            *sql.Stmt
-	removeReservationCourtStmt                       *sql.Stmt
-	removeTeamMemberStmt                             *sql.Stmt
-	restoreMemberStmt                                *sql.Stmt
-	searchMembersStmt                                *sql.Stmt
-	updateBillingInfoStmt                            *sql.Stmt
-	updateCancellationPolicyTierStmt                 *sql.Stmt
-	updateClinicSessionStmt                          *sql.Stmt
-	updateClinicTypeStmt                             *sql.Stmt
-	updateCourtStatusStmt                            *sql.Stmt
-	updateEnrollmentStatusStmt                       *sql.Stmt
-	updateFacilityBookingConfigStmt                  *sql.Stmt
-	updateFacilityVisitActivityStmt                  *sql.Stmt
-	updateLeagueStmt                                 *sql.Stmt
-	updateLeagueTeamStmt                             *sql.Stmt
-	updateMatchResultStmt                            *sql.Stmt
-	updateMemberStmt                                 *sql.Stmt
-	updateMemberEmailStmt                            *sql.Stmt
-	updateOpenPlayRuleStmt                           *sql.Stmt
-	updateOpenPlaySessionCourtCountStmt              *sql.Stmt
-	updateOpenPlaySessionStatusStmt                  *sql.Stmt
-	updateReservationStmt                            *sql.Stmt
-	updateSessionAutoScaleOverrideStmt               *sql.Stmt
-	updateStaffStmt                                  *sql.Stmt
-	updateStaffUserStmt                              *sql.Stmt
-	updateTeamCaptainStmt                            *sql.Stmt
-	updateThemeStmt                                  *sql.Stmt
-	updateUserCognitoStatusStmt                      *sql.Stmt
-	updateUserPasswordHashStmt                       *sql.Stmt
-	updateUserStatusStmt                             *sql.Stmt
-	updateVisitPackTypeStmt                          *sql.Stmt
-	updateWaitlistStatusStmt                         *sql.Stmt
-	upsertActiveThemeIDStmt                          *sql.Stmt
-	upsertOperatingHoursStmt                         *sql.Stmt
-	upsertPhotoStmt                                  *sql.Stmt
-	upsertWaitlistConfigStmt                         *sql.Stmt
+	db                                                DBTX
+	tx                                                *sql.Tx
+	acceptOfferStmt                                   *sql.Stmt
+	addOpenPlayParticipantStmt                        *sql.Stmt
+	addParticipantStmt                                *sql.Stmt
+	addReservationCourtStmt                           *sql.Stmt
+	addTeamMemberStmt                                 *sql.Stmt
+	advanceWaitlistOfferStmt                          *sql.Stmt
+	assignFreeAgentToTeamStmt                         *sql.Stmt
+	countActiveMemberReservationsStmt                 *sql.Stmt
+	countCheckinsByFacilityInRangeStmt                *sql.Stmt
+	countFacilityThemeNameStmt                        *sql.Stmt
+	countFacilityThemeNameExcludingIDStmt             *sql.Stmt
+	countFacilityThemesStmt                           *sql.Stmt
+	countLessonPackageTypesByFacilityStmt             *sql.Stmt
+	countOpenPlayReservationsForSessionStmt           *sql.Stmt
+	countReservationParticipantsStmt                  *sql.Stmt
+	countReservationsByTypeInRangeStmt                *sql.Stmt
+	countScheduledVsCompletedReservationsStmt         *sql.Stmt
+	countThemeUsageStmt                               *sql.Stmt
+	countUnreadStaffNotificationsStmt                 *sql.Stmt
+	countVisitPackTypesByFacilityStmt                 *sql.Stmt
+	createCancellationPolicyTierStmt                  *sql.Stmt
+	createClinicEnrollmentStmt                        *sql.Stmt
+	createClinicSessionStmt                           *sql.Stmt
+	createClinicTypeStmt                              *sql.Stmt
+	createCourtStmt                                   *sql.Stmt
+	createFacilityVisitStmt                           *sql.Stmt
+	createLeagueStmt                                  *sql.Stmt
+	createLeagueMatchStmt                             *sql.Stmt
+	createLeagueTeamStmt                              *sql.Stmt
+	createLessonCancelledNotificationStmt             *sql.Stmt
+	createLessonPackageStmt                           *sql.Stmt
+	createLessonPackageRedemptionStmt                 *sql.Stmt
+	createLessonPackageTypeStmt                       *sql.Stmt
+	createMemberStmt                                  *sql.Stmt
+	createOpenPlayAuditLogStmt                        *sql.Stmt
+	createOpenPlayRuleStmt                            *sql.Stmt
+	createOpenPlaySessionStmt                         *sql.Stmt
+	createPhotoStmt                                   *sql.Stmt
+	createProUnavailabilityStmt                       *sql.Stmt
+	createReservationStmt                             *sql.Stmt
+	createStaffStmt                                   *sql.Stmt
+	createStaffNotificationStmt                       *sql.Stmt
+	createStaffUserStmt                               *sql.Stmt
+	createThemeStmt                                   *sql.Stmt
+	createVisitPackStmt                               *sql.Stmt
+	createVisitPackRedemptionStmt                     *sql.Stmt
+	createVisitPackTypeStmt                           *sql.Stmt
+	createWaitlistEntryStmt                           *sql.Stmt
+	createWaitlistOfferStmt                           *sql.Stmt
+	deactivateLessonPackageTypeStmt                   *sql.Stmt
+	deactivateVisitPackTypeStmt                       *sql.Stmt
+	decrementLessonPackageLessonStmt                  *sql.Stmt
+	decrementVisitPackVisitStmt                       *sql.Stmt
+	deleteCancellationPolicyTierStmt                  *sql.Stmt
+	deleteClinicEnrollmentStmt                        *sql.Stmt
+	deleteClinicSessionStmt                           *sql.Stmt
+	deleteClinicTypeStmt                              *sql.Stmt
+	deleteLeagueStmt                                  *sql.Stmt
+	deleteLeagueMatchesByLeagueIDStmt                 *sql.Stmt
+	deleteMemberStmt                                  *sql.Stmt
+	deleteOpenPlayRuleStmt                            *sql.Stmt
+	deleteOperatingHoursStmt                          *sql.Stmt
+	deletePastWaitlistEntriesStmt                     *sql.Stmt
+	deletePhotoStmt                                   *sql.Stmt
+	deleteProUnavailabilityStmt                       *sql.Stmt
+	deleteReservationStmt                             *sql.Stmt
+	deleteReservationCourtsByReservationIDStmt        *sql.Stmt
+	deleteReservationParticipantsByReservationIDStmt  *sql.Stmt
+	deleteStaffStmt                                   *sql.Stmt
+	deleteThemeStmt                                   *sql.Stmt
+	deleteWaitlistEntryStmt                           *sql.Stmt
+	expireOfferStmt                                   *sql.Stmt
+	facilityExistsStmt                                *sql.Stmt
+	getActiveThemeIDStmt                              *sql.Stmt
+	getApplicableCancellationTierStmt                 *sql.Stmt
+	getAvailableCourtHoursStmt                        *sql.Stmt
+	getBookedCourtHoursStmt                           *sql.Stmt
+	getCancellationMetricsInRangeStmt                 *sql.Stmt
+	getCancellationPolicyTierStmt                     *sql.Stmt
+	getClinicSessionStmt                              *sql.Stmt
+	getClinicSessionByIDStmt                          *sql.Stmt
+	getClinicTypeStmt                                 *sql.Stmt
+	getCognitoConfigStmt                              *sql.Stmt
+	getCourtStmt                                      *sql.Stmt
+	getCreatedMemberStmt                              *sql.Stmt
+	getEnrollmentCountStmt                            *sql.Stmt
+	getFacilityByIDStmt                               *sql.Stmt
+	getFacilityHoursStmt                              *sql.Stmt
+	getFutureProSessionsByStaffIDStmt                 *sql.Stmt
+	getLatestCancellationByReservationIDStmt          *sql.Stmt
+	getLeagueStmt                                     *sql.Stmt
+	getLeagueMatchStmt                                *sql.Stmt
+	getLeagueStandingsDataStmt                        *sql.Stmt
+	getLeagueTeamStmt                                 *sql.Stmt
+	getLeagueWithFacilityTimezoneStmt                 *sql.Stmt
+	getLessonPackageStmt                              *sql.Stmt
+	getLessonPackageRedemptionInfoStmt                *sql.Stmt
+	getLessonPackageTypeStmt                          *sql.Stmt
+	getMemberBillingStmt                              *sql.Stmt
+	getMemberByEmailStmt                              *sql.Stmt
+	getMemberByEmailIncludeDeletedStmt                *sql.Stmt
+	getMemberByIDStmt                                 *sql.Stmt
+	getMemberPhotoStmt                                *sql.Stmt
+	getMemberTodayActivitiesStmt                      *sql.Stmt
+	getOpenPlayReservationIDStmt                      *sql.Stmt
+	getOpenPlayRuleStmt                               *sql.Stmt
+	getOpenPlaySessionStmt                            *sql.Stmt
+	getOrganizationByIDStmt                           *sql.Stmt
+	getOrganizationBySlugStmt                         *sql.Stmt
+	getOrganizationCrossFacilitySettingStmt           *sql.Stmt
+	getPendingOfferStmt                               *sql.Stmt
+	getPhotoStmt                                      *sql.Stmt
+	getProLessonSlotsStmt                             *sql.Stmt
+	getProUnavailabilityByIDStmt                      *sql.Stmt
+	getReservationStmt                                *sql.Stmt
+	getReservationByIDStmt                            *sql.Stmt
+	getReservationTypeStmt                            *sql.Stmt
+	getReservationTypeByNameStmt                      *sql.Stmt
+	getReservationTypeNameByReservationIDStmt         *sql.Stmt
+	getRestoredMemberStmt                             *sql.Stmt
+	getStaffByEmailStmt                               *sql.Stmt
+	getStaffByIDStmt                                  *sql.Stmt
+	getStaffByPhoneStmt                               *sql.Stmt
+	getStaffByUserIDStmt                              *sql.Stmt
+	getStaffNotificationByIDStmt                      *sql.Stmt
+	getThemeStmt                                      *sql.Stmt
+	getUpdatedMemberStmt                              *sql.Stmt
+	getUserByEmailStmt                                *sql.Stmt
+	getUserByIDStmt                                   *sql.Stmt
+	getUserByPhoneStmt                                *sql.Stmt
+	getVisitPackStmt                                  *sql.Stmt
+	getVisitPackRedemptionInfoStmt                    *sql.Stmt
+	getVisitPackTypeStmt                              *sql.Stmt
+	getWaitlistConfigStmt                             *sql.Stmt
+	getWaitlistEntryStmt                              *sql.Stmt
+	isMemberOpenPlayParticipantStmt                   *sql.Stmt
+	listActiveLessonPackagesForUserStmt               *sql.Stmt
+	listActiveLessonPackagesForUserByFacilityStmt     *sql.Stmt
+	listActiveLessonPackagesForUserByOrganizationStmt *sql.Stmt
+	listActiveVisitPacksForUserStmt                   *sql.Stmt
+	listActiveVisitPacksForUserByFacilityStmt         *sql.Stmt
+	listActiveVisitPacksForUserByOrganizationStmt     *sql.Stmt
+	listAvailableCourtsStmt                           *sql.Stmt
+	listCancellationPolicyTiersStmt                   *sql.Stmt
+	listClinicSessionsByFacilityStmt                  *sql.Stmt
+	listClinicTypesByFacilityStmt                     *sql.Stmt
+	listCourtsStmt                                    *sql.Stmt
+	listDistinctFacilitiesWithScheduledSessionsStmt   *sql.Stmt
+	listEnrollmentsForClinicStmt                      *sql.Stmt
+	listExpiredOffersStmt                             *sql.Stmt
+	listFacilitiesStmt                                *sql.Stmt
+	listFacilityThemesStmt                            *sql.Stmt
+	listFreeAgentsByLeagueStmt                        *sql.Stmt
+	listLeagueMatchesStmt                             *sql.Stmt
+	listLeagueMatchesWithReservationsStmt             *sql.Stmt
+	listLeagueTeamsStmt                               *sql.Stmt
+	listLeaguesByFacilityStmt                         *sql.Stmt
+	listLessonPackageTypesStmt                        *sql.Stmt
+	listMatchingPendingWaitlistsForCancelledSlotStmt  *sql.Stmt
+	listMemberUpcomingOpenPlaySessionsStmt            *sql.Stmt
+	listMembersStmt                                   *sql.Stmt
+	listOpenPlayAuditLogStmt                          *sql.Stmt
+	listOpenPlayParticipantsStmt                      *sql.Stmt
+	listOpenPlayRulesStmt                             *sql.Stmt
+	listOpenPlaySessionsStmt                          *sql.Stmt
+	listOpenPlaySessionsApproachingCutoffStmt         *sql.Stmt
+	listOrganizationsStmt                             *sql.Stmt
+	listParticipantsForReservationStmt                *sql.Stmt
+	listProUnavailabilityByFacilityAndDateRangeStmt   *sql.Stmt
+	listProUnavailabilityByProIDStmt                  *sql.Stmt
+	listProsByFacilityStmt                            *sql.Stmt
+	listRecentVisitsByUserStmt                        *sql.Stmt
+	listReservationCourtsStmt                         *sql.Stmt
+	listReservationCourtsByDateRangeStmt              *sql.Stmt
+	listReservationTypesStmt                          *sql.Stmt
+	listReservationsByDateRangeStmt                   *sql.Stmt
+	listReservationsByUserIDStmt                      *sql.Stmt
+	listStaffStmt                                     *sql.Stmt
+	listStaffByFacilityStmt                           *sql.Stmt
+	listStaffByRoleStmt                               *sql.Stmt
+	listStaffNotificationsStmt                        *sql.Stmt
+	listStaffNotificationsForFacilityOrCorporateStmt  *sql.Stmt
+	listStaffNotificationsForStaffStmt                *sql.Stmt
+	listSystemThemesStmt                              *sql.Stmt
+	listTeamMembersStmt                               *sql.Stmt
+	listTodayVisitsByFacilityStmt                     *sql.Stmt
+	listVisitPackTypesStmt                            *sql.Stmt
+	listWaitlistsByFacilityStmt                       *sql.Stmt
+	listWaitlistsByUserStmt                           *sql.Stmt
+	listWaitlistsByUserAndFacilityStmt                *sql.Stmt
+	listWaitlistsForSlotStmt                          *sql.Stmt
+	logCancellationStmt                               *sql.Stmt
+	markStaffNotificationAsReadStmt                   *sql.Stmt
+	operatingHoursExistsStmt                          *sql.Stmt
+	removeOpenPlayParticipantStmt                     *sql.Stmt
+	removeParticipantStmt                             *sql.Stmt
+	removeReservationCourtStmt                        *sql.Stmt
+	removeTeamMemberStmt                              *sql.Stmt
+	restoreMemberStmt                                 *sql.Stmt
+	searchMembersStmt                                 *sql.Stmt
+	updateBillingInfoStmt                             *sql.Stmt
+	updateCancellationPolicyTierStmt                  *sql.Stmt
+	updateClinicSessionStmt                           *sql.Stmt
+	updateClinicTypeStmt                              *sql.Stmt
+	updateCourtStatusStmt                             *sql.Stmt
+	updateEnrollmentStatusStmt                        *sql.Stmt
+	updateFacilityBookingConfigStmt                   *sql.Stmt
+	updateFacilityVisitActivityStmt                   *sql.Stmt
+	updateLeagueStmt                                  *sql.Stmt
+	updateLeagueTeamStmt                              *sql.Stmt
+	updateLessonPackageTypeStmt                       *sql.Stmt
+	updateMatchResultStmt                             *sql.Stmt
+	updateMemberStmt                                  *sql.Stmt
+	updateMemberEmailStmt                             *sql.Stmt
+	updateOpenPlayRuleStmt                            *sql.Stmt
+	updateOpenPlaySessionCourtCountStmt               *sql.Stmt
+	updateOpenPlaySessionStatusStmt                   *sql.Stmt
+	updateReservationStmt                             *sql.Stmt
+	updateSessionAutoScaleOverrideStmt                *sql.Stmt
+	updateStaffStmt                                   *sql.Stmt
+	updateStaffUserStmt                               *sql.Stmt
+	updateTeamCaptainStmt                             *sql.Stmt
+	updateThemeStmt                                   *sql.Stmt
+	updateUserCognitoStatusStmt                       *sql.Stmt
+	updateUserPasswordHashStmt                        *sql.Stmt
+	updateUserStatusStmt                              *sql.Stmt
+	updateVisitPackTypeStmt                           *sql.Stmt
+	updateWaitlistStatusStmt                          *sql.Stmt
+	upsertActiveThemeIDStmt                           *sql.Stmt
+	upsertOperatingHoursStmt                          *sql.Stmt
+	upsertPhotoStmt                                   *sql.Stmt
+	upsertWaitlistConfigStmt                          *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                                               tx,
-		tx:                                               tx,
-		acceptOfferStmt:                                  q.acceptOfferStmt,
-		addOpenPlayParticipantStmt:                       q.addOpenPlayParticipantStmt,
-		addParticipantStmt:                               q.addParticipantStmt,
-		addReservationCourtStmt:                          q.addReservationCourtStmt,
-		addTeamMemberStmt:                                q.addTeamMemberStmt,
-		advanceWaitlistOfferStmt:                         q.advanceWaitlistOfferStmt,
-		assignFreeAgentToTeamStmt:                        q.assignFreeAgentToTeamStmt,
-		countActiveMemberReservationsStmt:                q.countActiveMemberReservationsStmt,
-		countCheckinsByFacilityInRangeStmt:               q.countCheckinsByFacilityInRangeStmt,
-		countFacilityThemeNameStmt:                       q.countFacilityThemeNameStmt,
-		countFacilityThemeNameExcludingIDStmt:            q.countFacilityThemeNameExcludingIDStmt,
-		countFacilityThemesStmt:                          q.countFacilityThemesStmt,
-		countOpenPlayReservationsForSessionStmt:          q.countOpenPlayReservationsForSessionStmt,
-		countReservationParticipantsStmt:                 q.countReservationParticipantsStmt,
-		countReservationsByTypeInRangeStmt:               q.countReservationsByTypeInRangeStmt,
-		countScheduledVsCompletedReservationsStmt:        q.countScheduledVsCompletedReservationsStmt,
-		countThemeUsageStmt:                              q.countThemeUsageStmt,
-		countUnreadStaffNotificationsStmt:                q.countUnreadStaffNotificationsStmt,
-		countVisitPackTypesByFacilityStmt:                q.countVisitPackTypesByFacilityStmt,
-		createCancellationPolicyTierStmt:                 q.createCancellationPolicyTierStmt,
-		createClinicEnrollmentStmt:                       q.createClinicEnrollmentStmt,
-		createClinicSessionStmt:                          q.createClinicSessionStmt,
-		createClinicTypeStmt:                             q.createClinicTypeStmt,
-		createCourtStmt:                                  q.createCourtStmt,
-		createFacilityVisitStmt:                          q.createFacilityVisitStmt,
-		createLeagueStmt:                                 q.createLeagueStmt,
-		createLeagueMatchStmt:                            q.createLeagueMatchStmt,
-		createLeagueTeamStmt:                             q.createLeagueTeamStmt,
-		createLessonCancelledNotificationStmt:            q.createLessonCancelledNotificationStmt,
-		createMemberStmt:                                 q.createMemberStmt,
-		createOpenPlayAuditLogStmt:                       q.createOpenPlayAuditLogStmt,
-		createOpenPlayRuleStmt:                           q.createOpenPlayRuleStmt,
-		createOpenPlaySessionStmt:                        q.createOpenPlaySessionStmt,
-		createPhotoStmt:                                  q.createPhotoStmt,
-		createProUnavailabilityStmt:                      q.createProUnavailabilityStmt,
-		createReservationStmt:                            q.createReservationStmt,
-		createStaffStmt:                                  q.createStaffStmt,
-		createStaffNotificationStmt:                      q.createStaffNotificationStmt,
-		createStaffUserStmt:                              q.createStaffUserStmt,
-		createThemeStmt:                                  q.createThemeStmt,
-		createVisitPackStmt:                              q.createVisitPackStmt,
-		createVisitPackRedemptionStmt:                    q.createVisitPackRedemptionStmt,
-		createVisitPackTypeStmt:                          q.createVisitPackTypeStmt,
-		createWaitlistEntryStmt:                          q.createWaitlistEntryStmt,
-		createWaitlistOfferStmt:                          q.createWaitlistOfferStmt,
-		deactivateVisitPackTypeStmt:                      q.deactivateVisitPackTypeStmt,
-		decrementVisitPackVisitStmt:                      q.decrementVisitPackVisitStmt,
-		deleteCancellationPolicyTierStmt:                 q.deleteCancellationPolicyTierStmt,
-		deleteClinicEnrollmentStmt:                       q.deleteClinicEnrollmentStmt,
-		deleteClinicSessionStmt:                          q.deleteClinicSessionStmt,
-		deleteClinicTypeStmt:                             q.deleteClinicTypeStmt,
-		deleteLeagueStmt:                                 q.deleteLeagueStmt,
-		deleteLeagueMatchesByLeagueIDStmt:                q.deleteLeagueMatchesByLeagueIDStmt,
-		deleteMemberStmt:                                 q.deleteMemberStmt,
-		deleteOpenPlayRuleStmt:                           q.deleteOpenPlayRuleStmt,
-		deleteOperatingHoursStmt:                         q.deleteOperatingHoursStmt,
-		deletePastWaitlistEntriesStmt:                    q.deletePastWaitlistEntriesStmt,
-		deletePhotoStmt:                                  q.deletePhotoStmt,
-		deleteProUnavailabilityStmt:                      q.deleteProUnavailabilityStmt,
-		deleteReservationStmt:                            q.deleteReservationStmt,
-		deleteReservationCourtsByReservationIDStmt:       q.deleteReservationCourtsByReservationIDStmt,
-		deleteReservationParticipantsByReservationIDStmt: q.deleteReservationParticipantsByReservationIDStmt,
-		deleteStaffStmt:                                  q.deleteStaffStmt,
-		deleteThemeStmt:                                  q.deleteThemeStmt,
-		deleteWaitlistEntryStmt:                          q.deleteWaitlistEntryStmt,
-		expireOfferStmt:                                  q.expireOfferStmt,
-		facilityExistsStmt:                               q.facilityExistsStmt,
-		getActiveThemeIDStmt:                             q.getActiveThemeIDStmt,
-		getApplicableCancellationTierStmt:                q.getApplicableCancellationTierStmt,
-		getAvailableCourtHoursStmt:                       q.getAvailableCourtHoursStmt,
-		getBookedCourtHoursStmt:                          q.getBookedCourtHoursStmt,
-		getCancellationMetricsInRangeStmt:                q.getCancellationMetricsInRangeStmt,
-		getCancellationPolicyTierStmt:                    q.getCancellationPolicyTierStmt,
-		getClinicSessionStmt:                             q.getClinicSessionStmt,
-		getClinicSessionByIDStmt:                         q.getClinicSessionByIDStmt,
-		getClinicTypeStmt:                                q.getClinicTypeStmt,
-		getCognitoConfigStmt:                             q.getCognitoConfigStmt,
-		getCourtStmt:                                     q.getCourtStmt,
-		getCreatedMemberStmt:                             q.getCreatedMemberStmt,
-		getEnrollmentCountStmt:                           q.getEnrollmentCountStmt,
-		getFacilityByIDStmt:                              q.getFacilityByIDStmt,
-		getFacilityHoursStmt:                             q.getFacilityHoursStmt,
-		getFutureProSessionsByStaffIDStmt:                q.getFutureProSessionsByStaffIDStmt,
-		getLatestCancellationByReservationIDStmt:         q.getLatestCancellationByReservationIDStmt,
-		getLeagueStmt:                                    q.getLeagueStmt,
-		getLeagueMatchStmt:                               q.getLeagueMatchStmt,
-		getLeagueStandingsDataStmt:                       q.getLeagueStandingsDataStmt,
-		getLeagueTeamStmt:                                q.getLeagueTeamStmt,
-		getLeagueWithFacilityTimezoneStmt:                q.getLeagueWithFacilityTimezoneStmt,
-		getMemberBillingStmt:                             q.getMemberBillingStmt,
-		getMemberByEmailStmt:                             q.getMemberByEmailStmt,
-		getMemberByEmailIncludeDeletedStmt:               q.getMemberByEmailIncludeDeletedStmt,
-		getMemberByIDStmt:                                q.getMemberByIDStmt,
-		getMemberPhotoStmt:                               q.getMemberPhotoStmt,
-		getMemberTodayActivitiesStmt:                     q.getMemberTodayActivitiesStmt,
-		getOpenPlayReservationIDStmt:                     q.getOpenPlayReservationIDStmt,
-		getOpenPlayRuleStmt:                              q.getOpenPlayRuleStmt,
-		getOpenPlaySessionStmt:                           q.getOpenPlaySessionStmt,
-		getOrganizationByIDStmt:                          q.getOrganizationByIDStmt,
-		getOrganizationBySlugStmt:                        q.getOrganizationBySlugStmt,
-		getOrganizationCrossFacilitySettingStmt:          q.getOrganizationCrossFacilitySettingStmt,
-		getPendingOfferStmt:                              q.getPendingOfferStmt,
-		getPhotoStmt:                                     q.getPhotoStmt,
-		getProLessonSlotsStmt:                            q.getProLessonSlotsStmt,
-		getProUnavailabilityByIDStmt:                     q.getProUnavailabilityByIDStmt,
-		getReservationStmt:                               q.getReservationStmt,
-		getReservationByIDStmt:                           q.getReservationByIDStmt,
-		getReservationTypeStmt:                           q.getReservationTypeStmt,
-		getReservationTypeByNameStmt:                     q.getReservationTypeByNameStmt,
-		getReservationTypeNameByReservationIDStmt:        q.getReservationTypeNameByReservationIDStmt,
-		getRestoredMemberStmt:                            q.getRestoredMemberStmt,
-		getStaffByEmailStmt:                              q.getStaffByEmailStmt,
-		getStaffByIDStmt:                                 q.getStaffByIDStmt,
-		getStaffByPhoneStmt:                              q.getStaffByPhoneStmt,
-		getStaffByUserIDStmt:                             q.getStaffByUserIDStmt,
-		getStaffNotificationByIDStmt:                     q.getStaffNotificationByIDStmt,
-		getThemeStmt:                                     q.getThemeStmt,
-		getUpdatedMemberStmt:                             q.getUpdatedMemberStmt,
-		getUserByEmailStmt:                               q.getUserByEmailStmt,
-		getUserByIDStmt:                                  q.getUserByIDStmt,
-		getUserByPhoneStmt:                               q.getUserByPhoneStmt,
-		getVisitPackStmt:                                 q.getVisitPackStmt,
-		getVisitPackRedemptionInfoStmt:                   q.getVisitPackRedemptionInfoStmt,
-		getVisitPackTypeStmt:                             q.getVisitPackTypeStmt,
-		getWaitlistConfigStmt:                            q.getWaitlistConfigStmt,
-		getWaitlistEntryStmt:                             q.getWaitlistEntryStmt,
-		isMemberOpenPlayParticipantStmt:                  q.isMemberOpenPlayParticipantStmt,
-		listActiveVisitPacksForUserStmt:                  q.listActiveVisitPacksForUserStmt,
-		listActiveVisitPacksForUserByFacilityStmt:        q.listActiveVisitPacksForUserByFacilityStmt,
-		listActiveVisitPacksForUserByOrganizationStmt:    q.listActiveVisitPacksForUserByOrganizationStmt,
-		listAvailableCourtsStmt:                          q.listAvailableCourtsStmt,
-		listCancellationPolicyTiersStmt:                  q.listCancellationPolicyTiersStmt,
-		listClinicSessionsByFacilityStmt:                 q.listClinicSessionsByFacilityStmt,
-		listClinicTypesByFacilityStmt:                    q.listClinicTypesByFacilityStmt,
-		listCourtsStmt:                                   q.listCourtsStmt,
-		listDistinctFacilitiesWithScheduledSessionsStmt:  q.listDistinctFacilitiesWithScheduledSessionsStmt,
-		listEnrollmentsForClinicStmt:                     q.listEnrollmentsForClinicStmt,
-		listExpiredOffersStmt:                            q.listExpiredOffersStmt,
-		listFacilitiesStmt:                               q.listFacilitiesStmt,
-		listFacilityThemesStmt:                           q.listFacilityThemesStmt,
-		listFreeAgentsByLeagueStmt:                       q.listFreeAgentsByLeagueStmt,
-		listLeagueMatchesStmt:                            q.listLeagueMatchesStmt,
-		listLeagueMatchesWithReservationsStmt:            q.listLeagueMatchesWithReservationsStmt,
-		listLeagueTeamsStmt:                              q.listLeagueTeamsStmt,
-		listLeaguesByFacilityStmt:                        q.listLeaguesByFacilityStmt,
-		listMatchingPendingWaitlistsForCancelledSlotStmt: q.listMatchingPendingWaitlistsForCancelledSlotStmt,
-		listMemberUpcomingOpenPlaySessionsStmt:           q.listMemberUpcomingOpenPlaySessionsStmt,
-		listMembersStmt:                                  q.listMembersStmt,
-		listOpenPlayAuditLogStmt:                         q.listOpenPlayAuditLogStmt,
-		listOpenPlayParticipantsStmt:                     q.listOpenPlayParticipantsStmt,
-		listOpenPlayRulesStmt:                            q.listOpenPlayRulesStmt,
-		listOpenPlaySessionsStmt:                         q.listOpenPlaySessionsStmt,
-		listOpenPlaySessionsApproachingCutoffStmt:        q.listOpenPlaySessionsApproachingCutoffStmt,
-		listOrganizationsStmt:                            q.listOrganizationsStmt,
-		listParticipantsForReservationStmt:               q.listParticipantsForReservationStmt,
-		listProUnavailabilityByFacilityAndDateRangeStmt:  q.listProUnavailabilityByFacilityAndDateRangeStmt,
-		listProUnavailabilityByProIDStmt:                 q.listProUnavailabilityByProIDStmt,
-		listProsByFacilityStmt:                           q.listProsByFacilityStmt,
-		listRecentVisitsByUserStmt:                       q.listRecentVisitsByUserStmt,
-		listReservationCourtsStmt:                        q.listReservationCourtsStmt,
-		listReservationCourtsByDateRangeStmt:             q.listReservationCourtsByDateRangeStmt,
-		listReservationTypesStmt:                         q.listReservationTypesStmt,
-		listReservationsByDateRangeStmt:                  q.listReservationsByDateRangeStmt,
-		listReservationsByUserIDStmt:                     q.listReservationsByUserIDStmt,
-		listStaffStmt:                                    q.listStaffStmt,
-		listStaffByFacilityStmt:                          q.listStaffByFacilityStmt,
-		listStaffByRoleStmt:                              q.listStaffByRoleStmt,
-		listStaffNotificationsStmt:                       q.listStaffNotificationsStmt,
-		listStaffNotificationsForFacilityOrCorporateStmt: q.listStaffNotificationsForFacilityOrCorporateStmt,
-		listStaffNotificationsForStaffStmt:               q.listStaffNotificationsForStaffStmt,
-		listSystemThemesStmt:                             q.listSystemThemesStmt,
-		listTeamMembersStmt:                              q.listTeamMembersStmt,
-		listTodayVisitsByFacilityStmt:                    q.listTodayVisitsByFacilityStmt,
-		listVisitPackTypesStmt:                           q.listVisitPackTypesStmt,
-		listWaitlistsByFacilityStmt:                      q.listWaitlistsByFacilityStmt,
-		listWaitlistsByUserStmt:                          q.listWaitlistsByUserStmt,
-		listWaitlistsByUserAndFacilityStmt:               q.listWaitlistsByUserAndFacilityStmt,
-		listWaitlistsForSlotStmt:                         q.listWaitlistsForSlotStmt,
-		logCancellationStmt:                              q.logCancellationStmt,
-		markStaffNotificationAsReadStmt:                  q.markStaffNotificationAsReadStmt,
-		operatingHoursExistsStmt:                         q.operatingHoursExistsStmt,
-		removeOpenPlayParticipantStmt:                    q.removeOpenPlayParticipantStmt,
-		removeParticipantStmt:                            q.removeParticipantStmt,
-		removeReservationCourtStmt:                       q.removeReservationCourtStmt,
-		removeTeamMemberStmt:                             q.removeTeamMemberStmt,
-		restoreMemberStmt:                                q.restoreMemberStmt,
-		searchMembersStmt:                                q.searchMembersStmt,
-		updateBillingInfoStmt:                            q.updateBillingInfoStmt,
-		updateCancellationPolicyTierStmt:                 q.updateCancellationPolicyTierStmt,
-		updateClinicSessionStmt:                          q.updateClinicSessionStmt,
-		updateClinicTypeStmt:                             q.updateClinicTypeStmt,
-		updateCourtStatusStmt:                            q.updateCourtStatusStmt,
-		updateEnrollmentStatusStmt:                       q.updateEnrollmentStatusStmt,
-		updateFacilityBookingConfigStmt:                  q.updateFacilityBookingConfigStmt,
-		updateFacilityVisitActivityStmt:                  q.updateFacilityVisitActivityStmt,
-		updateLeagueStmt:                                 q.updateLeagueStmt,
-		updateLeagueTeamStmt:                             q.updateLeagueTeamStmt,
-		updateMatchResultStmt:                            q.updateMatchResultStmt,
-		updateMemberStmt:                                 q.updateMemberStmt,
-		updateMemberEmailStmt:                            q.updateMemberEmailStmt,
-		updateOpenPlayRuleStmt:                           q.updateOpenPlayRuleStmt,
-		updateOpenPlaySessionCourtCountStmt:              q.updateOpenPlaySessionCourtCountStmt,
-		updateOpenPlaySessionStatusStmt:                  q.updateOpenPlaySessionStatusStmt,
-		updateReservationStmt:                            q.updateReservationStmt,
-		updateSessionAutoScaleOverrideStmt:               q.updateSessionAutoScaleOverrideStmt,
-		updateStaffStmt:                                  q.updateStaffStmt,
-		updateStaffUserStmt:                              q.updateStaffUserStmt,
-		updateTeamCaptainStmt:                            q.updateTeamCaptainStmt,
-		updateThemeStmt:                                  q.updateThemeStmt,
-		updateUserCognitoStatusStmt:                      q.updateUserCognitoStatusStmt,
-		updateUserPasswordHashStmt:                       q.updateUserPasswordHashStmt,
-		updateUserStatusStmt:                             q.updateUserStatusStmt,
-		updateVisitPackTypeStmt:                          q.updateVisitPackTypeStmt,
-		updateWaitlistStatusStmt:                         q.updateWaitlistStatusStmt,
-		upsertActiveThemeIDStmt:                          q.upsertActiveThemeIDStmt,
-		upsertOperatingHoursStmt:                         q.upsertOperatingHoursStmt,
-		upsertPhotoStmt:                                  q.upsertPhotoStmt,
-		upsertWaitlistConfigStmt:                         q.upsertWaitlistConfigStmt,
+		db:                                                tx,
+		tx:                                                tx,
+		acceptOfferStmt:                                   q.acceptOfferStmt,
+		addOpenPlayParticipantStmt:                        q.addOpenPlayParticipantStmt,
+		addParticipantStmt:                                q.addParticipantStmt,
+		addReservationCourtStmt:                           q.addReservationCourtStmt,
+		addTeamMemberStmt:                                 q.addTeamMemberStmt,
+		advanceWaitlistOfferStmt:                          q.advanceWaitlistOfferStmt,
+		assignFreeAgentToTeamStmt:                         q.assignFreeAgentToTeamStmt,
+		countActiveMemberReservationsStmt:                 q.countActiveMemberReservationsStmt,
+		countCheckinsByFacilityInRangeStmt:                q.countCheckinsByFacilityInRangeStmt,
+		countFacilityThemeNameStmt:                        q.countFacilityThemeNameStmt,
+		countFacilityThemeNameExcludingIDStmt:             q.countFacilityThemeNameExcludingIDStmt,
+		countFacilityThemesStmt:                           q.countFacilityThemesStmt,
+		countLessonPackageTypesByFacilityStmt:             q.countLessonPackageTypesByFacilityStmt,
+		countOpenPlayReservationsForSessionStmt:           q.countOpenPlayReservationsForSessionStmt,
+		countReservationParticipantsStmt:                  q.countReservationParticipantsStmt,
+		countReservationsByTypeInRangeStmt:                q.countReservationsByTypeInRangeStmt,
+		countScheduledVsCompletedReservationsStmt:         q.countScheduledVsCompletedReservationsStmt,
+		countThemeUsageStmt:                               q.countThemeUsageStmt,
+		countUnreadStaffNotificationsStmt:                 q.countUnreadStaffNotificationsStmt,
+		countVisitPackTypesByFacilityStmt:                 q.countVisitPackTypesByFacilityStmt,
+		createCancellationPolicyTierStmt:                  q.createCancellationPolicyTierStmt,
+		createClinicEnrollmentStmt:                        q.createClinicEnrollmentStmt,
+		createClinicSessionStmt:                           q.createClinicSessionStmt,
+		createClinicTypeStmt:                              q.createClinicTypeStmt,
+		createCourtStmt:                                   q.createCourtStmt,
+		createFacilityVisitStmt:                           q.createFacilityVisitStmt,
+		createLeagueStmt:                                  q.createLeagueStmt,
+		createLeagueMatchStmt:                             q.createLeagueMatchStmt,
+		createLeagueTeamStmt:                              q.createLeagueTeamStmt,
+		createLessonCancelledNotificationStmt:             q.createLessonCancelledNotificationStmt,
+		createLessonPackageStmt:                           q.createLessonPackageStmt,
+		createLessonPackageRedemptionStmt:                 q.createLessonPackageRedemptionStmt,
+		createLessonPackageTypeStmt:                       q.createLessonPackageTypeStmt,
+		createMemberStmt:                                  q.createMemberStmt,
+		createOpenPlayAuditLogStmt:                        q.createOpenPlayAuditLogStmt,
+		createOpenPlayRuleStmt:                            q.createOpenPlayRuleStmt,
+		createOpenPlaySessionStmt:                         q.createOpenPlaySessionStmt,
+		createPhotoStmt:                                   q.createPhotoStmt,
+		createProUnavailabilityStmt:                       q.createProUnavailabilityStmt,
+		createReservationStmt:                             q.createReservationStmt,
+		createStaffStmt:                                   q.createStaffStmt,
+		createStaffNotificationStmt:                       q.createStaffNotificationStmt,
+		createStaffUserStmt:                               q.createStaffUserStmt,
+		createThemeStmt:                                   q.createThemeStmt,
+		createVisitPackStmt:                               q.createVisitPackStmt,
+		createVisitPackRedemptionStmt:                     q.createVisitPackRedemptionStmt,
+		createVisitPackTypeStmt:                           q.createVisitPackTypeStmt,
+		createWaitlistEntryStmt:                           q.createWaitlistEntryStmt,
+		createWaitlistOfferStmt:                           q.createWaitlistOfferStmt,
+		deactivateLessonPackageTypeStmt:                   q.deactivateLessonPackageTypeStmt,
+		deactivateVisitPackTypeStmt:                       q.deactivateVisitPackTypeStmt,
+		decrementLessonPackageLessonStmt:                  q.decrementLessonPackageLessonStmt,
+		decrementVisitPackVisitStmt:                       q.decrementVisitPackVisitStmt,
+		deleteCancellationPolicyTierStmt:                  q.deleteCancellationPolicyTierStmt,
+		deleteClinicEnrollmentStmt:                        q.deleteClinicEnrollmentStmt,
+		deleteClinicSessionStmt:                           q.deleteClinicSessionStmt,
+		deleteClinicTypeStmt:                              q.deleteClinicTypeStmt,
+		deleteLeagueStmt:                                  q.deleteLeagueStmt,
+		deleteLeagueMatchesByLeagueIDStmt:                 q.deleteLeagueMatchesByLeagueIDStmt,
+		deleteMemberStmt:                                  q.deleteMemberStmt,
+		deleteOpenPlayRuleStmt:                            q.deleteOpenPlayRuleStmt,
+		deleteOperatingHoursStmt:                          q.deleteOperatingHoursStmt,
+		deletePastWaitlistEntriesStmt:                     q.deletePastWaitlistEntriesStmt,
+		deletePhotoStmt:                                   q.deletePhotoStmt,
+		deleteProUnavailabilityStmt:                       q.deleteProUnavailabilityStmt,
+		deleteReservationStmt:                             q.deleteReservationStmt,
+		deleteReservationCourtsByReservationIDStmt:        q.deleteReservationCourtsByReservationIDStmt,
+		deleteReservationParticipantsByReservationIDStmt:  q.deleteReservationParticipantsByReservationIDStmt,
+		deleteStaffStmt:                                   q.deleteStaffStmt,
+		deleteThemeStmt:                                   q.deleteThemeStmt,
+		deleteWaitlistEntryStmt:                           q.deleteWaitlistEntryStmt,
+		expireOfferStmt:                                   q.expireOfferStmt,
+		facilityExistsStmt:                                q.facilityExistsStmt,
+		getActiveThemeIDStmt:                              q.getActiveThemeIDStmt,
+		getApplicableCancellationTierStmt:                 q.getApplicableCancellationTierStmt,
+		getAvailableCourtHoursStmt:                        q.getAvailableCourtHoursStmt,
+		getBookedCourtHoursStmt:                           q.getBookedCourtHoursStmt,
+		getCancellationMetricsInRangeStmt:                 q.getCancellationMetricsInRangeStmt,
+		getCancellationPolicyTierStmt:                     q.getCancellationPolicyTierStmt,
+		getClinicSessionStmt:                              q.getClinicSessionStmt,
+		getClinicSessionByIDStmt:                          q.getClinicSessionByIDStmt,
+		getClinicTypeStmt:                                 q.getClinicTypeStmt,
+		getCognitoConfigStmt:                              q.getCognitoConfigStmt,
+		getCourtStmt:                                      q.getCourtStmt,
+		getCreatedMemberStmt:                              q.getCreatedMemberStmt,
+		getEnrollmentCountStmt:                            q.getEnrollmentCountStmt,
+		getFacilityByIDStmt:                               q.getFacilityByIDStmt,
+		getFacilityHoursStmt:                              q.getFacilityHoursStmt,
+		getFutureProSessionsByStaffIDStmt:                 q.getFutureProSessionsByStaffIDStmt,
+		getLatestCancellationByReservationIDStmt:          q.getLatestCancellationByReservationIDStmt,
+		getLeagueStmt:                                     q.getLeagueStmt,
+		getLeagueMatchStmt:                                q.getLeagueMatchStmt,
+		getLeagueStandingsDataStmt:                        q.getLeagueStandingsDataStmt,
+		getLeagueTeamStmt:                                 q.getLeagueTeamStmt,
+		getLeagueWithFacilityTimezoneStmt:                 q.getLeagueWithFacilityTimezoneStmt,
+		getLessonPackageStmt:                              q.getLessonPackageStmt,
+		getLessonPackageRedemptionInfoStmt:                q.getLessonPackageRedemptionInfoStmt,
+		getLessonPackageTypeStmt:                          q.getLessonPackageTypeStmt,
+		getMemberBillingStmt:                              q.getMemberBillingStmt,
+		getMemberByEmailStmt:                              q.getMemberByEmailStmt,
+		getMemberByEmailIncludeDeletedStmt:                q.getMemberByEmailIncludeDeletedStmt,
+		getMemberByIDStmt:                                 q.getMemberByIDStmt,
+		getMemberPhotoStmt:                                q.getMemberPhotoStmt,
+		getMemberTodayActivitiesStmt:                      q.getMemberTodayActivitiesStmt,
+		getOpenPlayReservationIDStmt:                      q.getOpenPlayReservationIDStmt,
+		getOpenPlayRuleStmt:                               q.getOpenPlayRuleStmt,
+		getOpenPlaySessionStmt:                            q.getOpenPlaySessionStmt,
+		getOrganizationByIDStmt:                           q.getOrganizationByIDStmt,
+		getOrganizationBySlugStmt:                         q.getOrganizationBySlugStmt,
+		getOrganizationCrossFacilitySettingStmt:           q.getOrganizationCrossFacilitySettingStmt,
+		getPendingOfferStmt:                               q.getPendingOfferStmt,
+		getPhotoStmt:                                      q.getPhotoStmt,
+		getProLessonSlotsStmt:                             q.getProLessonSlotsStmt,
+		getProUnavailabilityByIDStmt:                      q.getProUnavailabilityByIDStmt,
+		getReservationStmt:                                q.getReservationStmt,
+		getReservationByIDStmt:                            q.getReservationByIDStmt,
+		getReservationTypeStmt:                            q.getReservationTypeStmt,
+		getReservationTypeByNameStmt:                      q.getReservationTypeByNameStmt,
+		getReservationTypeNameByReservationIDStmt:         q.getReservationTypeNameByReservationIDStmt,
+		getRestoredMemberStmt:                             q.getRestoredMemberStmt,
+		getStaffByEmailStmt:                               q.getStaffByEmailStmt,
+		getStaffByIDStmt:                                  q.getStaffByIDStmt,
+		getStaffByPhoneStmt:                               q.getStaffByPhoneStmt,
+		getStaffByUserIDStmt:                              q.getStaffByUserIDStmt,
+		getStaffNotificationByIDStmt:                      q.getStaffNotificationByIDStmt,
+		getThemeStmt:                                      q.getThemeStmt,
+		getUpdatedMemberStmt:                              q.getUpdatedMemberStmt,
+		getUserByEmailStmt:                                q.getUserByEmailStmt,
+		getUserByIDStmt:                                   q.getUserByIDStmt,
+		getUserByPhoneStmt:                                q.getUserByPhoneStmt,
+		getVisitPackStmt:                                  q.getVisitPackStmt,
+		getVisitPackRedemptionInfoStmt:                    q.getVisitPackRedemptionInfoStmt,
+		getVisitPackTypeStmt:                              q.getVisitPackTypeStmt,
+		getWaitlistConfigStmt:                             q.getWaitlistConfigStmt,
+		getWaitlistEntryStmt:                              q.getWaitlistEntryStmt,
+		isMemberOpenPlayParticipantStmt:                   q.isMemberOpenPlayParticipantStmt,
+		listActiveLessonPackagesForUserStmt:               q.listActiveLessonPackagesForUserStmt,
+		listActiveLessonPackagesForUserByFacilityStmt:     q.listActiveLessonPackagesForUserByFacilityStmt,
+		listActiveLessonPackagesForUserByOrganizationStmt: q.listActiveLessonPackagesForUserByOrganizationStmt,
+		listActiveVisitPacksForUserStmt:                   q.listActiveVisitPacksForUserStmt,
+		listActiveVisitPacksForUserByFacilityStmt:         q.listActiveVisitPacksForUserByFacilityStmt,
+		listActiveVisitPacksForUserByOrganizationStmt:     q.listActiveVisitPacksForUserByOrganizationStmt,
+		listAvailableCourtsStmt:                           q.listAvailableCourtsStmt,
+		listCancellationPolicyTiersStmt:                   q.listCancellationPolicyTiersStmt,
+		listClinicSessionsByFacilityStmt:                  q.listClinicSessionsByFacilityStmt,
+		listClinicTypesByFacilityStmt:                     q.listClinicTypesByFacilityStmt,
+		listCourtsStmt:                                    q.listCourtsStmt,
+		listDistinctFacilitiesWithScheduledSessionsStmt:   q.listDistinctFacilitiesWithScheduledSessionsStmt,
+		listEnrollmentsForClinicStmt:                      q.listEnrollmentsForClinicStmt,
+		listExpiredOffersStmt:                             q.listExpiredOffersStmt,
+		listFacilitiesStmt:                                q.listFacilitiesStmt,
+		listFacilityThemesStmt:                            q.listFacilityThemesStmt,
+		listFreeAgentsByLeagueStmt:                        q.listFreeAgentsByLeagueStmt,
+		listLeagueMatchesStmt:                             q.listLeagueMatchesStmt,
+		listLeagueMatchesWithReservationsStmt:             q.listLeagueMatchesWithReservationsStmt,
+		listLeagueTeamsStmt:                               q.listLeagueTeamsStmt,
+		listLeaguesByFacilityStmt:                         q.listLeaguesByFacilityStmt,
+		listLessonPackageTypesStmt:                        q.listLessonPackageTypesStmt,
+		listMatchingPendingWaitlistsForCancelledSlotStmt:  q.listMatchingPendingWaitlistsForCancelledSlotStmt,
+		listMemberUpcomingOpenPlaySessionsStmt:            q.listMemberUpcomingOpenPlaySessionsStmt,
+		listMembersStmt:                                   q.listMembersStmt,
+		listOpenPlayAuditLogStmt:                          q.listOpenPlayAuditLogStmt,
+		listOpenPlayParticipantsStmt:                      q.listOpenPlayParticipantsStmt,
+		listOpenPlayRulesStmt:                             q.listOpenPlayRulesStmt,
+		listOpenPlaySessionsStmt:                          q.listOpenPlaySessionsStmt,
+		listOpenPlaySessionsApproachingCutoffStmt:         q.listOpenPlaySessionsApproachingCutoffStmt,
+		listOrganizationsStmt:                             q.listOrganizationsStmt,
+		listParticipantsForReservationStmt:                q.listParticipantsForReservationStmt,
+		listProUnavailabilityByFacilityAndDateRangeStmt:   q.listProUnavailabilityByFacilityAndDateRangeStmt,
+		listProUnavailabilityByProIDStmt:                  q.listProUnavailabilityByProIDStmt,
+		listProsByFacilityStmt:                            q.listProsByFacilityStmt,
+		listRecentVisitsByUserStmt:                        q.listRecentVisitsByUserStmt,
+		listReservationCourtsStmt:                         q.listReservationCourtsStmt,
+		listReservationCourtsByDateRangeStmt:              q.listReservationCourtsByDateRangeStmt,
+		listReservationTypesStmt:                          q.listReservationTypesStmt,
+		listReservationsByDateRangeStmt:                   q.listReservationsByDateRangeStmt,
+		listReservationsByUserIDStmt:                      q.listReservationsByUserIDStmt,
+		listStaffStmt:                                     q.listStaffStmt,
+		listStaffByFacilityStmt:                           q.listStaffByFacilityStmt,
+		listStaffByRoleStmt:                               q.listStaffByRoleStmt,
+		listStaffNotificationsStmt:                        q.listStaffNotificationsStmt,
+		listStaffNotificationsForFacilityOrCorporateStmt:  q.listStaffNotificationsForFacilityOrCorporateStmt,
+		listStaffNotificationsForStaffStmt:                q.listStaffNotificationsForStaffStmt,
+		listSystemThemesStmt:                              q.listSystemThemesStmt,
+		listTeamMembersStmt:                               q.listTeamMembersStmt,
+		listTodayVisitsByFacilityStmt:                     q.listTodayVisitsByFacilityStmt,
+		listVisitPackTypesStmt:                            q.listVisitPackTypesStmt,
+		listWaitlistsByFacilityStmt:                       q.listWaitlistsByFacilityStmt,
+		listWaitlistsByUserStmt:                           q.listWaitlistsByUserStmt,
+		listWaitlistsByUserAndFacilityStmt:                q.listWaitlistsByUserAndFacilityStmt,
+		listWaitlistsForSlotStmt:                          q.listWaitlistsForSlotStmt,
+		logCancellationStmt:                               q.logCancellationStmt,
+		markStaffNotificationAsReadStmt:                   q.markStaffNotificationAsReadStmt,
+		operatingHoursExistsStmt:                          q.operatingHoursExistsStmt,
+		removeOpenPlayParticipantStmt:                     q.removeOpenPlayParticipantStmt,
+		removeParticipantStmt:                             q.removeParticipantStmt,
+		removeReservationCourtStmt:                        q.removeReservationCourtStmt,
+		removeTeamMemberStmt:                              q.removeTeamMemberStmt,
+		restoreMemberStmt:                                 q.restoreMemberStmt,
+		searchMembersStmt:                                 q.searchMembersStmt,
+		updateBillingInfoStmt:                             q.updateBillingInfoStmt,
+		updateCancellationPolicyTierStmt:                  q.updateCancellationPolicyTierStmt,
+		updateClinicSessionStmt:                           q.updateClinicSessionStmt,
+		updateClinicTypeStmt:                              q.updateClinicTypeStmt,
+		updateCourtStatusStmt:                             q.updateCourtStatusStmt,
+		updateEnrollmentStatusStmt:                        q.updateEnrollmentStatusStmt,
+		updateFacilityBookingConfigStmt:                   q.updateFacilityBookingConfigStmt,
+		updateFacilityVisitActivityStmt:                   q.updateFacilityVisitActivityStmt,
+		updateLeagueStmt:                                  q.updateLeagueStmt,
+		updateLeagueTeamStmt:                              q.updateLeagueTeamStmt,
+		updateLessonPackageTypeStmt:                       q.updateLessonPackageTypeStmt,
+		updateMatchResultStmt:                             q.updateMatchResultStmt,
+		updateMemberStmt:                                  q.updateMemberStmt,
+		updateMemberEmailStmt:                             q.updateMemberEmailStmt,
+		updateOpenPlayRuleStmt:                            q.updateOpenPlayRuleStmt,
+		updateOpenPlaySessionCourtCountStmt:               q.updateOpenPlaySessionCourtCountStmt,
+		updateOpenPlaySessionStatusStmt:                   q.updateOpenPlaySessionStatusStmt,
+		updateReservationStmt:                             q.updateReservationStmt,
+		updateSessionAutoScaleOverrideStmt:                q.updateSessionAutoScaleOverrideStmt,
+		updateStaffStmt:                                   q.updateStaffStmt,
+		updateStaffUserStmt:                               q.updateStaffUserStmt,
+		updateTeamCaptainStmt:                             q.updateTeamCaptainStmt,
+		updateThemeStmt:                                   q.updateThemeStmt,
+		updateUserCognitoStatusStmt:                       q.updateUserCognitoStatusStmt,
+		updateUserPasswordHashStmt:                        q.updateUserPasswordHashStmt,
+		updateUserStatusStmt:                              q.updateUserStatusStmt,
+		updateVisitPackTypeStmt:                           q.updateVisitPackTypeStmt,
+		updateWaitlistStatusStmt:                          q.updateWaitlistStatusStmt,
+		upsertActiveThemeIDStmt:                           q.upsertActiveThemeIDStmt,
+		upsertOperatingHoursStmt:                          q.upsertOperatingHoursStmt,
+		upsertPhotoStmt:                                   q.upsertPhotoStmt,
+		upsertWaitlistConfigStmt:                          q.upsertWaitlistConfigStmt,
 	}
 }
