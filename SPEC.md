@@ -1496,6 +1496,30 @@ Security measures:
 - Constant-time comparison via bcrypt
 - Dummy hash verification when user not found (timing attack mitigation)
 
+### Password Reset Flow
+
+Staff and members can reset passwords via `/api/v1/auth/reset-password` (initiate) and `/api/v1/auth/confirm-reset-password` (confirm):
+
+**Initiation (`POST /api/v1/auth/reset-password`):**
+1. User submits email or phone identifier
+2. System validates user exists before burning OTP quota
+3. Cognito sends reset code via email/SMS
+
+**Confirmation (`POST /api/v1/auth/confirm-reset-password`):**
+1. Validate password complexity (min 8 chars, uppercase, symbol)
+2. Record OTP verify attempt (rate limited)
+3. Confirm reset with Cognito
+4. If user has `local_auth_enabled=true`, sync new password hash to local DB
+5. Clear rate limit attempts on success
+
+**Password Requirements:**
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one symbol (punctuation or symbol character)
+
+**Dual-Auth Sync:**
+Users with both Cognito and local auth enabled have their password hash updated in both systems. If the local update fails after Cognito succeeds, an error is returned instructing the user to contact support (Cognito password is already changed).
+
 ### Dev Mode Bypass
 
 When `config.App.Environment == "development"`:
@@ -2604,7 +2628,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 |---------|--------|-------|
 | Cognito Auth | Complete | EMAIL_OTP and SMS_OTP via single shared User Pool |
 | Open Play Enforcement | Scheduled | gocron job configured, evaluation logic partial |
-| Password Reset | Not implemented | Returns 501 |
+| Password Reset | Complete | Cognito reset + local hash sync for dual-auth users |
 | Recurrence Rules | Schema only | Tables exist, not used in handlers |
 
 ### Not Yet Started
