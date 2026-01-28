@@ -1,57 +1,6 @@
-# PICKLEICIOUS - Complete Business Requirements Document
-
-## Requirements Sources
-
-### File-Based Sources
-| File | Description |
-|------|-------------|
-| `tools/auto_stories/stories.yaml` | Main PRD - 50+ user stories with acceptance criteria |
-| `assets/stories/stories1.yaml` | Foundational stories (IS, DB, SV categories) |
-| `internal/db/schema/schema.sql` | Complete database schema |
-| `internal/db/migrations/000001_init_schema.up.sql` | Initial migration |
-| `internal/db/queries/members.sql` | Member operations |
-| `internal/db/queries/courts.sql` | Court operations |
-| `internal/db/queries/schedules.sql` | Operating hours |
-| `assets/themes` | 30+ predefined color palettes |
-| `web/styles/themes.css` | CSS variable structure |
-| `internal/db/migrations/README.md` | Database architecture docs |
-| `internal/api/auth/handlers.go` | Auth TODOs |
-| `internal/api/nav/handlers.go` | Search TODO |
-
-### GitHub Issues (codr1/pickleicious)
-32 total issues tracking stories and bugs. See **Section 15** for complete list.
-
-### Coverage Matrix
-
-| Requirement Area | In GitHub Issues | In YAML Stories | In Code/Schema | Notes |
-|-----------------|------------------|-----------------|----------------|-------|
-| Infrastructure (IS1-3) | #1, #2, #3, #9, #10, #11 | ✅ | ✅ Implemented | IS1, IS2 closed |
-| Database (DB1-3) | #4, #5, #6, #12, #13, #14 | ✅ | ✅ Implemented | Schema complete |
-| Server (SV1-2) | #7, #8, #15, #16 | ✅ | ✅ Implemented | Hot reload working |
-| Themes (TH0-3) | #17, #18, #19, #20, #21, #22 | ✅ | Partial | CSS vars defined, mgmt TODO |
-| Localization (L1-6) | #23, #24, #25, #26, #27, #28 | ✅ | ❌ Not started | Full i18n planned |
-| CI/CD | #29 | ❌ | ❌ Not started | GitHub Actions planned |
-| Member Management | ❌ | ❌ | ✅ Implemented | Not in issues, but complete |
-| Court/Calendar | ❌ | ❌ | ✅ Basic UI | Not in issues |
-| Authentication | ❌ | ❌ | ✅ Cognito EMAIL_OTP | Logout/reset pending |
-| Open Play Rules | #32 | ❌ | ❌ | New feature request |
-| **Planned (Section 9)** | ❌ | ❌ | ❌ | 18 feature areas identified |
+# PICKLEICIOUS - Business Requirements Document
 
 ---
-
-## 0. INFRASTRUCTURE DEBT (Priority)
-
-### 0.0 Member Booking Enhancements (NEXT)
-
-**Context**: Follow-up from member-booking feature (STORY-0021). These are enhancements identified during implementation.
-
-#### 0.0.1 Simple Date Picker for Member Booking
-
-#### 0.0.2 Member Reservation Limits
-
----
-
-### 0.1 Comprehensive Test Infrastructure
 
 ## 1. EXECUTIVE SUMMARY
 
@@ -72,121 +21,15 @@
 
 ---
 
-## 2. ORGANIZATIONAL HIERARCHY
-
-### 2.1 Multi-Tenancy Model
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      ORGANIZATION                            │
-│  (Corporate entity - e.g., "PicklePlex Holdings")           │
-│  - Custom Cognito configuration                              │
-│  - Custom domain (organization.pickleadmin.com)             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│   FACILITY A    │ │   FACILITY B    │ │   FACILITY C    │
-│ (Location 1)    │ │ (Location 2)    │ │ (Location 3)    │
-│ - Own courts    │ │ - Own courts    │ │ - Own courts    │
-│ - Own hours     │ │ - Own hours     │ │ - Own hours     │
-│ - Own theme     │ │ - Own theme     │ │ - Own theme     │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-```
-
-### 2.2 Data Model Relationships
-
-| Entity | Parent | Key Attributes |
-|--------|--------|----------------|
-| **Organization** | — | name, slug (unique), status |
-| **Facility** | Organization | name, slug (unique), timezone |
-| **User** | — | email, phone, cognito_sub, auth preferences |
-| **Member** | User → Facility | profile, membership_level, billing, photo |
-| **Court** | Facility | name, court_number, status |
-| **Reservation** | Facility | type, courts, times, participants |
-
----
-
-## 3. USER MANAGEMENT SYSTEM
-
-> **Source:** `internal/db/schema/schema.sql`, `internal/db/queries/members.sql`
-> **GitHub Issues:** None (implemented directly)
-
-### 3.1 User Entity (Authentication Core)
-
-The `users` table is the authentication foundation:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | INTEGER PK | Unique user identifier |
-| `email` | TEXT UNIQUE | Primary email address |
-| `phone` | TEXT | Phone number for SMS auth |
-| `cognito_sub` | TEXT | AWS Cognito unique user ID |
-| `cognito_status` | TEXT | 'CONFIRMED' or 'UNCONFIRMED' |
-| `preferred_auth_method` | TEXT | 'SMS', 'EMAIL', or 'PUSH' |
-| `status` | TEXT | 'active', 'suspended', 'archived' |
-
-### 3.2 Member Entity (Customer Profile)
-
-Complete member record structure:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | INTEGER PK | Member identifier |
-| `user_id` | FK→users | Links to auth record |
-| `first_name` | TEXT NOT NULL | First name |
-| `last_name` | TEXT NOT NULL | Last name |
-| `photo_url` | TEXT | Legacy photo URL (deprecated) |
-| `street_address` | TEXT | Street address |
-| `city` | TEXT | City |
-| `state` | TEXT | State/province |
-| `postal_code` | TEXT | ZIP/postal code |
-| `date_of_birth` | TEXT | YYYY-MM-DD format |
-| `waiver_signed` | BOOLEAN | Legal waiver acceptance |
-| `status` | TEXT | 'active', 'suspended', 'archived', 'deleted' |
-| `home_facility_id` | FK→facilities | Primary location |
-| `membership_level` | INTEGER | Tier: 0-3+ |
-
-### 3.3 Membership Levels
-
-| Level | Name | Description |
-|-------|------|-------------|
-| 0 | Unverified Guest | New registrant, identity not confirmed |
-| 1 | Verified Guest | Identity confirmed, limited access |
-| 2 | Member | Full membership, standard benefits |
-| 3+ | Member+ | Premium tiers with additional benefits |
-
-### 3.4 Member Billing Information
-
-Separate billing table for payment data:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `member_id` | FK→members | Unique per member |
-| `card_last_four` | TEXT | Last 4 digits of card |
-| `card_type` | TEXT | Visa, Mastercard, etc. |
-| `billing_address` | TEXT | Billing street address |
-| `billing_city` | TEXT | Billing city |
-| `billing_state` | TEXT | Billing state |
-| `billing_postal_code` | TEXT | Billing postal code |
-
-**Planned:** Transaction history table for all charges, payments, refunds.
-
-### 3.6 Staff Entity
-
-
----
-
-## 4. AUTHENTICATION SYSTEM
+## 2. AUTHENTICATION SYSTEM
 
 > **Source:** `internal/api/auth/handlers.go` (TODOs), login templates
 > **GitHub Issues:** None (not tracked as stories)
 
-### 4.1 Authentication Architecture
+### 3.1 Authentication Architecture
 
 
-### 4.2 Login UI Flow (HTMX-Powered)
+### 3.2 Login UI Flow (HTMX-Powered)
 
 **Step 1: Identifier Entry**
 - On blur, checks if identifier belongs to staff with local auth
@@ -197,7 +40,7 @@ Separate billing table for payment data:
 - Replaces form with code entry UI
 
 
-### 4.3 Pending
+### 3.3 Pending
 
 | Feature | Status |
 |---------|--------|
@@ -205,11 +48,11 @@ Separate billing table for payment data:
 
 ---
 
-## 5. MEMBER MANAGEMENT OPERATIONS
+## 3. MEMBER MANAGEMENT OPERATIONS
 
 > **Source:** `internal/api/members/handlers.go`, member templates
 
-### 5.1 Member CRUD Operations
+### 4.1 Member CRUD Operations
 
 **Create Member:**
 1. Click "Add Member" → New form loads in right panel
@@ -248,7 +91,7 @@ WHERE id = @id;
 - Sets status to 'deleted' (not physical delete)
 - Excluded from normal queries
 
-### 5.2 Member Detail View
+### 4.2 Member Detail View
 
 **Information Displayed:**
 - Photo (or initials placeholder)
@@ -268,15 +111,15 @@ WHERE id = @id;
 
 ---
 
-## 6. COURT & RESERVATION SYSTEM
+## 4. COURT & RESERVATION SYSTEM
 
 > **Source:** `internal/db/schema/schema.sql`, `internal/templates/components/courts/`
 > **GitHub Issues:** #32 (Open play cancellation rules - NEW)
 
-### 6.1 Facility Operating Hours
+### 5.1 Facility Operating Hours
 
 
-### 6.2 Court Entity
+### 5.2 Court Entity
 
 | Field | Description |
 |-------|-------------|
@@ -285,7 +128,7 @@ WHERE id = @id;
 | `court_number` | Numeric identifier (unique per facility) |
 | `status` | 'active', 'maintenance', etc. |
 
-### 6.3 Reservation Types (Lookup Table)
+### 5.3 Reservation Types (Lookup Table)
 
 | Type | Description | Visual |
 |------|-------------|--------|
@@ -296,7 +139,7 @@ WHERE id = @id;
 | `LEAGUE` | League play | Primary color |
 | `TOURNAMENT` | Tournament blocks | Gradient |
 
-### 6.4 Recurrence Rules
+### 5.4 Recurrence Rules
 
 Supports recurring reservations:
 
@@ -309,7 +152,7 @@ Supports recurring reservations:
 Stored as iCalendar RRULE compatible format.
 
 
-### 6.7 Open Play Rules (NEW)
+### 5.5 Open Play Rules (NEW)
 
 > **GitHub Issue #32:** Open play cancellation and auto-scaling
 
@@ -319,7 +162,7 @@ Stored as iCalendar RRULE compatible format.
 - People per team
 - Teams per court
 
-### 6.8 Calendar UI Requirements
+### 5.6 Calendar UI Requirements
 
 **Current Implementation:**
 - 8-court grid display
@@ -337,7 +180,7 @@ Stored as iCalendar RRULE compatible format.
 ```
 
 
-### 6.9 Calendar Interactions (Planned)
+### 5.7 Calendar Interactions (Planned)
 
 These calendar interactions are designed but not yet implemented:
 
@@ -349,12 +192,12 @@ These calendar interactions are designed but not yet implemented:
 
 ---
 
-## 7. THEMING SYSTEM
+## 5. THEMING SYSTEM
 
 > **Source:** `assets/themes`, `web/styles/themes.css`, `tools/auto_stories/stories.yaml`
 > **GitHub Issues:** #17, #18, #19, #20, #21, #22 (TH0.1 through TH3.3)
 
-### 7.1 Theme Architecture
+### 6.1 Theme Architecture
 
 > **GitHub Issue #17 [TH0.1]:** Theme Data Structure and Template Definition
 
@@ -378,7 +221,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Theme switching mechanism specified
 - [ ] Default component styles templated
 
-### 7.2 Theme Component Definitions
+### 6.2 Theme Component Definitions
 
 > **GitHub Issue #18 [TH1.0]:** Theme Component Definitions and Requirements
 
@@ -397,7 +240,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Create component preview layout
 - [ ] Document accessibility requirements
 
-### 7.3 Pre-Defined Themes (30+)
+### 6.3 Pre-Defined Themes (30+)
 
 > **GitHub Issue #19 [TH2.0]:** Simple Theme (Default) Implementation
 > **GitHub Issue #20 [TH2.1]:** Core Theme Palette Definitions
@@ -429,17 +272,17 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Hover and active states defined
 - [ ] Theme preview demonstrates all components
 
-### 7.4 Light/Dark Mode System
+### 6.4 Light/Dark Mode System
 
 > **GitHub Issue #21 [TH3.0]:** Light/Dark Theme Variant System
 
 
-### 7.5 Theme Preference Management
+### 6.5 Theme Preference Management
 
 > **GitHub Issue #22 [TH3.3]:** Theme Preference Management System
 
 
-### 7.6 Theme Transitions
+### 6.6 Theme Transitions
 
 ```css
 .theme-transition-root {
@@ -461,13 +304,13 @@ These calendar interactions are designed but not yet implemented:
 
 ---
 
-## 8. LOCALIZATION SYSTEM
+## 6. LOCALIZATION SYSTEM
 
 > **Source:** `tools/auto_stories/stories.yaml`
 > **GitHub Issues:** #23, #24, #25, #26, #27, #28 (L1 through L6)
 > **Status:** NOT STARTED
 
-### 8.1 Core Infrastructure
+### 7.1 Core Infrastructure
 
 > **GitHub Issue #23 [L1]:** Localization Core Infrastructure Setup
 
@@ -484,7 +327,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Message loading and caching system
 - [ ] Hot reload in development
 
-### 8.2 Message Extraction
+### 7.2 Message Extraction
 
 > **GitHub Issue #24 [L2]:** Message Extraction and Bundle Management
 
@@ -504,7 +347,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Bundle hot-reloading in development
 - [ ] Documentation for extraction workflow
 
-### 8.3 Locale Detection
+### 7.3 Locale Detection
 
 > **GitHub Issue #25 [L3]:** Locale Detection and Switching
 
@@ -522,7 +365,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] URL-based switching
 - [ ] Tests for detection logic
 
-### 8.4 Formatting Support
+### 7.4 Formatting Support
 
 > **GitHub Issue #26 [L4]:** Date, Time, and Number Formatting
 
@@ -541,7 +384,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Helper functions documented
 - [ ] Tests for all formatting functions
 
-### 8.5 Translation Management UI
+### 7.5 Translation Management UI
 
 > **GitHub Issue #27 [L5]:** Translation Management Interface
 
@@ -560,7 +403,7 @@ Admin interface features:
 - [ ] Import/export working
 - [ ] Search functionality working
 
-### 8.6 Testing Framework
+### 7.6 Testing Framework
 
 > **GitHub Issue #28 [L6]:** Localization Testing Framework
 
@@ -578,7 +421,7 @@ Admin interface features:
 - [ ] Performance benchmarks created
 - [ ] CI pipeline integration complete
 
-### 8.7 Performance Targets
+### 7.7 Performance Targets
 
 | Metric | Target |
 |--------|--------|
@@ -589,7 +432,7 @@ Admin interface features:
 
 ---
 
-## 9. PLANNED REQUIREMENTS (NOT YET IMPLEMENTED)
+## 7. PLANNED REQUIREMENTS (NOT YET IMPLEMENTED)
 
 > **Source:** Industry analysis, competitive research (CourtReserve, PodPlay, Playbypoint, EZFacility)
 > **GitHub Issues:** None yet - these are identified gaps
@@ -597,7 +440,7 @@ Admin interface features:
 
 This section documents features that are standard in competing pickleball/sports facility management software but are not yet implemented or tracked in Pickleicious.
 
-### 9.1 Payment Processing System
+### 8.1 Payment Processing System
 
 **Payment Gateway Integration:**
 | Feature | Description | Priority |
@@ -641,7 +484,7 @@ This section documents features that are standard in competing pickleball/sports
 | Tax Reporting | Sales tax collection and reporting |
 | Accounts Receivable | Outstanding balances tracking |
 
-### 9.2 Communication System
+### 8.2 Communication System
 
 **Automated Notifications:**
 | Trigger | Channels | Content |
@@ -670,11 +513,11 @@ This section documents features that are standard in competing pickleball/sports
 | Staff-to-Member Messaging | Direct communication channel |
 | Announcement Banner | Facility-wide notices |
 
-### 9.3 Waitlist Management
+### 8.3 Waitlist Management
 
 
 
-### 9.4 Cancellation Policies & No-Show Management
+### 8.4 Cancellation Policies & No-Show Management
 
 > **Implemented:** STORY-0025 (Reservation Cancellation Policies) - merged 2026-01-08
 
@@ -685,7 +528,7 @@ This section documents features that are standard in competing pickleball/sports
 
 
 
-### 9.5 League & Tournament Management
+### 8.5 League & Tournament Management
 
 
 **Tournament Features:**
@@ -699,7 +542,7 @@ This section documents features that are standard in competing pickleball/sports
 | Prize Management | Track and award prizes |
 
 
-### 9.6 DUPR Integration & Player Ratings
+### 8.6 DUPR Integration & Player Ratings
 
 **DUPR Sync:**
 | Feature | Description |
@@ -724,7 +567,7 @@ This section documents features that are standard in competing pickleball/sports
 | New Player Assessment | Rate players without DUPR history |
 | Rating Appeals | Process for disputing ratings |
 
-### 9.7 Lesson & Program Management
+### 8.7 Lesson & Program Management
 
 > **Implemented:** STORY-0026 (Member Portal Lesson Booking MVP) - in progress
 
@@ -734,6 +577,7 @@ This section documents features that are standard in competing pickleball/sports
 - `lesson_min_notice_hours` facility setting (default: 24 hours) - booking must be at least this far in advance
 - Lessons count toward max_member_reservations limit
 
+<!-- BEGIN WIP: STORY-0044 -->
 **Lesson Packages:**
 | Feature | Description |
 |---------|-------------|
@@ -741,17 +585,8 @@ This section documents features that are standard in competing pickleball/sports
 | Package Tracking | Remaining lessons in package |
 | Expiration | Package validity period |
 | Transferability | Can package be shared/gifted |
-
-<!-- BEGIN WIP: STORY-0043 -->
-**Clinics & Classes:**
-| Feature | Description |
-|---------|-------------|
-| Multi-Participant Sessions | Group instruction |
-| Skill Level Filtering | Beginner, intermediate, advanced |
-| Recurring Classes | Weekly clinics |
-| Min/Max Enrollment | Cancel if min not met |
-| Waitlist | For popular sessions |
 <!-- END WIP -->
+
 
 **Camps & Programs:**
 | Feature | Description |
@@ -798,7 +633,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Rating Trends | Rating over time |
 | Cancellation Rate | Coach and student cancellations |
 
-### 9.8 Reporting & Analytics Dashboard
+### 8.8 Reporting & Analytics Dashboard
 
 
 **Financial Analytics:**
@@ -824,7 +659,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Inventory Status | Pro shop stock levels |
 | Maintenance Log | Equipment/facility issues |
 
-### 9.9 Booking Rules & Quotas
+### 8.9 Booking Rules & Quotas
 
 **Advance Booking Limits:**
 | Setting | Description | Example |
@@ -855,7 +690,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Member vs. Guest Pricing | Discounts for members |
 | Dynamic Pricing | Adjust based on demand |
 | Minimum Duration | Shortest bookable slot |
-### 9.10 Access Control & Check-In
+### 8.10 Access Control & Check-In
 
 
 **Kiosk Mode:**
@@ -873,7 +708,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Locker Access | Electronic locker assignment |
 
 
-### 9.11 Waiver & Compliance Management
+### 8.11 Waiver & Compliance Management
 
 **Digital Waivers:**
 | Feature | Description |
@@ -899,7 +734,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Background Checks | Staff verification records |
 | Safety Inspections | Facility inspection logs |
 
-### 9.12 Guest & Drop-In Management
+### 8.12 Guest & Drop-In Management
 
 **Guest Conversion:**
 | Feature | Description |
@@ -909,7 +744,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Follow-Up Campaigns | Email after guest visits |
 | Conversion Tracking | Guest-to-member analytics |
 
-### 9.13 Pro Shop & Retail
+### 8.13 Pro Shop & Retail
 
 **Inventory Management:**
 | Feature | Description |
@@ -935,7 +770,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Locker Rental | Assign lockers to members |
 | Equipment Condition | Track wear and damage |
 
-### 9.14 Mobile App & Member Portal
+### 8.14 Mobile App & Member Portal
 
 
 **Mobile App Features:**
@@ -955,7 +790,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Guest Booking | Reserve for guests |
 | Message Center | View communications |
 
-### 9.15 Staff Management
+### 8.15 Staff Management
 
 **Scheduling:**
 | Feature | Description |
@@ -980,7 +815,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Customer Ratings | Member feedback on pros |
 | Utilization | % of available time booked |
 
-### 9.16 External Integrations
+### 8.16 External Integrations
 
 **Calendar Sync:**
 | Integration | Description |
@@ -1010,7 +845,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Webhooks | Real-time event notifications |
 | API | Public API for custom integrations |
 
-### 9.17 Family & Group Memberships
+### 8.17 Family & Group Memberships
 
 **Family Accounts:**
 | Feature | Description |
@@ -1028,7 +863,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Admin Portal | Company admin manages members |
 | Billing Options | Individual or consolidated |
 
-### 9.18 Maintenance & Equipment Management
+### 8.18 Maintenance & Equipment Management
 
 **Facility Maintenance:**
 | Feature | Description |
@@ -1054,7 +889,7 @@ A self-service marketplace where members discover and book coaches directly, red
 | Photo Documentation | Visual issue records |
 | Compliance Tracking | Regulatory requirements |
 
-### 9.19 Player Matchmaking & Social Features
+### 8.19 Player Matchmaking & Social Features
 
 > **Competitive Reference:** PickleUp, Hitch, Playtomic, CourtReserve "Player Matchmaker", DUPR social features
 > **Priority:** High - Key differentiator for member retention and community building
@@ -1117,7 +952,7 @@ Social features transform a facility from a transactional booking platform into 
 | Contact Preferences | Anyone / Buddies Only / None |
 | Activity Sharing | Share play activity with buddies or keep private |
 
-### 9.20 Round Robin & Open Play Engine
+### 8.20 Round Robin & Open Play Engine
 
 > **Competitive Reference:** Pickleheads Round Robin Tool, USAPA Rotation Charts, TopDog, PlayMore AI
 > **Priority:** High - Core functionality for recreational facilities
@@ -1192,7 +1027,7 @@ Open play and round robins are the bread-and-butter of recreational pickleball. 
 | Print Bracket | Printable rotation schedule |
 | Session Templates | Save configurations for recurring sessions |
 
-### 9.21 Challenge Ladder System
+### 8.21 Challenge Ladder System
 
 > **Competitive Reference:** Global Pickleball Network, TopDog Challenge Ladders, R2 Sports
 > **Priority:** High - Self-sustaining engagement with minimal staff oversight
@@ -1278,7 +1113,7 @@ Challenge ladders are player-driven competition systems where participants chall
 | Announcement System | Post updates to ladder participants |
 | Auto-Cleanup | Archive completed seasons, prune inactive players |
 
-### 9.22 AI-Powered Features
+### 8.22 AI-Powered Features
 
 > **Competitive Reference:** Wellyx AI marketing, PlayMore AI matchmaking
 > **Priority:** Medium - Nice-to-have enhancement layer
@@ -1338,7 +1173,7 @@ AI capabilities can enhance personalization, automate routine decisions, and sur
 | Smart Search | Understand natural language queries |
 | Automated Summaries | Generate session recaps, performance reports |
 
-### 9.23 Autonomous & Unstaffed Operations
+### 8.23 Autonomous & Unstaffed Operations
 
 > **Competitive Reference:** PodPlay autonomous tier, Pickle Parlor, Pickleball 365, Rhombus/Latitude Security
 > **Priority:** Medium - Significant cost savings for right facility types
@@ -1433,7 +1268,7 @@ Autonomous operation enables facilities to run with minimal or zero on-site staf
 | Break-Even Point | Lower revenue threshold for profitability |
 | Technology Investment | Higher upfront, lower ongoing |
 
-### 9.24 Video Replay & Digital Scoreboards
+### 8.24 Video Replay & Digital Scoreboards
 
 > **Competitive Reference:** PodPlay video replays, PlaySight, TopDog digital scoreboards
 > **Priority:** Low - Premium feature for differentiation
@@ -1541,181 +1376,12 @@ Video technology and digital scoreboards create a premium, professional experien
 
 ---
 
-## 10. NAVIGATION & UI FRAMEWORK
-
-> **Source:** `internal/templates/components/nav/`, `internal/templates/layouts/`
-> **GitHub Issues:** None
-
-### 9.1 Application Layout
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  [☰]                    [Search...]              [◐] [🔔]  │  ← Top Nav (fixed)
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│                     MAIN CONTENT                             │
-│                     (pt-16 for nav)                          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-
-┌──────────────┐
-│   SLIDE-OUT  │  ← Menu (z-50, -translate-x-full → 0)
-│    MENU      │
-│              │
-│  Dashboard   │
-│  Courts      │
-│  Members     │
-│  ──────────  │
-│  [Avatar]    │
-│  Settings    │
-└──────────────┘
-```
-
-### 9.2 Top Navigation Components
-
-- **Menu Toggle:** Opens slide-out navigation
-- **Global Search:** Debounced search (500ms) - ✅ Fixed (#31)
-
-### 9.3 Slide-Out Menu
-
-**Menu Items:**
-- Dashboard
-- Courts
-- Member Management
-- Settings
-
-**User Section:**
-
-### 9.4 HTMX Patterns Used
-
-| Pattern | Usage |
-|---------|-------|
-| `hx-get` | Load content fragments |
-| `hx-post` | Form submissions |
-| `hx-put` | Update operations |
-| `hx-delete` | Delete operations |
-| `hx-trigger` | Custom events, delays |
-| `hx-target` | Where to swap content |
-| `hx-swap` | How to swap (innerHTML, outerHTML) |
-| `HX-Trigger` | Server-sent events |
-| `HX-Retarget` | Dynamic target change |
-| `HX-Reswap` | Dynamic swap method |
-
----
-
-## 11. TECHNICAL ARCHITECTURE
-
-### 11.1 Technology Stack
-
-**Backend:**
-| Component | Technology |
-|-----------|------------|
-| Language | Go 1.22+ (toolchain 1.23.1) |
-| HTTP Server | Standard library `net/http` |
-| Templating | Templ (type-safe HTML) |
-| Database | SQLite (via mattn/go-sqlite3) |
-| Query Generation | SQLC |
-| Migrations | golang-migrate |
-| Logging | Zerolog |
-| Auth | AWS Cognito SDK v2 |
-| UUIDs | google/uuid |
-| Config | YAML + godotenv |
-
-**Frontend:**
-| Component | Technology |
-|-----------|------------|
-| Interactivity | HTMX 1.9.10 |
-| Styling | Tailwind CSS 3.4 |
-| Build | PostCSS + autoprefixer |
-| Camera | MediaDevices API |
-
-### 11.2 Project Structure
-
-```
-pickleicious/
-├── cmd/
-│   ├── server/              # Main application
-│   ├── dbtools/migrate/     # Migration tool
-│   └── tools/dbmigrate/     # Alternative migration tool
-├── internal/
-│   ├── api/                 # HTTP handlers
-│   │   ├── middleware.go    # Logging, recovery, request ID
-│   │   ├── auth/            # Authentication handlers
-│   │   ├── courts/          # Court/calendar handlers
-│   │   ├── members/         # Member CRUD handlers
-│   │   └── nav/             # Navigation handlers
-│   ├── config/              # Configuration loading
-│   ├── db/
-│   │   ├── db.go            # Database wrapper
-│   │   ├── migrations/      # SQL migration files
-│   │   ├── queries/         # SQLC query files
-│   │   ├── schema/          # Master schema
-│   │   └── generated/       # SQLC output
-│   ├── models/              # Domain models
-│   └── templates/
-│       ├── layouts/         # Base HTML layout
-│       └── components/      # Templ components
-├── tools/
-│   ├── auto_stories/        # GitHub issue generator
-│   └── svg_tools/           # SVG utilities
-├── web/
-│   ├── static/js/           # Client-side JavaScript
-│   └── styles/              # Tailwind source CSS
-├── assets/
-│   ├── stories/             # Story YAML files
-│   └── themes/              # Theme color definitions
-├── .air.toml                # Hot reload config
-└── config.yaml              # App configuration
-```
-
-### 11.3 Configuration
-
-**config.yaml:**
-```yaml
-app:
-  name: "Pickleicious"
-  environment: "development"
-  port: 8080
-  base_url: "http://localhost:8080"
-
-database:
-  driver: "sqlite"  # or "turso"
-  filename: "build/db/pickleicious.db"
-
-features:
-  enable_metrics: false
-  enable_tracing: false
-  enable_debug: true
-```
-
-**Environment Variables:**
-| Variable | Purpose |
-|----------|---------|
-| `APP_SECRET_KEY` | Application secret |
-| `DATABASE_AUTH_TOKEN` | Turso auth token |
-| `GITHUB_API_KEY` | For auto_stories tool |
-| `STATIC_DIR` | Override static file path |
-
-### 11.5 Middleware Stack
-
-```go
-handler := api.ChainMiddleware(
-    router,
-    api.WithLogging,      // Request/response logging
-    api.WithRecovery,     // Panic recovery
-    api.WithRequestID,    // UUID per request
-    api.WithContentType,  // Default Accept header
-)
-```
-
----
-
-## 12. CI/CD & INFRASTRUCTURE
+## 9. CI/CD & INFRASTRUCTURE
 
 > **Source:** GitHub Issue #29
 > **GitHub Issues:** #9, #29
 
-### 12.1 GitHub Repository Setup
+### 11.1 GitHub Repository Setup
 
 > **GitHub Issue #9 [IS1]:** GitHub Repository Setup (partially complete)
 
@@ -1726,7 +1392,7 @@ handler := api.ChainMiddleware(
 - [ ] Basic GitHub Actions workflow configured (#29)
 - [x] Project board setup with Kanban structure
 
-### 12.2 GitHub Actions (Planned)
+### 11.2 GitHub Actions (Planned)
 
 > **GitHub Issue #29:** Basic GitHub Actions workflow
 
@@ -1749,73 +1415,7 @@ handler := api.ChainMiddleware(
 
 ---
 
-## 13. IMPLEMENTATION STATUS
-
-### 13.1 Completed Features
-
-| Feature | Status | GitHub Issue |
-|---------|--------|--------------|
-| Member billing info | ✅ Complete | — |
-| Court calendar UI | ✅ Basic | — |
-| Navigation menu | ✅ Complete | — |
-| Dark mode toggle | ✅ Complete | — |
-| Login page UI | ✅ Complete | — |
-| Database layer | ✅ Complete | #4, #5 |
-| Build system | ✅ Complete | — |
-
-### 13.2 In Progress / TODO
-
-| Feature | Status | GitHub Issue |
-|---------|--------|--------------|
-| ~~Fix member search~~ | ✅ Fixed | #31 |
-| Theme management system | ❌ TODO | #17-22 |
-| Localization system | ❌ TODO | #23-28 |
-| GitHub Actions CI/CD | ❌ TODO | #29 |
-| Open play rules | ❌ TODO | #32 |
-| Global search | ❌ TODO | — |
-| Transactions table | ❌ TODO | — |
-
-### 13.3 TODO Items (From Code)
-
-| Location | TODO |
-|----------|------|
-| nav/handlers.go:20 | Search functionality |
-| schema.sql:78 | Transactions table |
-| schema.sql:79 | Products table |
-
----
-
-## 14. DATABASE SCHEMA REFERENCE
-
-### 14.1 Complete Table List
-
-| Table | Purpose |
-|-------|---------|
-| `organizations` | Top-level tenant entities |
-| `facilities` | Physical locations |
-| `operating_hours` | Per-facility schedules |
-| `users` | Authentication records |
-| `members` | Customer profiles |
-| `member_billing` | Payment information |
-| `member_photos` | Photo BLOB storage |
-| `staff` | Employee records |
-| `courts` | Court definitions |
-| `reservation_types` | Booking type lookup |
-| `recurrence_rules` | Recurring patterns |
-| `cognito_config` | Per-org auth settings |
-
-### 14.2 Key Constraints
-
-- `organizations.slug` - UNIQUE
-- `facilities.slug` - UNIQUE
-- `users.email` - UNIQUE
-- `courts(facility_id, court_number)` - UNIQUE
-- `operating_hours(facility_id, day_of_week)` - UNIQUE
-- `member_photos.member_id` - UNIQUE INDEX
-
----
-
-## 15. GITHUB ISSUES (Complete List)
+## 12. GITHUB ISSUES (Complete List)
 
 ### Open Issues
 
@@ -1850,20 +1450,20 @@ Issues 3-8 are duplicates of issues 9-16 (same content, created twice).
 
 ---
 
-## 16. FUTURE ROADMAP
+## 14. FUTURE ROADMAP
 
-### 16.1 Near-Term (Based on TODOs + Bugs)
+### 14.1 Near-Term (Based on TODOs + Bugs)
 1. ~~Fix member search (#31)~~ ✅ Done
 4. Implement global search
 5. Add transactions/billing tables
 
-### 16.2 Medium-Term (Based on GitHub Issues)
+### 14.2 Medium-Term (Based on GitHub Issues)
 1. Theme management system (#17-22)
 2. Localization system (#23-28)
 3. GitHub Actions CI/CD (#29)
 4. Open play rules (#32)
 
-### 16.3 Long-Term (Based on Section 9 - Planned Requirements)
+### 14.3 Long-Term (Based on Section 8 - Planned Requirements)
 1. Payment processing system (9.1)
 2. Communication system (9.2)
 3. Waitlist management (9.3)
