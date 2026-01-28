@@ -178,8 +178,14 @@ SET lessons_remaining = lessons_remaining + 1,
         ELSE status
     END,
     updated_at = CURRENT_TIMESTAMP
-WHERE id = @id
-RETURNING id, pack_type_id, user_id, purchase_date, expires_at,
+WHERE lesson_packages.id = @id
+  AND expires_at > CURRENT_TIMESTAMP
+  AND lessons_remaining < (
+      SELECT lesson_count
+      FROM lesson_package_types
+      WHERE lesson_package_types.id = lesson_packages.pack_type_id
+  )
+RETURNING lesson_packages.id, pack_type_id, user_id, purchase_date, expires_at,
     lessons_remaining, status, created_at, updated_at;
 
 -- name: CreateLessonPackageRedemption :one

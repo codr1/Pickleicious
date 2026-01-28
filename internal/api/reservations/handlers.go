@@ -792,6 +792,10 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 			if len(redemptions) > 0 {
 				for _, redemption := range redemptions {
 					if _, err := qtx.RestoreLessonPackageLesson(ctx, redemption.LessonPackageID); err != nil {
+						if errors.Is(err, sql.ErrNoRows) {
+							logger.Info().Int64("lesson_package_id", redemption.LessonPackageID).Msg("Skipped lesson package restore (expired or already at max)")
+							continue
+						}
 						return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to restore lesson package", Err: err}
 					}
 				}

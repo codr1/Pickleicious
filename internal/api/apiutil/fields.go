@@ -76,13 +76,13 @@ func ParsePurchaseDate(raw string) (time.Time, error) {
 		if layout == time.RFC3339 {
 			parsed, err := time.Parse(layout, raw)
 			if err == nil {
-				return parsed, nil
+				return parsed.UTC(), nil
 			}
 			continue
 		}
 		parsed, err := time.ParseInLocation(layout, raw, time.Local)
 		if err == nil {
-			return parsed, nil
+			return parsed.UTC(), nil
 		}
 	}
 	return time.Time{}, fmt.Errorf("purchase_date must be a valid date")
