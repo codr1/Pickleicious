@@ -76,6 +76,7 @@ type Querier interface {
 	DeleteClinicType(ctx context.Context, arg DeleteClinicTypeParams) (int64, error)
 	DeleteLeague(ctx context.Context, id int64) (int64, error)
 	DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error)
+	DeleteLessonPackageRedemptionsByReservationID(ctx context.Context, reservationID sql.NullInt64) error
 	DeleteMember(ctx context.Context, id int64) error
 	DeleteOpenPlayRule(ctx context.Context, arg DeleteOpenPlayRuleParams) (int64, error)
 	DeleteOperatingHours(ctx context.Context, arg DeleteOperatingHoursParams) (int64, error)
@@ -106,6 +107,7 @@ type Querier interface {
 	// internal/db/queries/courts.sql
 	GetCourt(ctx context.Context, id int64) (Court, error)
 	GetCreatedMember(ctx context.Context) (GetCreatedMemberRow, error)
+	GetEligibleLessonPackageForUser(ctx context.Context, arg GetEligibleLessonPackageForUserParams) (LessonPackage, error)
 	GetEnrollmentCount(ctx context.Context, arg GetEnrollmentCountParams) (int64, error)
 	GetFacilityByID(ctx context.Context, id int64) (Facility, error)
 	// internal/db/queries/schedules.sql
@@ -183,6 +185,7 @@ type Querier interface {
 	ListLeagueMatchesWithReservations(ctx context.Context, leagueID int64) ([]ListLeagueMatchesWithReservationsRow, error)
 	ListLeagueTeams(ctx context.Context, leagueID int64) ([]LeagueTeam, error)
 	ListLeaguesByFacility(ctx context.Context, facilityID int64) ([]League, error)
+	ListLessonPackageRedemptionsByReservationID(ctx context.Context, reservationID sql.NullInt64) ([]ListLessonPackageRedemptionsByReservationIDRow, error)
 	ListLessonPackageTypes(ctx context.Context, facilityID int64) ([]LessonPackageType, error)
 	ListMatchingPendingWaitlistsForCancelledSlot(ctx context.Context, arg ListMatchingPendingWaitlistsForCancelledSlotParams) ([]Waitlist, error)
 	// Empty facility_ids intentionally yields zero rows (caller should prefilter).
@@ -230,6 +233,7 @@ type Querier interface {
 	RemoveParticipant(ctx context.Context, arg RemoveParticipantParams) error
 	RemoveReservationCourt(ctx context.Context, arg RemoveReservationCourtParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
+	RestoreLessonPackageLesson(ctx context.Context, id int64) (LessonPackage, error)
 	RestoreMember(ctx context.Context, id int64) error
 	SearchMembers(ctx context.Context, arg SearchMembersParams) ([]SearchMembersRow, error)
 	UpdateBillingInfo(ctx context.Context, arg UpdateBillingInfoParams) (UserBilling, error)

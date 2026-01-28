@@ -133,6 +133,28 @@ WHERE lp.user_id = @user_id
   AND lp.expires_at > @comparison_time
 ORDER BY lp.expires_at;
 
+-- name: GetEligibleLessonPackageForUser :one
+SELECT lp.id, lp.pack_type_id, lp.user_id, lp.purchase_date, lp.expires_at,
+    lp.lessons_remaining, lp.status, lp.created_at, lp.updated_at
+FROM lesson_packages lp
+JOIN lesson_package_types lpt ON lpt.id = lp.pack_type_id
+WHERE lp.user_id = @user_id
+  AND lpt.facility_id = @facility_id
+  AND lp.status = 'active'
+  AND lp.lessons_remaining > 0
+  AND lp.expires_at > @comparison_time
+ORDER BY lp.expires_at
+LIMIT 1;
+
+-- name: ListLessonPackageRedemptionsByReservationID :many
+SELECT id, lesson_package_id
+FROM lesson_package_redemptions
+WHERE reservation_id = @reservation_id;
+
+-- name: DeleteLessonPackageRedemptionsByReservationID :exec
+DELETE FROM lesson_package_redemptions
+WHERE reservation_id = @reservation_id;
+
 -- name: DecrementLessonPackageLesson :one
 UPDATE lesson_packages
 SET lessons_remaining = lessons_remaining - 1,
@@ -145,6 +167,18 @@ WHERE id = @id
   AND status = 'active'
   AND lessons_remaining > 0
   AND expires_at > CURRENT_TIMESTAMP
+RETURNING id, pack_type_id, user_id, purchase_date, expires_at,
+    lessons_remaining, status, created_at, updated_at;
+
+-- name: RestoreLessonPackageLesson :one
+UPDATE lesson_packages
+SET lessons_remaining = lessons_remaining + 1,
+    status = CASE
+        WHEN status = 'depleted' THEN 'active'
+        ELSE status
+    END,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
 RETURNING id, pack_type_id, user_id, purchase_date, expires_at,
     lessons_remaining, status, created_at, updated_at;
 
