@@ -238,6 +238,53 @@ func (q *Queries) DecrementLessonPackageLesson(ctx context.Context, id int64) (L
 	return i, err
 }
 
+const deleteLessonPackageRedemptionsByReservationID = `-- name: DeleteLessonPackageRedemptionsByReservationID :exec
+DELETE FROM lesson_package_redemptions
+WHERE reservation_id = ?1
+`
+
+func (q *Queries) DeleteLessonPackageRedemptionsByReservationID(ctx context.Context, reservationID sql.NullInt64) error {
+	_, err := q.exec(ctx, q.deleteLessonPackageRedemptionsByReservationIDStmt, deleteLessonPackageRedemptionsByReservationID, reservationID)
+	return err
+}
+
+const getEligibleLessonPackageForUser = `-- name: GetEligibleLessonPackageForUser :one
+SELECT lp.id, lp.pack_type_id, lp.user_id, lp.purchase_date, lp.expires_at,
+    lp.lessons_remaining, lp.status, lp.created_at, lp.updated_at
+FROM lesson_packages lp
+JOIN lesson_package_types lpt ON lpt.id = lp.pack_type_id
+WHERE lp.user_id = ?1
+  AND lpt.facility_id = ?2
+  AND lp.status = 'active'
+  AND lp.lessons_remaining > 0
+  AND lp.expires_at > ?3
+ORDER BY lp.expires_at
+LIMIT 1
+`
+
+type GetEligibleLessonPackageForUserParams struct {
+	UserID         int64     `json:"userId"`
+	FacilityID     int64     `json:"facilityId"`
+	ComparisonTime time.Time `json:"comparisonTime"`
+}
+
+func (q *Queries) GetEligibleLessonPackageForUser(ctx context.Context, arg GetEligibleLessonPackageForUserParams) (LessonPackage, error) {
+	row := q.queryRow(ctx, q.getEligibleLessonPackageForUserStmt, getEligibleLessonPackageForUser, arg.UserID, arg.FacilityID, arg.ComparisonTime)
+	var i LessonPackage
+	err := row.Scan(
+		&i.ID,
+		&i.PackTypeID,
+		&i.UserID,
+		&i.PurchaseDate,
+		&i.ExpiresAt,
+		&i.LessonsRemaining,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getLessonPackage = `-- name: GetLessonPackage :one
 SELECT id, pack_type_id, user_id, purchase_date, expires_at,
     lessons_remaining, status, created_at, updated_at
@@ -482,6 +529,40 @@ func (q *Queries) ListActiveLessonPackagesForUserByOrganization(ctx context.Cont
 	return items, nil
 }
 
+const listLessonPackageRedemptionsByReservationID = `-- name: ListLessonPackageRedemptionsByReservationID :many
+SELECT id, lesson_package_id
+FROM lesson_package_redemptions
+WHERE reservation_id = ?1
+`
+
+type ListLessonPackageRedemptionsByReservationIDRow struct {
+	ID              int64 `json:"id"`
+	LessonPackageID int64 `json:"lessonPackageId"`
+}
+
+func (q *Queries) ListLessonPackageRedemptionsByReservationID(ctx context.Context, reservationID sql.NullInt64) ([]ListLessonPackageRedemptionsByReservationIDRow, error) {
+	rows, err := q.query(ctx, q.listLessonPackageRedemptionsByReservationIDStmt, listLessonPackageRedemptionsByReservationID, reservationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLessonPackageRedemptionsByReservationIDRow
+	for rows.Next() {
+		var i ListLessonPackageRedemptionsByReservationIDRow
+		if err := rows.Scan(&i.ID, &i.LessonPackageID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonPackageTypes = `-- name: ListLessonPackageTypes :many
 SELECT id, facility_id, name, price_cents, lesson_count, valid_days, status,
     created_at, updated_at
@@ -521,6 +602,36 @@ func (q *Queries) ListLessonPackageTypes(ctx context.Context, facilityID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const restoreLessonPackageLesson = `-- name: RestoreLessonPackageLesson :one
+UPDATE lesson_packages
+SET lessons_remaining = lessons_remaining + 1,
+    status = CASE
+        WHEN status = 'depleted' THEN 'active'
+        ELSE status
+    END,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?1
+RETURNING id, pack_type_id, user_id, purchase_date, expires_at,
+    lessons_remaining, status, created_at, updated_at
+`
+
+func (q *Queries) RestoreLessonPackageLesson(ctx context.Context, id int64) (LessonPackage, error) {
+	row := q.queryRow(ctx, q.restoreLessonPackageLessonStmt, restoreLessonPackageLesson, id)
+	var i LessonPackage
+	err := row.Scan(
+		&i.ID,
+		&i.PackTypeID,
+		&i.UserID,
+		&i.PurchaseDate,
+		&i.ExpiresAt,
+		&i.LessonsRemaining,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateLessonPackageType = `-- name: UpdateLessonPackageType :one

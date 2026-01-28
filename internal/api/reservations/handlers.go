@@ -784,6 +784,22 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation type", Err: err}
 		}
+		if reservationTypeName == "PRO_SESSION" {
+			redemptions, err := qtx.ListLessonPackageRedemptionsByReservationID(ctx, sql.NullInt64{Int64: reservationID, Valid: true})
+			if err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load lesson package redemption", Err: err}
+			}
+			if len(redemptions) > 0 {
+				for _, redemption := range redemptions {
+					if _, err := qtx.RestoreLessonPackageLesson(ctx, redemption.LessonPackageID); err != nil {
+						return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to restore lesson package", Err: err}
+					}
+				}
+				if err := qtx.DeleteLessonPackageRedemptionsByReservationID(ctx, sql.NullInt64{Int64: reservationID, Valid: true}); err != nil {
+					return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to clear lesson package redemption", Err: err}
+				}
+			}
+		}
 		// Only notify pros for member-initiated lesson cancellations.
 		if reservationTypeName == "PRO_SESSION" && !user.IsStaff {
 			if !reservation.ProID.Valid {

@@ -110,6 +110,7 @@ func createStaffLessonReservation(ctx context.Context, input staffLessonReservat
 	var created dbgen.Reservation
 	err = store.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
+		var eligiblePackageID int64
 
 		if input.Facility.MaxMemberReservations > 0 {
 			activeCount, err := qtx.CountActiveMemberReservations(ctx, dbgen.CountActiveMemberReservationsParams{
@@ -177,6 +178,36 @@ func createStaffLessonReservation(ctx context.Context, input staffLessonReservat
 			UserID:        input.MemberID,
 		}); err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to add lesson participant", Err: err}
+		}
+
+		eligiblePackage, err := qtx.GetEligibleLessonPackageForUser(ctx, dbgen.GetEligibleLessonPackageForUserParams{
+			UserID:         input.MemberID,
+			FacilityID:     input.FacilityID,
+			ComparisonTime: time.Now(),
+		})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to check lesson packages", Err: err}
+		}
+		if err == nil {
+			eligiblePackageID = eligiblePackage.ID
+		}
+
+		if eligiblePackageID != 0 {
+			if _, err := qtx.DecrementLessonPackageLesson(ctx, eligiblePackageID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return apiutil.HandlerError{Status: http.StatusConflict, Message: "Lesson package is no longer available", Err: err}
+				}
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to redeem lesson package", Err: err}
+			}
+
+			if _, err := qtx.CreateLessonPackageRedemption(ctx, dbgen.CreateLessonPackageRedemptionParams{
+				LessonPackageID: eligiblePackageID,
+				FacilityID:      input.FacilityID,
+				RedeemedAt:      time.Now(),
+				ReservationID:   sql.NullInt64{Int64: created.ID, Valid: true},
+			}); err != nil {
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to redeem lesson package", Err: err}
+			}
 		}
 		return nil
 	})
@@ -609,11 +640,11 @@ func HandleStaffLessonCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		proID     int64
-		memberID  int64
-		startRaw  string
-		endRaw    string
-		parseErr  error
+		proID    int64
+		memberID int64
+		startRaw string
+		endRaw   string
+		parseErr error
 	)
 
 	if apiutil.IsJSONRequest(r) {
