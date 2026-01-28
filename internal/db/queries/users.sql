@@ -43,3 +43,9 @@ UPDATE users
 SET status = @status,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id;
+
+-- name: UpdateUserPasswordHash :exec
+UPDATE users
+SET password_hash = @password_hash,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id;

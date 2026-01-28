@@ -712,7 +712,7 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user exists in our database before burning quota
 	// This prevents attackers from exhausting quota for non-existent users
-	_, err := getUserByIdentifier(r.Context(), identifier)
+	user, err := getUserByIdentifier(r.Context(), identifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// User doesn't exist - don't burn quota, return generic error
@@ -721,6 +721,11 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		logger.Error().Err(err).Msg("Failed to check user for password reset confirm")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := ValidatePasswordComplexity(newPassword); err != nil {
+		writeHTMXError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -747,6 +752,24 @@ func HandleConfirmResetPassword(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Msg("Failed to confirm password reset")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+
+	if user.LocalAuthEnabled {
+		passwordHash, err := HashPassword(newPassword)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to hash password for local auth reset")
+			writeHTMXError(w, r, http.StatusInternalServerError, "Password reset succeeded, but we couldn't update local sign-in. Please contact support.")
+			return
+		}
+		err = queries.UpdateUserPasswordHash(r.Context(), dbgen.UpdateUserPasswordHashParams{
+			ID:           user.ID,
+			PasswordHash: sql.NullString{String: passwordHash, Valid: true},
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("Local auth password hash update failed after Cognito reset; local auth now out of sync")
+			writeHTMXError(w, r, http.StatusInternalServerError, "Password reset succeeded, but we couldn't update local sign-in. Please contact support.")
+			return
+		}
 	}
 
 	// Successful password reset - clear attempts

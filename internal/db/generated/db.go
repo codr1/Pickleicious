@@ -654,6 +654,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateUserCognitoStatusStmt, err = db.PrepareContext(ctx, updateUserCognitoStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserCognitoStatus: %w", err)
 	}
+	if q.updateUserPasswordHashStmt, err = db.PrepareContext(ctx, updateUserPasswordHash); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserPasswordHash: %w", err)
+	}
 	if q.updateUserStatusStmt, err = db.PrepareContext(ctx, updateUserStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserStatus: %w", err)
 	}
@@ -1730,6 +1733,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateUserCognitoStatusStmt: %w", cerr)
 		}
 	}
+	if q.updateUserPasswordHashStmt != nil {
+		if cerr := q.updateUserPasswordHashStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserPasswordHashStmt: %w", cerr)
+		}
+	}
 	if q.updateUserStatusStmt != nil {
 		if cerr := q.updateUserStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateUserStatusStmt: %w", cerr)
@@ -2014,6 +2022,7 @@ type Queries struct {
 	updateTeamCaptainStmt                            *sql.Stmt
 	updateThemeStmt                                  *sql.Stmt
 	updateUserCognitoStatusStmt                      *sql.Stmt
+	updateUserPasswordHashStmt                       *sql.Stmt
 	updateUserStatusStmt                             *sql.Stmt
 	updateVisitPackTypeStmt                          *sql.Stmt
 	updateWaitlistStatusStmt                         *sql.Stmt
@@ -2237,6 +2246,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateTeamCaptainStmt:                            q.updateTeamCaptainStmt,
 		updateThemeStmt:                                  q.updateThemeStmt,
 		updateUserCognitoStatusStmt:                      q.updateUserCognitoStatusStmt,
+		updateUserPasswordHashStmt:                       q.updateUserPasswordHashStmt,
 		updateUserStatusStmt:                             q.updateUserStatusStmt,
 		updateVisitPackTypeStmt:                          q.updateVisitPackTypeStmt,
 		updateWaitlistStatusStmt:                         q.updateWaitlistStatusStmt,
