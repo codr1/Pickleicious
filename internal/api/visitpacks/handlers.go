@@ -28,7 +28,6 @@ import (
 const (
 	visitPackQueryTimeout = 5 * time.Second
 	maxVisitPackTypes     = 1000
-	facilityIDQueryKey    = "facility_id"
 	visitPackTypeIDParam  = "id"
 	userIDParam           = "id"
 )
@@ -87,7 +86,7 @@ func HandleVisitPackTypesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, err := facilityIDFromQuery(r)
+	facilityID, err := apiutil.FacilityIDFromQuery(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -124,7 +123,7 @@ func HandleVisitPackTypesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, err := facilityIDFromQuery(r)
+	facilityID, err := apiutil.FacilityIDFromQuery(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -178,7 +177,7 @@ func HandleVisitPackTypeCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, err := facilityIDFromRequest(r, req.FacilityID)
+	facilityID, err := apiutil.FacilityIDFromRequest(r, req.FacilityID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -258,7 +257,7 @@ func HandleVisitPackTypeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, err := facilityIDFromRequest(r, req.FacilityID)
+	facilityID, err := apiutil.FacilityIDFromRequest(r, req.FacilityID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -317,7 +316,7 @@ func HandleVisitPackTypeDeactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, err := facilityIDFromQuery(r)
+	facilityID, err := apiutil.FacilityIDFromQuery(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -382,7 +381,7 @@ func HandleVisitPackSale(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facilityID, err := facilityIDFromRequest(r, req.FacilityID)
+	facilityID, err := apiutil.FacilityIDFromRequest(r, req.FacilityID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -467,7 +466,7 @@ func HandleListUserVisitPacks(w http.ResponseWriter, r *http.Request) {
 	}
 	var facilityID *int64
 	if requestUser.IsStaff {
-		facilityIDValue, err := facilityIDFromQuery(r)
+		facilityIDValue, err := apiutil.FacilityIDFromQuery(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -589,7 +588,7 @@ func buildVisitPackTypesListHTML(visitPackTypes []dbgen.VisitPackType, facilityI
 		builder.WriteString(`<div class="flex flex-wrap items-start justify-between gap-4">`)
 		builder.WriteString(`<div>`)
 		builder.WriteString(fmt.Sprintf(`<div class="text-sm font-semibold text-foreground">%s</div>`, name))
-		builder.WriteString(fmt.Sprintf(`<div class="mt-1 text-xs text-muted-foreground">%d visits • valid %d days • %s</div>`, packType.VisitCount, packType.ValidDays, formatPriceCents(packType.PriceCents)))
+		builder.WriteString(fmt.Sprintf(`<div class="mt-1 text-xs text-muted-foreground">%d visits • valid %d days • %s</div>`, packType.VisitCount, packType.ValidDays, apiutil.FormatPriceCents(packType.PriceCents)))
 		builder.WriteString(fmt.Sprintf(`<div class="mt-1 text-xs text-muted-foreground">Status: %s</div>`, status))
 		builder.WriteString(`</div>`)
 		if !strings.EqualFold(packType.Status, "inactive") {
@@ -601,10 +600,6 @@ func buildVisitPackTypesListHTML(visitPackTypes []dbgen.VisitPackType, facilityI
 	}
 	builder.WriteString(`</div>`)
 	return builder.String()
-}
-
-func formatPriceCents(cents int64) string {
-	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }
 
 func decodeVisitPackTypeRequest(r *http.Request) (visitPackTypeRequest, error) {
@@ -622,17 +617,17 @@ func decodeVisitPackTypeRequest(r *http.Request) (visitPackTypeRequest, error) {
 		return visitPackTypeRequest{}, err
 	}
 
-	priceCents, err := parseNonNegativeInt64Field(apiutil.FirstNonEmpty(r.FormValue("price_cents"), r.FormValue("priceCents")), "price_cents")
+	priceCents, err := apiutil.ParseNonNegativeInt64Field(apiutil.FirstNonEmpty(r.FormValue("price_cents"), r.FormValue("priceCents")), "price_cents")
 	if err != nil {
 		return visitPackTypeRequest{}, err
 	}
 
-	visitCount, err := parsePositiveInt64Field(apiutil.FirstNonEmpty(r.FormValue("visit_count"), r.FormValue("visitCount")), "visit_count")
+	visitCount, err := apiutil.ParsePositiveInt64Field(apiutil.FirstNonEmpty(r.FormValue("visit_count"), r.FormValue("visitCount")), "visit_count")
 	if err != nil {
 		return visitPackTypeRequest{}, err
 	}
 
-	validDays, err := parsePositiveInt64Field(apiutil.FirstNonEmpty(r.FormValue("valid_days"), r.FormValue("validDays")), "valid_days")
+	validDays, err := apiutil.ParsePositiveInt64Field(apiutil.FirstNonEmpty(r.FormValue("valid_days"), r.FormValue("validDays")), "valid_days")
 	if err != nil {
 		return visitPackTypeRequest{}, err
 	}
@@ -689,7 +684,7 @@ func decodeVisitPackSaleRequest(r *http.Request) (visitPackSaleRequest, error) {
 	rawPurchaseDate := apiutil.FirstNonEmpty(r.FormValue("purchase_date"), r.FormValue("purchaseDate"))
 	var purchaseDate *time.Time
 	if strings.TrimSpace(rawPurchaseDate) != "" {
-		parsed, err := parseVisitPackPurchaseDate(rawPurchaseDate)
+		parsed, err := apiutil.ParsePurchaseDate(rawPurchaseDate)
 		if err != nil {
 			return visitPackSaleRequest{}, err
 		}
@@ -715,80 +710,6 @@ func validateVisitPackSaleRequest(req visitPackSaleRequest) error {
 		return fmt.Errorf("purchase_date must be a valid date")
 	}
 	return nil
-}
-
-func parseVisitPackPurchaseDate(raw string) (time.Time, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return time.Time{}, fmt.Errorf("purchase_date is required")
-	}
-
-	layouts := []string{
-		time.RFC3339,
-		"2006-01-02",
-		"2006-01-02T15:04",
-		"2006-01-02 15:04",
-	}
-	for _, layout := range layouts {
-		if layout == time.RFC3339 {
-			parsed, err := time.Parse(layout, raw)
-			if err == nil {
-				return parsed, nil
-			}
-			continue
-		}
-		parsed, err := time.ParseInLocation(layout, raw, time.Local)
-		if err == nil {
-			return parsed, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("purchase_date must be a valid date")
-}
-
-func parseNonNegativeInt64Field(raw string, field string) (int64, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, fmt.Errorf("%s is required", field)
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value < 0 {
-		return 0, fmt.Errorf("%s must be 0 or greater", field)
-	}
-	return value, nil
-}
-
-func parsePositiveInt64Field(raw string, field string) (int64, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, fmt.Errorf("%s is required", field)
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s must be greater than 0", field)
-	}
-	return value, nil
-}
-
-func facilityIDFromQuery(r *http.Request) (int64, error) {
-	raw := strings.TrimSpace(r.URL.Query().Get(facilityIDQueryKey))
-	if raw == "" {
-		return 0, fmt.Errorf("%s is required", facilityIDQueryKey)
-	}
-	id, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", facilityIDQueryKey)
-	}
-	return id, nil
-}
-
-func facilityIDFromRequest(r *http.Request, fromBody *int64) (int64, error) {
-	if fromBody != nil {
-		if *fromBody <= 0 {
-			return 0, fmt.Errorf("facility_id must be a positive integer")
-		}
-		return *fromBody, nil
-	}
-	return facilityIDFromQuery(r)
 }
 
 func visitPackTypeIDFromRequest(r *http.Request) (int64, error) {

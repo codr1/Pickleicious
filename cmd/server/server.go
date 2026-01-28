@@ -20,6 +20,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/courts"
 	"github.com/codr1/Pickleicious/internal/api/dashboard"
 	"github.com/codr1/Pickleicious/internal/api/leagues"
+	"github.com/codr1/Pickleicious/internal/api/lessonpacks"
 	"github.com/codr1/Pickleicious/internal/api/member"
 	"github.com/codr1/Pickleicious/internal/api/members"
 	"github.com/codr1/Pickleicious/internal/api/nav"
@@ -81,6 +82,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
 	cancellationpolicy.InitHandlers(database.Queries)
+	lessonpacks.InitHandlers(database.Queries)
 	visitpacks.InitHandlers(database.Queries)
 	waitlist.InitHandlers(database)
 
@@ -558,6 +560,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Visit pack admin page
 	mux.HandleFunc("/admin/visit-packs", visitpacks.HandleVisitPackTypesPage)
 
+	// Lesson package admin page
+	mux.HandleFunc("/admin/lesson-packages", lessonpacks.HandleLessonPackageTypesPage)
+
 	// Visit pack API
 	mux.HandleFunc("/api/v1/visit-pack-types", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  visitpacks.HandleVisitPackTypesList,
@@ -572,6 +577,19 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/users/{id}/visit-packs", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: visitpacks.HandleListUserVisitPacks,
+	}))
+
+	// Lesson package API
+	mux.HandleFunc("/api/v1/lesson-package-types", methodHandler(map[string]http.HandlerFunc{
+		http.MethodGet:  lessonpacks.HandleLessonPackageTypesList,
+		http.MethodPost: lessonpacks.HandleLessonPackageTypeCreate,
+	}))
+	mux.HandleFunc("/api/v1/lesson-package-types/{id}", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPut:    lessonpacks.HandleLessonPackageTypeUpdate,
+		http.MethodDelete: lessonpacks.HandleLessonPackageTypeDeactivate,
+	}))
+	mux.HandleFunc("/api/v1/lesson-packages", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: lessonpacks.HandleLessonPackageSale,
 	}))
 
 	// Operating hours admin page
