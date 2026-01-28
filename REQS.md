@@ -42,9 +42,11 @@
 
 ### 3.3 Pending
 
+<!-- BEGIN WIP: STORY-0045 -->
 | Feature | Status |
 |---------|--------|
 | Password reset | ❌ TODO |
+<!-- END WIP -->
 
 ---
 
