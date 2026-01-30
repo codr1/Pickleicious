@@ -40,7 +40,7 @@ func SendConfirmationEmail(ctx context.Context, q *dbgen.Queries, client *SESCli
 		sendCtx, cancel := context.WithTimeout(context.Background(), confirmationEmailTimeout)
 		defer cancel()
 		if err := client.Send(sendCtx, recipient, confirmation.Subject, confirmation.Body); err != nil && logger != nil {
-			logger.Error().Err(err).Str("recipient", recipient).Msg("Failed to send confirmation email")
+			logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send confirmation email")
 		}
 	}()
 }
