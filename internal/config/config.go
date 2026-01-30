@@ -22,6 +22,10 @@ type DatabaseConfig struct {
 type AWSConfig struct {
 	CognitoPoolID   string `yaml:"-"` // Loaded from environment
 	CognitoClientID string `yaml:"-"` // Loaded from environment
+	SESAccessKeyID  string `yaml:"-"` // Loaded from environment
+	SESSecretAccessKey string `yaml:"-"` // Loaded from environment
+	SESRegion       string `yaml:"-"` // Loaded from environment
+	SESSender       string `yaml:"-"` // Loaded from environment
 }
 
 type Config struct {
@@ -97,6 +101,10 @@ func Load(configPath string) (*Config, error) {
 	cfg.Database.AuthToken = os.Getenv("DATABASE_AUTH_TOKEN")
 	cfg.AWS.CognitoPoolID = os.Getenv("COGNITO_POOL_ID")
 	cfg.AWS.CognitoClientID = os.Getenv("COGNITO_CLIENT_ID")
+	cfg.AWS.SESAccessKeyID = os.Getenv("SES_ACCESS_KEY_ID")
+	cfg.AWS.SESSecretAccessKey = os.Getenv("SES_SECRET_ACCESS_KEY")
+	cfg.AWS.SESRegion = os.Getenv("SES_REGION")
+	cfg.AWS.SESSender = os.Getenv("SES_SENDER")
 
 	// Allow environment override (e.g., APP_ENVIRONMENT=staging for real Cognito)
 	if env := os.Getenv("APP_ENVIRONMENT"); env != "" {
