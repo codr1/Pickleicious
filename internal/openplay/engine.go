@@ -10,6 +10,7 @@ import (
 
 	db "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,14 +25,15 @@ const (
 )
 
 type Engine struct {
-	db *db.DB
+	db          *db.DB
+	emailClient *email.SESClient
 }
 
-func NewEngine(database *db.DB) (*Engine, error) {
+func NewEngine(database *db.DB, client *email.SESClient) (*Engine, error) {
 	if database == nil {
 		return nil, errors.New("open play engine requires a database")
 	}
-	return &Engine{db: database}, nil
+	return &Engine{db: database, emailClient: client}, nil
 }
 
 func (e *Engine) EvaluateSessionsApproachingCutoff(ctx context.Context, facilityID int64, comparisonTime time.Time) error {
@@ -190,6 +192,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 		logger.Error().Err(err).Msg("Failed to list reservation courts")
 		return false, err
 	}
+	originalCourtCount := int64(len(existingCourts))
 
 	if err := removeReservationCourts(ctx, queries, reservationID, existingCourts); err != nil {
 		logger.Error().Err(err).Msg("Failed to release reservation courts")
@@ -270,6 +273,10 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 		Int("released_courts", len(existingCourts)).
 		Str("decision", "cancelled").
 		Msg("Cancelled open play session")
+
+	if err := e.notifyOpenPlayCancellation(ctx, queries, session, rule, reservationID, originalCourtCount, reason); err != nil {
+		logger.Error().Err(err).Msg("Failed to send open play cancellation emails")
+	}
 
 	return true, nil
 }
@@ -459,6 +466,61 @@ func countReservationParticipants(ctx context.Context, queries *dbgen.Queries, r
 		return 0, fmt.Errorf("count reservation participants %d: %w", reservationID, err)
 	}
 	return count, nil
+}
+
+func (e *Engine) notifyOpenPlayCancellation(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule, reservationID int64, courtCount int64, reason string) error {
+	if e == nil || e.emailClient == nil || queries == nil {
+		return nil
+	}
+
+	facility, err := queries.GetFacilityByID(ctx, session.FacilityID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Int64("facility_id", session.FacilityID).Msg("Failed to load facility for open play cancellation email")
+		return err
+	}
+
+	facilityLoc := time.Local
+	if facility.Timezone != "" {
+		if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+			facilityLoc = loadedLoc
+		} else {
+			log.Ctx(ctx).Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for open play cancellation email")
+		}
+	}
+
+	date, timeRange := email.FormatDateTimeRange(session.StartTime.In(facilityLoc), session.EndTime.In(facilityLoc))
+	courtLabel := "TBD"
+	if courtCount == 1 {
+		courtLabel = "1 court"
+	} else if courtCount > 1 {
+		courtLabel = fmt.Sprintf("%d courts", courtCount)
+	}
+
+	refund := int64(100)
+	message := email.BuildCancellationEmail(email.CancellationDetails{
+		FacilityName:     facility.Name,
+		ReservationType:  email.ReservationTypeLabel("OPEN_PLAY"),
+		Date:             date,
+		TimeRange:        timeRange,
+		Courts:           courtLabel,
+		Reason:           fmt.Sprintf("%s cancelled - %s", rule.Name, reason),
+		RefundPercentage: &refund,
+	})
+
+	participants, err := queries.ListParticipantsForReservation(ctx, reservationID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load open play participants for cancellation email")
+		return err
+	}
+	if len(participants) == 0 {
+		return nil
+	}
+
+	sender := email.ResolveFromAddress(ctx, queries, facility, log.Ctx(ctx))
+	for _, participant := range participants {
+		email.SendCancellationEmail(ctx, queries, e.emailClient, participant.ID, message, sender, log.Ctx(ctx))
+	}
+	return nil
 }
 
 func listReservationCourts(ctx context.Context, queries *dbgen.Queries, reservationID int64) ([]courtAssignment, error) {

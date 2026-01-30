@@ -22,6 +22,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/codr1/Pickleicious/internal/request"
 	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
 )
@@ -30,6 +31,7 @@ var (
 	queries     *dbgen.Queries
 	store       *appdb.DB
 	queriesOnce sync.Once
+	emailClient *email.SESClient
 )
 
 const (
@@ -50,13 +52,14 @@ const (
 )
 
 // InitHandlers must be called during server startup before handling requests.
-func InitHandlers(database *appdb.DB) {
+func InitHandlers(database *appdb.DB, client *email.SESClient) {
 	if database == nil {
 		return
 	}
 	queriesOnce.Do(func() {
 		queries = database.Queries
 		store = database
+		emailClient = client
 	})
 }
 
@@ -755,6 +758,8 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var reservationCourts []dbgen.ListReservationCourtsRow
+	var reservationParticipants []dbgen.ListParticipantsForReservationRow
+	var reservationTypeName string
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -780,11 +785,12 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to log cancellation", Err: err}
 		}
 
-		reservationTypeName, err := qtx.GetReservationTypeNameByReservationID(ctx, reservationID)
+		loadedReservationTypeName, err := qtx.GetReservationTypeNameByReservationID(ctx, reservationID)
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation type", Err: err}
 		}
-		if reservationTypeName == "PRO_SESSION" {
+		reservationTypeName = loadedReservationTypeName
+		if loadedReservationTypeName == "PRO_SESSION" {
 			redemptions, err := qtx.ListLessonPackageRedemptionsByReservationID(ctx, sql.NullInt64{Int64: reservationID, Valid: true})
 			if err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load lesson package redemption", Err: err}
@@ -805,7 +811,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Only notify pros for member-initiated lesson cancellations.
-		if reservationTypeName == "PRO_SESSION" && !user.IsStaff {
+		if loadedReservationTypeName == "PRO_SESSION" && !user.IsStaff {
 			if !reservation.ProID.Valid {
 				logger.Error().Int64("reservation_id", reservationID).Msg("Missing pro for lesson cancellation notification")
 			} else {
@@ -860,6 +866,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation participants", Err: err}
 		}
+		reservationParticipants = participants
 		for _, participant := range participants {
 			if err := qtx.RemoveParticipant(ctx, dbgen.RemoveParticipantParams{
 				ReservationID: reservationID,
@@ -882,6 +889,45 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to delete reservation")
 		http.Error(w, "Failed to delete reservation", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil && reservation.ID != 0 {
+		facility, err := q.GetFacilityByID(ctx, facilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility for cancellation email")
+		} else {
+			facilityLoc := time.Local
+			if facility.Timezone != "" {
+				if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+					facilityLoc = loadedLoc
+				} else {
+					logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for cancellation email")
+				}
+			}
+			date, timeRange := email.FormatDateTimeRange(reservation.StartTime.In(facilityLoc), reservation.EndTime.In(facilityLoc))
+			courtLabel := apiutil.ReservationCourtLabel(reservationCourts)
+			refund := refundPercentage
+			message := email.BuildCancellationEmail(email.CancellationDetails{
+				FacilityName:     facility.Name,
+				ReservationType:  email.ReservationTypeLabel(reservationTypeName),
+				Date:             date,
+				TimeRange:        timeRange,
+				Courts:           courtLabel,
+				RefundPercentage: &refund,
+				FeeWaived:        feeWaived,
+			})
+			sender := email.ResolveFromAddress(ctx, q, facility, logger)
+			recipients := make(map[int64]struct{}, len(reservationParticipants)+1)
+			for _, participant := range reservationParticipants {
+				recipients[participant.ID] = struct{}{}
+			}
+			if reservation.PrimaryUserID.Valid {
+				recipients[reservation.PrimaryUserID.Int64] = struct{}{}
+			}
+			for participantID := range recipients {
+				email.SendCancellationEmail(ctx, q, emailClient, participantID, message, sender, logger)
+			}
+		}
 	}
 
 	notifyCtx, notifyCancel := context.WithTimeout(context.Background(), waitlistNotificationTimeout)
