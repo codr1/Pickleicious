@@ -46,7 +46,7 @@ func RegisterReminderJobs(database *db.DB, emailClient *email.SESClient) error {
 			return
 		}
 
-		now := time.Now().UTC()
+		now := time.Now().UTC().Truncate(reminderJobWindow)
 		facilities, err := database.Queries.ListFacilities(ctx)
 		if err != nil {
 			jobLogger.Error().Err(err).Msg("Failed to load facilities for reminder job")
