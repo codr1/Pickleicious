@@ -16,6 +16,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 )
 
@@ -571,6 +572,23 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to create lesson reservation")
 		http.Error(w, "Failed to create reservation", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil {
+		cancellationPolicy, policyErr := cancellationPolicySummary(ctx, q, facility.ID, reservationTypeID, startTime, now)
+		if policyErr != nil {
+			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")
+			cancellationPolicy = "Contact the facility for cancellation policy details."
+		}
+		date, timeRange := email.FormatDateTimeRange(startTime.In(facilityLoc), endTime.In(facilityLoc))
+		confirmation := email.BuildProSessionConfirmation(email.ConfirmationDetails{
+			FacilityName:       facility.Name,
+			Date:               date,
+			TimeRange:          timeRange,
+			Courts:             "Assigned at check-in",
+			CancellationPolicy: cancellationPolicy,
+		})
+		email.SendConfirmationEmail(ctx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")

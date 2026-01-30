@@ -59,7 +59,7 @@ func setupAuthzIntegrationTest(t *testing.T) *db.DB {
 	}
 
 	themes.InitHandlers(database.Queries)
-	openplay.InitHandlers(database)
+	openplay.InitHandlers(database, nil)
 
 	return database
 }
