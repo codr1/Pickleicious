@@ -7,6 +7,7 @@ CREATE TABLE organizations (
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     email_from_address TEXT,
+    reminder_hours_before INTEGER NOT NULL DEFAULT 24 CHECK (reminder_hours_before > 0),
     cross_facility_visit_packs BOOLEAN NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

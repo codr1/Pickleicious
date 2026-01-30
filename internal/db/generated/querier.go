@@ -137,6 +137,7 @@ type Querier interface {
 	GetOrganizationBySlug(ctx context.Context, slug string) (GetOrganizationBySlugRow, error)
 	GetOrganizationCrossFacilitySetting(ctx context.Context, id int64) (bool, error)
 	GetOrganizationEmailConfig(ctx context.Context, id int64) (GetOrganizationEmailConfigRow, error)
+	GetOrganizationReminderConfig(ctx context.Context, id int64) (GetOrganizationReminderConfigRow, error)
 	GetPendingOffer(ctx context.Context, waitlistID int64) (WaitlistOffer, error)
 	GetPhoto(ctx context.Context, id int64) (GetPhotoRow, error)
 	GetProLessonSlots(ctx context.Context, arg GetProLessonSlotsParams) ([]GetProLessonSlotsRow, error)
@@ -212,6 +213,7 @@ type Querier interface {
 	ListReservationTypes(ctx context.Context) ([]ReservationType, error)
 	ListReservationsByDateRange(ctx context.Context, arg ListReservationsByDateRangeParams) ([]Reservation, error)
 	ListReservationsByUserID(ctx context.Context, userID sql.NullInt64) ([]ListReservationsByUserIDRow, error)
+	ListReservationsStartingBetween(ctx context.Context, arg ListReservationsStartingBetweenParams) ([]Reservation, error)
 	// internal/db/queries/staff.sql
 	// Queries for staff members (join staff table with users for auth/contact info)
 	ListStaff(ctx context.Context) ([]ListStaffRow, error)

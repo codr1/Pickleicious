@@ -115,6 +115,9 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	if err := scheduler.RegisterWaitlistJobs(database); err != nil {
 		return nil, fmt.Errorf("register waitlist jobs: %w", err)
 	}
+	if err := scheduler.RegisterReminderJobs(database, emailClient); err != nil {
+		return nil, fmt.Errorf("register reminder jobs: %w", err)
+	}
 
 	// Register routes
 	registerRoutes(router, database)
