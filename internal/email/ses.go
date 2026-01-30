@@ -60,7 +60,6 @@ func (c *SESClient) Send(ctx context.Context, recipient, subject, body string) e
 			Simple: &types.Message{
 				Subject: &types.Content{Data: aws.String(subject)},
 				Body: &types.Body{
-					Html: &types.Content{Data: aws.String(body)},
 					Text: &types.Content{Data: aws.String(body)},
 				},
 			},

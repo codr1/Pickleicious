@@ -21,6 +21,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/codr1/Pickleicious/internal/models"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
@@ -32,6 +33,7 @@ var (
 	queries     *dbgen.Queries
 	store       *appdb.DB
 	queriesOnce sync.Once
+	emailClient *email.SESClient
 )
 
 const portalQueryTimeout = 5 * time.Second
@@ -44,13 +46,14 @@ const memberBookingDefaultMaxAdvanceDays int64 = 7
 const cancellationPenaltyWindow = 10 * time.Minute
 
 // InitHandlers must be called during server startup before handling requests.
-func InitHandlers(database *appdb.DB) {
+func InitHandlers(database *appdb.DB, client *email.SESClient) {
 	if database == nil {
 		return
 	}
 	queriesOnce.Do(func() {
 		queries = database.Queries
 		store = database
+		emailClient = client
 	})
 }
 
@@ -770,6 +773,23 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if emailClient != nil && facilityLoaded {
+		cancellationPolicy, policyErr := cancellationPolicySummary(ctx, q, facility.ID, reservationTypeID, startTime, now)
+		if policyErr != nil {
+			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")
+			cancellationPolicy = "Contact the facility for cancellation policy details."
+		}
+		date, timeRange := email.FormatDateTimeRange(startTime.In(facilityLoc), endTime.In(facilityLoc))
+		confirmation := email.BuildGameConfirmation(email.ConfirmationDetails{
+			FacilityName:       facility.Name,
+			Date:               date,
+			TimeRange:          timeRange,
+			Courts:             court.Name,
+			CancellationPolicy: cancellationPolicy,
+		})
+		email.SendConfirmationEmail(ctx, q, emailClient, user.ID, confirmation, logger)
+	}
+
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
 	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
 		logger.Error().Err(err).Int64("reservation_id", created.ID).Msg("Failed to write reservation response")
@@ -1080,6 +1100,8 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var participant dbgen.ReservationParticipant
+	var session dbgen.GetOpenPlaySessionRow
+	var rule dbgen.OpenPlayRule
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -1096,7 +1118,7 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		session, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+		session, err = qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
 			ID:         sessionID,
 			FacilityID: *user.HomeFacilityID,
 		})
@@ -1113,7 +1135,7 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session must be in the future"}
 		}
 
-		rule, err := qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+		rule, err = qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
 			ID:         session.OpenPlayRuleID,
 			FacilityID: *user.HomeFacilityID,
 		})
@@ -1189,6 +1211,31 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to sign up for open play")
 		http.Error(w, "Failed to sign up for open play", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil && facility.ID != 0 {
+		facilityLoc := time.Local
+		if facility.Timezone != "" {
+			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+				facilityLoc = loadedLoc
+			} else {
+				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for confirmation email")
+			}
+		}
+		date, timeRange := email.FormatDateTimeRange(session.StartTime.In(facilityLoc), session.EndTime.In(facilityLoc))
+		courtsLabel := fmt.Sprintf("%d courts", session.CurrentCourtCount)
+		if session.CurrentCourtCount == 1 {
+			courtsLabel = "1 court"
+		}
+		cancellationPolicy := fmt.Sprintf("Cancel at least %d minutes before start time to avoid penalties.", rule.CancellationCutoffMinutes)
+		confirmation := email.BuildOpenPlayConfirmation(email.ConfirmationDetails{
+			FacilityName:       facility.Name,
+			Date:               date,
+			TimeRange:          timeRange,
+			Courts:             courtsLabel,
+			CancellationPolicy: cancellationPolicy,
+		})
+		email.SendConfirmationEmail(ctx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations,refreshMemberOpenPlay")
