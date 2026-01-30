@@ -23,6 +23,7 @@ type Querier interface {
 	CountFacilityThemeName(ctx context.Context, arg CountFacilityThemeNameParams) (int64, error)
 	CountFacilityThemeNameExcludingID(ctx context.Context, arg CountFacilityThemeNameExcludingIDParams) (int64, error)
 	CountFacilityThemes(ctx context.Context, facilityID sql.NullInt64) (int64, error)
+	CountLessonPackageTypesByFacility(ctx context.Context, facilityID int64) (int64, error)
 	CountOpenPlayReservationsForSession(ctx context.Context, arg CountOpenPlayReservationsForSessionParams) (int64, error)
 	CountReservationParticipants(ctx context.Context, reservationID int64) (int64, error)
 	CountReservationsByTypeInRange(ctx context.Context, arg CountReservationsByTypeInRangeParams) ([]CountReservationsByTypeInRangeRow, error)
@@ -43,6 +44,10 @@ type Querier interface {
 	CreateLeagueMatch(ctx context.Context, arg CreateLeagueMatchParams) (LeagueMatch, error)
 	CreateLeagueTeam(ctx context.Context, arg CreateLeagueTeamParams) (LeagueTeam, error)
 	CreateLessonCancelledNotification(ctx context.Context, arg CreateLessonCancelledNotificationParams) (StaffNotification, error)
+	CreateLessonPackage(ctx context.Context, arg CreateLessonPackageParams) (LessonPackage, error)
+	CreateLessonPackageRedemption(ctx context.Context, arg CreateLessonPackageRedemptionParams) (LessonPackageRedemption, error)
+	// internal/db/queries/lesson_packages.sql
+	CreateLessonPackageType(ctx context.Context, arg CreateLessonPackageTypeParams) (LessonPackageType, error)
 	CreateMember(ctx context.Context, arg CreateMemberParams) (int64, error)
 	CreateOpenPlayAuditLog(ctx context.Context, arg CreateOpenPlayAuditLogParams) (OpenPlayAuditLog, error)
 	CreateOpenPlayRule(ctx context.Context, arg CreateOpenPlayRuleParams) (OpenPlayRule, error)
@@ -61,7 +66,9 @@ type Querier interface {
 	// internal/db/queries/waitlist.sql
 	CreateWaitlistEntry(ctx context.Context, arg CreateWaitlistEntryParams) (Waitlist, error)
 	CreateWaitlistOffer(ctx context.Context, arg CreateWaitlistOfferParams) (WaitlistOffer, error)
+	DeactivateLessonPackageType(ctx context.Context, arg DeactivateLessonPackageTypeParams) (LessonPackageType, error)
 	DeactivateVisitPackType(ctx context.Context, arg DeactivateVisitPackTypeParams) (VisitPackType, error)
+	DecrementLessonPackageLesson(ctx context.Context, id int64) (LessonPackage, error)
 	DecrementVisitPackVisit(ctx context.Context, id int64) (VisitPack, error)
 	DeleteCancellationPolicyTier(ctx context.Context, arg DeleteCancellationPolicyTierParams) (int64, error)
 	DeleteClinicEnrollment(ctx context.Context, arg DeleteClinicEnrollmentParams) (int64, error)
@@ -69,6 +76,7 @@ type Querier interface {
 	DeleteClinicType(ctx context.Context, arg DeleteClinicTypeParams) (int64, error)
 	DeleteLeague(ctx context.Context, id int64) (int64, error)
 	DeleteLeagueMatchesByLeagueID(ctx context.Context, leagueID int64) (int64, error)
+	DeleteLessonPackageRedemptionsByReservationID(ctx context.Context, reservationID sql.NullInt64) error
 	DeleteMember(ctx context.Context, id int64) error
 	DeleteOpenPlayRule(ctx context.Context, arg DeleteOpenPlayRuleParams) (int64, error)
 	DeleteOperatingHours(ctx context.Context, arg DeleteOperatingHoursParams) (int64, error)
@@ -99,6 +107,7 @@ type Querier interface {
 	// internal/db/queries/courts.sql
 	GetCourt(ctx context.Context, id int64) (Court, error)
 	GetCreatedMember(ctx context.Context) (GetCreatedMemberRow, error)
+	GetEligibleLessonPackageForUser(ctx context.Context, arg GetEligibleLessonPackageForUserParams) (LessonPackage, error)
 	GetEnrollmentCount(ctx context.Context, arg GetEnrollmentCountParams) (int64, error)
 	GetFacilityByID(ctx context.Context, id int64) (Facility, error)
 	// internal/db/queries/schedules.sql
@@ -110,6 +119,9 @@ type Querier interface {
 	GetLeagueStandingsData(ctx context.Context, leagueID int64) ([]GetLeagueStandingsDataRow, error)
 	GetLeagueTeam(ctx context.Context, id int64) (LeagueTeam, error)
 	GetLeagueWithFacilityTimezone(ctx context.Context, id int64) (GetLeagueWithFacilityTimezoneRow, error)
+	GetLessonPackage(ctx context.Context, arg GetLessonPackageParams) (LessonPackage, error)
+	GetLessonPackageRedemptionInfo(ctx context.Context, id int64) (GetLessonPackageRedemptionInfoRow, error)
+	GetLessonPackageType(ctx context.Context, arg GetLessonPackageTypeParams) (LessonPackageType, error)
 	GetMemberBilling(ctx context.Context, userID int64) (GetMemberBillingRow, error)
 	GetMemberByEmail(ctx context.Context, email sql.NullString) (User, error)
 	GetMemberByEmailIncludeDeleted(ctx context.Context, email sql.NullString) (User, error)
@@ -151,6 +163,9 @@ type Querier interface {
 	GetWaitlistConfig(ctx context.Context, facilityID int64) (WaitlistConfig, error)
 	GetWaitlistEntry(ctx context.Context, arg GetWaitlistEntryParams) (Waitlist, error)
 	IsMemberOpenPlayParticipant(ctx context.Context, arg IsMemberOpenPlayParticipantParams) (int64, error)
+	ListActiveLessonPackagesForUser(ctx context.Context, arg ListActiveLessonPackagesForUserParams) ([]LessonPackage, error)
+	ListActiveLessonPackagesForUserByFacility(ctx context.Context, arg ListActiveLessonPackagesForUserByFacilityParams) ([]LessonPackage, error)
+	ListActiveLessonPackagesForUserByOrganization(ctx context.Context, arg ListActiveLessonPackagesForUserByOrganizationParams) ([]LessonPackage, error)
 	ListActiveVisitPacksForUser(ctx context.Context, arg ListActiveVisitPacksForUserParams) ([]VisitPack, error)
 	ListActiveVisitPacksForUserByFacility(ctx context.Context, arg ListActiveVisitPacksForUserByFacilityParams) ([]VisitPack, error)
 	ListActiveVisitPacksForUserByOrganization(ctx context.Context, arg ListActiveVisitPacksForUserByOrganizationParams) ([]VisitPack, error)
@@ -170,6 +185,8 @@ type Querier interface {
 	ListLeagueMatchesWithReservations(ctx context.Context, leagueID int64) ([]ListLeagueMatchesWithReservationsRow, error)
 	ListLeagueTeams(ctx context.Context, leagueID int64) ([]LeagueTeam, error)
 	ListLeaguesByFacility(ctx context.Context, facilityID int64) ([]League, error)
+	ListLessonPackageRedemptionsByReservationID(ctx context.Context, reservationID sql.NullInt64) ([]ListLessonPackageRedemptionsByReservationIDRow, error)
+	ListLessonPackageTypes(ctx context.Context, facilityID int64) ([]LessonPackageType, error)
 	ListMatchingPendingWaitlistsForCancelledSlot(ctx context.Context, arg ListMatchingPendingWaitlistsForCancelledSlotParams) ([]Waitlist, error)
 	// Empty facility_ids intentionally yields zero rows (caller should prefilter).
 	ListMemberUpcomingOpenPlaySessions(ctx context.Context, arg ListMemberUpcomingOpenPlaySessionsParams) ([]ListMemberUpcomingOpenPlaySessionsRow, error)
@@ -216,6 +233,7 @@ type Querier interface {
 	RemoveParticipant(ctx context.Context, arg RemoveParticipantParams) error
 	RemoveReservationCourt(ctx context.Context, arg RemoveReservationCourtParams) error
 	RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error)
+	RestoreLessonPackageLesson(ctx context.Context, id int64) (LessonPackage, error)
 	RestoreMember(ctx context.Context, id int64) error
 	SearchMembers(ctx context.Context, arg SearchMembersParams) ([]SearchMembersRow, error)
 	UpdateBillingInfo(ctx context.Context, arg UpdateBillingInfoParams) (UserBilling, error)
@@ -228,6 +246,7 @@ type Querier interface {
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)
 	UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (League, error)
 	UpdateLeagueTeam(ctx context.Context, arg UpdateLeagueTeamParams) (LeagueTeam, error)
+	UpdateLessonPackageType(ctx context.Context, arg UpdateLessonPackageTypeParams) (LessonPackageType, error)
 	UpdateMatchResult(ctx context.Context, arg UpdateMatchResultParams) (LeagueMatch, error)
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) error
 	UpdateMemberEmail(ctx context.Context, arg UpdateMemberEmailParams) (User, error)
