@@ -587,6 +587,7 @@ CREATE INDEX idx_reservation_cancellations_reservation_id ON reservation_cancell
 CREATE INDEX idx_reservation_cancellations_cancelled_by_user_id ON reservation_cancellations(cancelled_by_user_id);
 CREATE INDEX idx_reservation_cancellations_cancelled_at ON reservation_cancellations(cancelled_at);
 CREATE INDEX idx_reservations_created_by_user_id ON reservations(created_by_user_id);
+CREATE INDEX idx_reservations_facility_id_start_time ON reservations(facility_id, start_time);
 
 ------ CANCELLATION POLICIES ------
 CREATE TABLE cancellation_policy_tiers (

@@ -136,7 +136,7 @@ func sendReservationReminder(ctx context.Context, database *db.DB, emailClient *
 	date, timeRange := email.FormatDateTimeRange(reservation.StartTime.In(facilityLoc), reservation.EndTime.In(facilityLoc))
 	reminder := email.BuildReminderEmail(email.ReminderDetails{
 		FacilityName:    facility.Name,
-		ReservationType: email.ReservationTypeLabel(reservationTypeName),
+		ReservationType: reservationTypeName,
 		Date:            date,
 		TimeRange:       timeRange,
 		Courts:          apiutil.ReservationCourtLabel(courtRows),
@@ -152,7 +152,7 @@ func sendReservationReminder(ctx context.Context, database *db.DB, emailClient *
 
 func resolveReminderHours(ctx context.Context, q *dbgen.Queries, facility dbgen.Facility, logger *zerolog.Logger) int64 {
 	reminderHours := facility.ReminderHoursBefore
-	useOrgFallback := reminderHours <= 0 || reminderHours == defaultReminderHoursBefore
+	useOrgFallback := reminderHours <= 0
 	if useOrgFallback && q != nil && facility.OrganizationID != 0 {
 		orgConfig, err := q.GetOrganizationReminderConfig(ctx, facility.OrganizationID)
 		if err != nil {
