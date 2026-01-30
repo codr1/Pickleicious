@@ -322,6 +322,14 @@ Organization (corporate entity)
 | visit_packs | Purchased packs owned by users (visits remaining, expiration) |
 | visit_pack_redemptions | Log of pack usage (links pack, facility, optional reservation) |
 
+### Lesson Package System
+
+| Table | Purpose |
+|-------|---------|
+| lesson_package_types | Package definitions per facility (name, price, lesson count, validity) |
+| lesson_packages | Purchased packages owned by users (lessons remaining, expiration) |
+| lesson_package_redemptions | Log of package usage (links package, facility, reservation) |
+
 ### Clinic System
 
 | Table | Purpose |
@@ -1064,6 +1072,80 @@ Organizations can enable `cross_facility_visit_packs` to allow packs purchased a
 | Deactivate pack type | DELETE `/api/v1/visit-pack-types/{id}` | Soft deactivate |
 | Sell pack | POST `/api/v1/visit-packs` | Staff creates pack for user |
 | List user packs | GET `/api/v1/users/{id}/visit-packs` | Staff or self |
+
+---
+
+## Lesson Packages
+
+Lesson packages allow facilities to sell prepaid lesson bundles to members. A member purchases a package (e.g., "5-Lesson Pack") and lessons are automatically redeemed when booking PRO_SESSION reservations.
+
+### Lesson Package Types
+
+Each facility defines lesson package types available for purchase:
+
+| Field | Description |
+|-------|-------------|
+| name | Display name (e.g., "5-Lesson Pack") |
+| price_cents | Price in cents |
+| lesson_count | Number of lessons included |
+| valid_days | Days until expiration from purchase |
+| status | active or inactive |
+
+Staff create and manage package types through the `/admin/lesson-packages` admin page.
+
+### Lesson Packages
+
+When a package is sold, a lesson_package record is created:
+
+| Field | Description |
+|-------|-------------|
+| pack_type_id | Reference to the package type |
+| user_id | Owner of the package |
+| purchase_date | When the package was purchased |
+| expires_at | Calculated from purchase_date + valid_days |
+| lessons_remaining | Decrements on each redemption |
+| status | active, expired, or depleted |
+
+### Redemption Flow
+
+Lesson packages are automatically redeemed when members book lessons:
+
+1. Member books a lesson (PRO_SESSION reservation)
+2. System checks for eligible packages (active, not expired, lessons_remaining > 0)
+3. If eligible package exists, a lesson is decremented from the oldest eligible package
+4. A redemption record is created linking package, facility, and reservation
+5. Staff-booked lessons also trigger automatic redemption
+
+### Cancellation Handling
+
+When a lesson reservation is cancelled:
+
+1. System looks up any lesson_package_redemptions linked to the reservation
+2. For each redemption, the lesson is restored to the package (if not expired and below max)
+3. Redemption records are deleted
+4. Expired packages or packages already at max lessons skip restoration
+
+### Lesson Package Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Facility scope | Packages are scoped to the facility where purchased |
+| Package Status | Must be 'active' (not expired or depleted) |
+| Expiration | Checked at booking time against current timestamp |
+| Lessons | Must have lessons_remaining > 0 |
+| Auto-redemption | Happens automatically during lesson booking |
+| Package Type Limit | Maximum 1000 package types per facility |
+
+### Admin Operations
+
+| Operation | Endpoint | Notes |
+|-----------|----------|-------|
+| List package types | GET `/api/v1/lesson-package-types` | Requires facility_id |
+| Create package type | POST `/api/v1/lesson-package-types` | Staff only |
+| Update package type | PUT `/api/v1/lesson-package-types/{id}` | Staff only |
+| Deactivate package type | DELETE `/api/v1/lesson-package-types/{id}` | Soft deactivate |
+| Sell package | POST `/api/v1/lesson-packages` | Staff creates package for user |
+| List user packages | GET `/api/v1/users/{id}/lesson-packages` | Staff or self |
 
 ---
 
@@ -1830,6 +1912,18 @@ Authorization failures are logged with facility_id and user_id.
 | DELETE | `/api/v1/visit-pack-types/{id}` | Deactivate visit pack type |
 | POST | `/api/v1/visit-packs` | Sell visit pack to user (staff only) |
 | GET | `/api/v1/users/{id}/visit-packs` | List user's active visit packs |
+
+### Lesson Packages
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/lesson-packages` | Lesson package types admin page |
+| GET | `/api/v1/lesson-package-types` | List lesson package types for facility |
+| POST | `/api/v1/lesson-package-types` | Create lesson package type |
+| PUT | `/api/v1/lesson-package-types/{id}` | Update lesson package type |
+| DELETE | `/api/v1/lesson-package-types/{id}` | Deactivate lesson package type |
+| POST | `/api/v1/lesson-packages` | Sell lesson package to user (staff only) |
+| GET | `/api/v1/users/{id}/lesson-packages` | List user's active lesson packages |
 
 ### Dashboard
 
@@ -2619,6 +2713,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
 | Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
 | Visit Pack Management | Complete | Pack type CRUD, pack sales, redemption at booking, cross-facility support |
+| Lesson Package Management | Complete | Package type CRUD, package sales, auto-redemption at lesson booking, cancellation restore |
 | League Management | Complete | League CRUD, team management, roster controls, schedule generation, match results, standings |
 | Reporting Dashboard | Complete | Utilization metrics, booking counts by type, cancellation rates, check-in counts, date range filtering |
 

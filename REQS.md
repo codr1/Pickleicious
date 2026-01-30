@@ -576,15 +576,6 @@ This section documents features that are standard in competing pickleball/sports
 - `lesson_min_notice_hours` facility setting (default: 24 hours) - booking must be at least this far in advance
 - Lessons count toward max_member_reservations limit
 
-<!-- BEGIN WIP: STORY-0044 -->
-**Lesson Packages:**
-| Feature | Description |
-|---------|-------------|
-| Package Creation | Bundle lessons at discount (e.g., 5 for $X) |
-| Package Tracking | Remaining lessons in package |
-| Expiration | Package validity period |
-| Transferability | Can package be shared/gifted |
-<!-- END WIP -->
 
 
 **Camps & Programs:**
