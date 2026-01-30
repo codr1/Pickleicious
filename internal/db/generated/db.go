@@ -291,6 +291,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getFacilityByIDStmt, err = db.PrepareContext(ctx, getFacilityByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetFacilityByID: %w", err)
 	}
+	if q.getFacilityEmailConfigStmt, err = db.PrepareContext(ctx, getFacilityEmailConfig); err != nil {
+		return nil, fmt.Errorf("error preparing query GetFacilityEmailConfig: %w", err)
+	}
 	if q.getFacilityHoursStmt, err = db.PrepareContext(ctx, getFacilityHours); err != nil {
 		return nil, fmt.Errorf("error preparing query GetFacilityHours: %w", err)
 	}
@@ -359,6 +362,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getOrganizationCrossFacilitySettingStmt, err = db.PrepareContext(ctx, getOrganizationCrossFacilitySetting); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrganizationCrossFacilitySetting: %w", err)
+	}
+	if q.getOrganizationEmailConfigStmt, err = db.PrepareContext(ctx, getOrganizationEmailConfig); err != nil {
+		return nil, fmt.Errorf("error preparing query GetOrganizationEmailConfig: %w", err)
 	}
 	if q.getPendingOfferStmt, err = db.PrepareContext(ctx, getPendingOffer); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPendingOffer: %w", err)
@@ -657,6 +663,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateFacilityBookingConfigStmt, err = db.PrepareContext(ctx, updateFacilityBookingConfig); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateFacilityBookingConfig: %w", err)
 	}
+	if q.updateFacilityEmailConfigStmt, err = db.PrepareContext(ctx, updateFacilityEmailConfig); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateFacilityEmailConfig: %w", err)
+	}
 	if q.updateFacilityVisitActivityStmt, err = db.PrepareContext(ctx, updateFacilityVisitActivity); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateFacilityVisitActivity: %w", err)
 	}
@@ -686,6 +695,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.updateOpenPlaySessionStatusStmt, err = db.PrepareContext(ctx, updateOpenPlaySessionStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateOpenPlaySessionStatus: %w", err)
+	}
+	if q.updateOrganizationEmailConfigStmt, err = db.PrepareContext(ctx, updateOrganizationEmailConfig); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateOrganizationEmailConfig: %w", err)
 	}
 	if q.updateReservationStmt, err = db.PrepareContext(ctx, updateReservation); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateReservation: %w", err)
@@ -1182,6 +1194,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getFacilityByIDStmt: %w", cerr)
 		}
 	}
+	if q.getFacilityEmailConfigStmt != nil {
+		if cerr := q.getFacilityEmailConfigStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getFacilityEmailConfigStmt: %w", cerr)
+		}
+	}
 	if q.getFacilityHoursStmt != nil {
 		if cerr := q.getFacilityHoursStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getFacilityHoursStmt: %w", cerr)
@@ -1295,6 +1312,11 @@ func (q *Queries) Close() error {
 	if q.getOrganizationCrossFacilitySettingStmt != nil {
 		if cerr := q.getOrganizationCrossFacilitySettingStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getOrganizationCrossFacilitySettingStmt: %w", cerr)
+		}
+	}
+	if q.getOrganizationEmailConfigStmt != nil {
+		if cerr := q.getOrganizationEmailConfigStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getOrganizationEmailConfigStmt: %w", cerr)
 		}
 	}
 	if q.getPendingOfferStmt != nil {
@@ -1792,6 +1814,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateFacilityBookingConfigStmt: %w", cerr)
 		}
 	}
+	if q.updateFacilityEmailConfigStmt != nil {
+		if cerr := q.updateFacilityEmailConfigStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateFacilityEmailConfigStmt: %w", cerr)
+		}
+	}
 	if q.updateFacilityVisitActivityStmt != nil {
 		if cerr := q.updateFacilityVisitActivityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateFacilityVisitActivityStmt: %w", cerr)
@@ -1840,6 +1867,11 @@ func (q *Queries) Close() error {
 	if q.updateOpenPlaySessionStatusStmt != nil {
 		if cerr := q.updateOpenPlaySessionStatusStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateOpenPlaySessionStatusStmt: %w", cerr)
+		}
+	}
+	if q.updateOrganizationEmailConfigStmt != nil {
+		if cerr := q.updateOrganizationEmailConfigStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateOrganizationEmailConfigStmt: %w", cerr)
 		}
 	}
 	if q.updateReservationStmt != nil {
@@ -2045,6 +2077,7 @@ type Queries struct {
 	getEligibleLessonPackageForUserStmt               *sql.Stmt
 	getEnrollmentCountStmt                            *sql.Stmt
 	getFacilityByIDStmt                               *sql.Stmt
+	getFacilityEmailConfigStmt                        *sql.Stmt
 	getFacilityHoursStmt                              *sql.Stmt
 	getFutureProSessionsByStaffIDStmt                 *sql.Stmt
 	getLatestCancellationByReservationIDStmt          *sql.Stmt
@@ -2068,6 +2101,7 @@ type Queries struct {
 	getOrganizationByIDStmt                           *sql.Stmt
 	getOrganizationBySlugStmt                         *sql.Stmt
 	getOrganizationCrossFacilitySettingStmt           *sql.Stmt
+	getOrganizationEmailConfigStmt                    *sql.Stmt
 	getPendingOfferStmt                               *sql.Stmt
 	getPhotoStmt                                      *sql.Stmt
 	getProLessonSlotsStmt                             *sql.Stmt
@@ -2167,6 +2201,7 @@ type Queries struct {
 	updateCourtStatusStmt                             *sql.Stmt
 	updateEnrollmentStatusStmt                        *sql.Stmt
 	updateFacilityBookingConfigStmt                   *sql.Stmt
+	updateFacilityEmailConfigStmt                     *sql.Stmt
 	updateFacilityVisitActivityStmt                   *sql.Stmt
 	updateLeagueStmt                                  *sql.Stmt
 	updateLeagueTeamStmt                              *sql.Stmt
@@ -2177,6 +2212,7 @@ type Queries struct {
 	updateOpenPlayRuleStmt                            *sql.Stmt
 	updateOpenPlaySessionCourtCountStmt               *sql.Stmt
 	updateOpenPlaySessionStatusStmt                   *sql.Stmt
+	updateOrganizationEmailConfigStmt                 *sql.Stmt
 	updateReservationStmt                             *sql.Stmt
 	updateSessionAutoScaleOverrideStmt                *sql.Stmt
 	updateStaffStmt                                   *sql.Stmt
@@ -2287,6 +2323,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getEligibleLessonPackageForUserStmt:               q.getEligibleLessonPackageForUserStmt,
 		getEnrollmentCountStmt:                            q.getEnrollmentCountStmt,
 		getFacilityByIDStmt:                               q.getFacilityByIDStmt,
+		getFacilityEmailConfigStmt:                        q.getFacilityEmailConfigStmt,
 		getFacilityHoursStmt:                              q.getFacilityHoursStmt,
 		getFutureProSessionsByStaffIDStmt:                 q.getFutureProSessionsByStaffIDStmt,
 		getLatestCancellationByReservationIDStmt:          q.getLatestCancellationByReservationIDStmt,
@@ -2310,6 +2347,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getOrganizationByIDStmt:                           q.getOrganizationByIDStmt,
 		getOrganizationBySlugStmt:                         q.getOrganizationBySlugStmt,
 		getOrganizationCrossFacilitySettingStmt:           q.getOrganizationCrossFacilitySettingStmt,
+		getOrganizationEmailConfigStmt:                    q.getOrganizationEmailConfigStmt,
 		getPendingOfferStmt:                               q.getPendingOfferStmt,
 		getPhotoStmt:                                      q.getPhotoStmt,
 		getProLessonSlotsStmt:                             q.getProLessonSlotsStmt,
@@ -2409,6 +2447,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateCourtStatusStmt:                             q.updateCourtStatusStmt,
 		updateEnrollmentStatusStmt:                        q.updateEnrollmentStatusStmt,
 		updateFacilityBookingConfigStmt:                   q.updateFacilityBookingConfigStmt,
+		updateFacilityEmailConfigStmt:                     q.updateFacilityEmailConfigStmt,
 		updateFacilityVisitActivityStmt:                   q.updateFacilityVisitActivityStmt,
 		updateLeagueStmt:                                  q.updateLeagueStmt,
 		updateLeagueTeamStmt:                              q.updateLeagueTeamStmt,
@@ -2419,6 +2458,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateOpenPlayRuleStmt:                            q.updateOpenPlayRuleStmt,
 		updateOpenPlaySessionCourtCountStmt:               q.updateOpenPlaySessionCourtCountStmt,
 		updateOpenPlaySessionStatusStmt:                   q.updateOpenPlaySessionStatusStmt,
+		updateOrganizationEmailConfigStmt:                 q.updateOrganizationEmailConfigStmt,
 		updateReservationStmt:                             q.updateReservationStmt,
 		updateSessionAutoScaleOverrideStmt:                q.updateSessionAutoScaleOverrideStmt,
 		updateStaffStmt:                                   q.updateStaffStmt,

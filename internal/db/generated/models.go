@@ -78,17 +78,19 @@ type Court struct {
 }
 
 type Facility struct {
-	ID                    int64         `json:"id"`
-	OrganizationID        int64         `json:"organizationId"`
-	Name                  string        `json:"name"`
-	Slug                  string        `json:"slug"`
-	Timezone              string        `json:"timezone"`
-	ActiveThemeID         sql.NullInt64 `json:"activeThemeId"`
-	MaxAdvanceBookingDays int64         `json:"maxAdvanceBookingDays"`
-	MaxMemberReservations int64         `json:"maxMemberReservations"`
-	LessonMinNoticeHours  int64         `json:"lessonMinNoticeHours"`
-	CreatedAt             time.Time     `json:"createdAt"`
-	UpdatedAt             time.Time     `json:"updatedAt"`
+	ID                    int64          `json:"id"`
+	OrganizationID        int64          `json:"organizationId"`
+	Name                  string         `json:"name"`
+	Slug                  string         `json:"slug"`
+	Timezone              string         `json:"timezone"`
+	ActiveThemeID         sql.NullInt64  `json:"activeThemeId"`
+	EmailFromAddress      sql.NullString `json:"emailFromAddress"`
+	MaxAdvanceBookingDays int64          `json:"maxAdvanceBookingDays"`
+	MaxMemberReservations int64          `json:"maxMemberReservations"`
+	LessonMinNoticeHours  int64          `json:"lessonMinNoticeHours"`
+	ReminderHoursBefore   int64          `json:"reminderHoursBefore"`
+	CreatedAt             time.Time      `json:"createdAt"`
+	UpdatedAt             time.Time      `json:"updatedAt"`
 }
 
 type FacilityVisit struct {
@@ -235,13 +237,14 @@ type OperatingHour struct {
 }
 
 type Organization struct {
-	ID                      int64     `json:"id"`
-	Name                    string    `json:"name"`
-	Slug                    string    `json:"slug"`
-	CrossFacilityVisitPacks bool      `json:"crossFacilityVisitPacks"`
-	Status                  string    `json:"status"`
-	CreatedAt               time.Time `json:"createdAt"`
-	UpdatedAt               time.Time `json:"updatedAt"`
+	ID                      int64          `json:"id"`
+	Name                    string         `json:"name"`
+	Slug                    string         `json:"slug"`
+	EmailFromAddress        sql.NullString `json:"emailFromAddress"`
+	CrossFacilityVisitPacks bool           `json:"crossFacilityVisitPacks"`
+	Status                  string         `json:"status"`
+	CreatedAt               time.Time      `json:"createdAt"`
+	UpdatedAt               time.Time      `json:"updatedAt"`
 }
 
 type ProUnavailability struct {
