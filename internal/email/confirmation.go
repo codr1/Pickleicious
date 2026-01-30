@@ -13,7 +13,7 @@ import (
 const confirmationEmailTimeout = 5 * time.Second
 
 // SendConfirmationEmail sends a confirmation email asynchronously.
-func SendConfirmationEmail(ctx context.Context, q *dbgen.Queries, client *SESClient, userID int64, confirmation ConfirmationEmail, logger *zerolog.Logger) {
+func SendConfirmationEmail(ctx context.Context, q *dbgen.Queries, client EmailSender, userID int64, confirmation ConfirmationEmail, logger *zerolog.Logger) {
 	if client == nil || q == nil {
 		return
 	}
@@ -37,8 +37,11 @@ func SendConfirmationEmail(ctx context.Context, q *dbgen.Queries, client *SESCli
 	}
 
 	go func() {
-		sendCtx, cancel := context.WithTimeout(context.Background(), confirmationEmailTimeout)
+		sendCtx, cancel := newEmailContext(ctx, confirmationEmailTimeout)
 		defer cancel()
+		if sendCtx.Err() != nil {
+			return
+		}
 		if err := client.Send(sendCtx, recipient, confirmation.Subject, confirmation.Body); err != nil && logger != nil {
 			logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send confirmation email")
 		}

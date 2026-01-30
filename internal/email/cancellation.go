@@ -15,7 +15,7 @@ import (
 const cancellationEmailTimeout = 5 * time.Second
 
 // SendCancellationEmail sends a cancellation email asynchronously.
-func SendCancellationEmail(ctx context.Context, q *dbgen.Queries, client *SESClient, userID int64, message ConfirmationEmail, sender string, logger *zerolog.Logger) {
+func SendCancellationEmail(ctx context.Context, q *dbgen.Queries, client EmailSender, userID int64, message ConfirmationEmail, sender string, logger *zerolog.Logger) {
 	if client == nil || q == nil {
 		return
 	}
@@ -45,8 +45,11 @@ func SendCancellationEmail(ctx context.Context, q *dbgen.Queries, client *SESCli
 	}
 
 	go func() {
-		sendCtx, cancel := context.WithTimeout(context.Background(), cancellationEmailTimeout)
+		sendCtx, cancel := newEmailContext(ctx, cancellationEmailTimeout)
 		defer cancel()
+		if sendCtx.Err() != nil {
+			return
+		}
 		if err := client.SendFrom(sendCtx, recipient, message.Subject, message.Body, sender); err != nil && logger != nil {
 			logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send cancellation email")
 		}

@@ -13,7 +13,7 @@ import (
 const reminderEmailTimeout = 5 * time.Second
 
 // SendReminderEmail sends a reminder email asynchronously.
-func SendReminderEmail(ctx context.Context, q *dbgen.Queries, client *SESClient, userID int64, message ConfirmationEmail, sender string, logger *zerolog.Logger) {
+func SendReminderEmail(ctx context.Context, q *dbgen.Queries, client EmailSender, userID int64, message ConfirmationEmail, sender string, logger *zerolog.Logger) {
 	if client == nil || q == nil {
 		return
 	}
@@ -37,8 +37,11 @@ func SendReminderEmail(ctx context.Context, q *dbgen.Queries, client *SESClient,
 	}
 
 	go func() {
-		sendCtx, cancel := context.WithTimeout(context.Background(), reminderEmailTimeout)
+		sendCtx, cancel := newEmailContext(ctx, reminderEmailTimeout)
 		defer cancel()
+		if sendCtx.Err() != nil {
+			return
+		}
 		if err := client.SendFrom(sendCtx, recipient, message.Subject, message.Body, sender); err != nil {
 			if logger != nil {
 				logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send reminder email")
