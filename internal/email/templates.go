@@ -30,6 +30,14 @@ type CancellationDetails struct {
 	FeeWaived        bool
 }
 
+type ReminderDetails struct {
+	FacilityName    string
+	ReservationType string
+	Date            string
+	TimeRange       string
+	Courts          string
+}
+
 func FormatDateTimeRange(start, end time.Time) (string, string) {
 	date := start.Format("Monday, Jan 2, 2006")
 	timeRange := fmt.Sprintf("%s - %s %s", start.Format("3:04 PM"), end.Format("3:04 PM"), start.Format("MST"))
@@ -106,6 +114,49 @@ func BuildCancellationEmail(details CancellationDetails) ConfirmationEmail {
 		lines = append(lines, "Fee waived: Yes")
 	} else if details.RefundPercentage != nil {
 		lines = append(lines, fmt.Sprintf("Refund: %d%%", *details.RefundPercentage))
+	}
+
+	return ConfirmationEmail{
+		Subject: subject,
+		Body:    strings.Join(lines, "\n"),
+	}
+}
+
+func BuildReminderEmail(details ReminderDetails) ConfirmationEmail {
+	facilityName := strings.TrimSpace(details.FacilityName)
+	if facilityName == "" {
+		facilityName = "your facility"
+	}
+	reservationType := strings.TrimSpace(details.ReservationType)
+	if reservationType == "" {
+		reservationType = "Reservation"
+	}
+	date := strings.TrimSpace(details.Date)
+	if date == "" {
+		date = "TBD"
+	}
+	timeRange := strings.TrimSpace(details.TimeRange)
+	if timeRange == "" {
+		timeRange = "TBD"
+	}
+	courts := strings.TrimSpace(details.Courts)
+	if courts == "" {
+		courts = "TBD"
+	}
+
+	subject := fmt.Sprintf("Upcoming %s Reminder", reservationType)
+	if facilityName != "" {
+		subject = fmt.Sprintf("%s - %s", subject, facilityName)
+	}
+
+	lines := []string{
+		fmt.Sprintf("Reminder: your %s booking is coming up.", reservationType),
+		"",
+		fmt.Sprintf("Facility: %s", facilityName),
+		fmt.Sprintf("Reservation type: %s", reservationType),
+		fmt.Sprintf("Date: %s", date),
+		fmt.Sprintf("Time: %s", timeRange),
+		fmt.Sprintf("Courts: %s", courts),
 	}
 
 	return ConfirmationEmail{

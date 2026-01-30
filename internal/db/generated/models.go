@@ -241,6 +241,7 @@ type Organization struct {
 	Name                    string         `json:"name"`
 	Slug                    string         `json:"slug"`
 	EmailFromAddress        sql.NullString `json:"emailFromAddress"`
+	ReminderHoursBefore     int64          `json:"reminderHoursBefore"`
 	CrossFacilityVisitPacks bool           `json:"crossFacilityVisitPacks"`
 	Status                  string         `json:"status"`
 	CreatedAt               time.Time      `json:"createdAt"`

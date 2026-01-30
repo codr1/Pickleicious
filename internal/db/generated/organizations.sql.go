@@ -106,6 +106,24 @@ func (q *Queries) GetOrganizationEmailConfig(ctx context.Context, id int64) (Get
 	return i, err
 }
 
+const getOrganizationReminderConfig = `-- name: GetOrganizationReminderConfig :one
+SELECT id, reminder_hours_before
+FROM organizations
+WHERE id = ?1
+`
+
+type GetOrganizationReminderConfigRow struct {
+	ID                  int64 `json:"id"`
+	ReminderHoursBefore int64 `json:"reminderHoursBefore"`
+}
+
+func (q *Queries) GetOrganizationReminderConfig(ctx context.Context, id int64) (GetOrganizationReminderConfigRow, error) {
+	row := q.queryRow(ctx, q.getOrganizationReminderConfigStmt, getOrganizationReminderConfig, id)
+	var i GetOrganizationReminderConfigRow
+	err := row.Scan(&i.ID, &i.ReminderHoursBefore)
+	return i, err
+}
+
 const listOrganizations = `-- name: ListOrganizations :many
 SELECT id, name, slug, email_from_address, status, created_at, updated_at
 FROM organizations

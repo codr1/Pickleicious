@@ -366,6 +366,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getOrganizationEmailConfigStmt, err = db.PrepareContext(ctx, getOrganizationEmailConfig); err != nil {
 		return nil, fmt.Errorf("error preparing query GetOrganizationEmailConfig: %w", err)
 	}
+	if q.getOrganizationReminderConfigStmt, err = db.PrepareContext(ctx, getOrganizationReminderConfig); err != nil {
+		return nil, fmt.Errorf("error preparing query GetOrganizationReminderConfig: %w", err)
+	}
 	if q.getPendingOfferStmt, err = db.PrepareContext(ctx, getPendingOffer); err != nil {
 		return nil, fmt.Errorf("error preparing query GetPendingOffer: %w", err)
 	}
@@ -569,6 +572,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listReservationsByUserIDStmt, err = db.PrepareContext(ctx, listReservationsByUserID); err != nil {
 		return nil, fmt.Errorf("error preparing query ListReservationsByUserID: %w", err)
+	}
+	if q.listReservationsStartingBetweenStmt, err = db.PrepareContext(ctx, listReservationsStartingBetween); err != nil {
+		return nil, fmt.Errorf("error preparing query ListReservationsStartingBetween: %w", err)
 	}
 	if q.listStaffStmt, err = db.PrepareContext(ctx, listStaff); err != nil {
 		return nil, fmt.Errorf("error preparing query ListStaff: %w", err)
@@ -1319,6 +1325,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getOrganizationEmailConfigStmt: %w", cerr)
 		}
 	}
+	if q.getOrganizationReminderConfigStmt != nil {
+		if cerr := q.getOrganizationReminderConfigStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getOrganizationReminderConfigStmt: %w", cerr)
+		}
+	}
 	if q.getPendingOfferStmt != nil {
 		if cerr := q.getPendingOfferStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getPendingOfferStmt: %w", cerr)
@@ -1657,6 +1668,11 @@ func (q *Queries) Close() error {
 	if q.listReservationsByUserIDStmt != nil {
 		if cerr := q.listReservationsByUserIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listReservationsByUserIDStmt: %w", cerr)
+		}
+	}
+	if q.listReservationsStartingBetweenStmt != nil {
+		if cerr := q.listReservationsStartingBetweenStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listReservationsStartingBetweenStmt: %w", cerr)
 		}
 	}
 	if q.listStaffStmt != nil {
@@ -2102,6 +2118,7 @@ type Queries struct {
 	getOrganizationBySlugStmt                         *sql.Stmt
 	getOrganizationCrossFacilitySettingStmt           *sql.Stmt
 	getOrganizationEmailConfigStmt                    *sql.Stmt
+	getOrganizationReminderConfigStmt                 *sql.Stmt
 	getPendingOfferStmt                               *sql.Stmt
 	getPhotoStmt                                      *sql.Stmt
 	getProLessonSlotsStmt                             *sql.Stmt
@@ -2170,6 +2187,7 @@ type Queries struct {
 	listReservationTypesStmt                          *sql.Stmt
 	listReservationsByDateRangeStmt                   *sql.Stmt
 	listReservationsByUserIDStmt                      *sql.Stmt
+	listReservationsStartingBetweenStmt               *sql.Stmt
 	listStaffStmt                                     *sql.Stmt
 	listStaffByFacilityStmt                           *sql.Stmt
 	listStaffByRoleStmt                               *sql.Stmt
@@ -2348,6 +2366,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getOrganizationBySlugStmt:                         q.getOrganizationBySlugStmt,
 		getOrganizationCrossFacilitySettingStmt:           q.getOrganizationCrossFacilitySettingStmt,
 		getOrganizationEmailConfigStmt:                    q.getOrganizationEmailConfigStmt,
+		getOrganizationReminderConfigStmt:                 q.getOrganizationReminderConfigStmt,
 		getPendingOfferStmt:                               q.getPendingOfferStmt,
 		getPhotoStmt:                                      q.getPhotoStmt,
 		getProLessonSlotsStmt:                             q.getProLessonSlotsStmt,
@@ -2416,6 +2435,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listReservationTypesStmt:                          q.listReservationTypesStmt,
 		listReservationsByDateRangeStmt:                   q.listReservationsByDateRangeStmt,
 		listReservationsByUserIDStmt:                      q.listReservationsByUserIDStmt,
+		listReservationsStartingBetweenStmt:               q.listReservationsStartingBetweenStmt,
 		listStaffStmt:                                     q.listStaffStmt,
 		listStaffByFacilityStmt:                           q.listStaffByFacilityStmt,
 		listStaffByRoleStmt:                               q.listStaffByRoleStmt,

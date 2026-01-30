@@ -26,6 +26,11 @@ SELECT id, email_from_address
 FROM organizations
 WHERE id = @id;
 
+-- name: GetOrganizationReminderConfig :one
+SELECT id, reminder_hours_before
+FROM organizations
+WHERE id = @id;
+
 -- name: UpdateOrganizationEmailConfig :one
 UPDATE organizations
 SET email_from_address = @email_from_address,

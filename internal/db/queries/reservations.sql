@@ -66,6 +66,21 @@ WHERE facility_id = @facility_id
   )
 ORDER BY start_time;
 
+-- name: ListReservationsStartingBetween :many
+SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    is_open_event, teams_per_court, people_per_team, created_at, updated_at
+FROM reservations
+WHERE facility_id = @facility_id
+  AND start_time >= @start_time
+  AND start_time < @end_time
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reservation_cancellations rcc
+      WHERE rcc.reservation_id = reservations.id
+  )
+ORDER BY start_time;
+
 -- name: ListReservationCourtsByDateRange :many
 SELECT rc.reservation_id, c.court_number
 FROM reservation_courts rc
