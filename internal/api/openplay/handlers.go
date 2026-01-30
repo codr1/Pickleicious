@@ -771,6 +771,8 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && facility.ID != 0 {
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), openPlayQueryTimeout)
+		defer emailCancel()
 		facilityLoc := time.Local
 		if facility.Timezone != "" {
 			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
@@ -792,7 +794,7 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 			Courts:             courtsLabel,
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(ctx, q, emailClient, payload.UserID, confirmation, logger)
+		email.SendConfirmationEmail(emailCtx, q, emailClient, payload.UserID, confirmation, logger)
 	}
 
 	if htmx.IsRequest(r) {

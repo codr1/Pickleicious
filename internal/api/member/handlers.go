@@ -774,7 +774,9 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && facilityLoaded {
-		cancellationPolicy, policyErr := cancellationPolicySummary(ctx, q, facility.ID, reservationTypeID, startTime, now)
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
+		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, reservationTypeID, startTime, now)
 		if policyErr != nil {
 			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")
 			cancellationPolicy = "Contact the facility for cancellation policy details."
@@ -787,7 +789,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 			Courts:             court.Name,
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(ctx, q, emailClient, user.ID, confirmation, logger)
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
@@ -1001,7 +1003,9 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && reservation.ID != 0 {
-		facility, err := q.GetFacilityByID(ctx, reservation.FacilityID)
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
+		facility, err := q.GetFacilityByID(emailCtx, reservation.FacilityID)
 		if err != nil {
 			logger.Error().Err(err).Int64("facility_id", reservation.FacilityID).Msg("Failed to load facility for cancellation email")
 		} else {
@@ -1024,7 +1028,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				Courts:           courtLabel,
 				RefundPercentage: &refund,
 			})
-			sender := email.ResolveFromAddress(ctx, q, facility, logger)
+			sender := email.ResolveFromAddress(emailCtx, q, facility, logger)
 			recipients := make(map[int64]struct{}, len(reservationParticipants)+1)
 			for _, participant := range reservationParticipants {
 				recipients[participant.ID] = struct{}{}
@@ -1033,7 +1037,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				recipients[reservation.PrimaryUserID.Int64] = struct{}{}
 			}
 			for participantID := range recipients {
-				email.SendCancellationEmail(ctx, q, emailClient, participantID, message, sender, logger)
+				email.SendCancellationEmail(emailCtx, q, emailClient, participantID, message, sender, logger)
 			}
 		}
 	}
@@ -1265,6 +1269,8 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && facility.ID != 0 {
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
 		facilityLoc := time.Local
 		if facility.Timezone != "" {
 			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
@@ -1286,7 +1292,7 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			Courts:             courtsLabel,
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(ctx, q, emailClient, user.ID, confirmation, logger)
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations,refreshMemberOpenPlay")
