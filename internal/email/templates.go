@@ -73,10 +73,7 @@ func BuildCancellationEmail(details CancellationDetails) ConfirmationEmail {
 	if facilityName == "" {
 		facilityName = "your facility"
 	}
-	reservationType := strings.TrimSpace(details.ReservationType)
-	if reservationType == "" {
-		reservationType = "Reservation"
-	}
+	reservationType := ReservationTypeLabel(details.ReservationType)
 	date := strings.TrimSpace(details.Date)
 	if date == "" {
 		date = "TBD"
@@ -127,10 +124,7 @@ func BuildReminderEmail(details ReminderDetails) ConfirmationEmail {
 	if facilityName == "" {
 		facilityName = "your facility"
 	}
-	reservationType := strings.TrimSpace(details.ReservationType)
-	if reservationType == "" {
-		reservationType = "Reservation"
-	}
+	reservationType := ReservationTypeLabel(details.ReservationType)
 	date := strings.TrimSpace(details.Date)
 	if date == "" {
 		date = "TBD"
@@ -178,6 +172,14 @@ func buildConfirmationEmail(reservationType, subjectPrefix string, details Confi
 	if cancellationPolicy == "" {
 		cancellationPolicy = "Contact the facility for cancellation policy details."
 	}
+	date := strings.TrimSpace(details.Date)
+	if date == "" {
+		date = "TBD"
+	}
+	timeRange := strings.TrimSpace(details.TimeRange)
+	if timeRange == "" {
+		timeRange = "TBD"
+	}
 
 	subject := subjectPrefix
 	if facilityName != "" {
@@ -189,8 +191,8 @@ func buildConfirmationEmail(reservationType, subjectPrefix string, details Confi
 		"",
 		fmt.Sprintf("Facility: %s", facilityName),
 		fmt.Sprintf("Reservation type: %s", reservationType),
-		fmt.Sprintf("Date: %s", strings.TrimSpace(details.Date)),
-		fmt.Sprintf("Time: %s", strings.TrimSpace(details.TimeRange)),
+		fmt.Sprintf("Date: %s", date),
+		fmt.Sprintf("Time: %s", timeRange),
 		fmt.Sprintf("Courts: %s", courts),
 		fmt.Sprintf("Cancellation policy: %s", cancellationPolicy),
 	}

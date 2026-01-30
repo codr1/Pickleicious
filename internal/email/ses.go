@@ -71,8 +71,8 @@ func (c *SESClient) Send(ctx context.Context, recipient, subject, body string) e
 	if _, err := c.client.SendEmail(ctx, input); err != nil {
 		log.Error().
 			Err(err).
-			Str("recipient", recipient).
-			Str("subject", subject).
+			Str("recipient_masked", maskEmail(recipient)).
+			Int("subject_len", len(subject)).
 			Time("timestamp", time.Now().UTC()).
 			Msg("Failed to send SES email")
 		return fmt.Errorf("send ses email: %w", err)
@@ -116,12 +116,21 @@ func (c *SESClient) SendFrom(ctx context.Context, recipient, subject, body, send
 	if _, err := c.client.SendEmail(ctx, input); err != nil {
 		log.Error().
 			Err(err).
-			Str("recipient", recipient).
-			Str("subject", subject).
+			Str("recipient_masked", maskEmail(recipient)).
+			Int("subject_len", len(subject)).
 			Time("timestamp", time.Now().UTC()).
 			Msg("Failed to send SES email")
 		return fmt.Errorf("send ses email: %w", err)
 	}
 
 	return nil
+}
+
+func maskEmail(email string) string {
+	email = strings.TrimSpace(email)
+	at := strings.LastIndex(email, "@")
+	if at <= 1 {
+		return "***"
+	}
+	return email[:1] + strings.Repeat("*", at-1) + email[at:]
 }

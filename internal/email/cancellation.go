@@ -19,6 +19,12 @@ func SendCancellationEmail(ctx context.Context, q *dbgen.Queries, client *SESCli
 	if client == nil || q == nil {
 		return
 	}
+	if userID <= 0 {
+		if logger != nil {
+			logger.Warn().Int64("user_id", userID).Msg("Skipping cancellation email with invalid user ID")
+		}
+		return
+	}
 	if message.Subject == "" || message.Body == "" {
 		return
 	}
@@ -42,7 +48,7 @@ func SendCancellationEmail(ctx context.Context, q *dbgen.Queries, client *SESCli
 		sendCtx, cancel := context.WithTimeout(context.Background(), cancellationEmailTimeout)
 		defer cancel()
 		if err := client.SendFrom(sendCtx, recipient, message.Subject, message.Body, sender); err != nil && logger != nil {
-			logger.Error().Err(err).Str("recipient", recipient).Msg("Failed to send cancellation email")
+			logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send cancellation email")
 		}
 	}()
 }

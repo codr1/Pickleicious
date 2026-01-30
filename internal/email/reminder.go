@@ -41,12 +41,12 @@ func SendReminderEmail(ctx context.Context, q *dbgen.Queries, client *SESClient,
 		defer cancel()
 		if err := client.SendFrom(sendCtx, recipient, message.Subject, message.Body, sender); err != nil {
 			if logger != nil {
-				logger.Error().Err(err).Str("recipient", recipient).Msg("Failed to send reminder email")
+				logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send reminder email")
 			}
 			return
 		}
 		if logger != nil {
-			logger.Info().Str("recipient", recipient).Int64("user_id", userID).Msg("Reminder email sent")
+			logger.Info().Int64("user_id", userID).Msg("Reminder email sent")
 		}
 	}()
 }
