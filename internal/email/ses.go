@@ -30,8 +30,11 @@ func NewSESClient(accessKeyID, secretAccessKey, region, sender string) (*SESClie
 		return nil, fmt.Errorf("ses sender is required")
 	}
 
+	initCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	awsCfg, err := awsconfig.LoadDefaultConfig(
-		context.Background(),
+		initCtx,
 		awsconfig.WithRegion(region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
 	)
@@ -40,7 +43,7 @@ func NewSESClient(accessKeyID, secretAccessKey, region, sender string) (*SESClie
 	}
 
 	sesClient := sesv2.NewFromConfig(awsCfg)
-	if err := verifySESIdentity(context.Background(), sesClient, sender); err != nil {
+	if err := verifySESIdentity(initCtx, sesClient, sender); err != nil {
 		return nil, err
 	}
 

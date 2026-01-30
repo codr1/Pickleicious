@@ -575,7 +575,9 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil {
-		cancellationPolicy, policyErr := cancellationPolicySummary(ctx, q, facility.ID, reservationTypeID, startTime, now)
+		emailCtx, cancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer cancel()
+		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, reservationTypeID, startTime, now)
 		if policyErr != nil {
 			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")
 			cancellationPolicy = "Contact the facility for cancellation policy details."
@@ -588,7 +590,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 			Courts:             "Assigned at check-in",
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(ctx, q, emailClient, user.ID, confirmation, logger)
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
