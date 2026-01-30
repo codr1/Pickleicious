@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -38,8 +39,13 @@ func NewSESClient(accessKeyID, secretAccessKey, region, sender string) (*SESClie
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
+	sesClient := sesv2.NewFromConfig(awsCfg)
+	if err := verifySESIdentity(context.Background(), sesClient, sender); err != nil {
+		return nil, err
+	}
+
 	return &SESClient{
-		client: sesv2.NewFromConfig(awsCfg),
+		client: sesClient,
 		sender: sender,
 	}, nil
 }
@@ -97,6 +103,11 @@ func (c *SESClient) SendFrom(ctx context.Context, recipient, subject, body, send
 	if from == "" {
 		return fmt.Errorf("sender is required")
 	}
+	if from != c.sender {
+		if err := verifySESIdentity(ctx, c.client, from); err != nil {
+			return fmt.Errorf("validate ses sender %q: %w", from, err)
+		}
+	}
 
 	input := &sesv2.SendEmailInput{
 		Destination: &types.Destination{
@@ -133,4 +144,61 @@ func maskEmail(email string) string {
 		return "***"
 	}
 	return email[:1] + strings.Repeat("*", at-1) + email[at:]
+}
+
+func verifySESIdentity(ctx context.Context, client *sesv2.Client, sender string) error {
+	if client == nil {
+		return fmt.Errorf("ses client is not initialized")
+	}
+
+	identity := strings.TrimSpace(sender)
+	if identity == "" {
+		return fmt.Errorf("ses sender is required")
+	}
+
+	if err := checkSESIdentity(ctx, client, identity); err == nil {
+		return nil
+	} else if !isSESIdentityNotFound(err) {
+		return fmt.Errorf("validate ses identity %q: %w", identity, err)
+	}
+
+	at := strings.LastIndex(identity, "@")
+	if at <= 0 || at == len(identity)-1 {
+		return fmt.Errorf("ses sender %q is not a verified identity", sender)
+	}
+
+	domain := identity[at+1:]
+	if err := checkSESIdentity(ctx, client, domain); err != nil {
+		if isSESIdentityNotFound(err) {
+			return fmt.Errorf("ses sender %q is not a verified identity", sender)
+		}
+		return fmt.Errorf("validate ses identity %q: %w", domain, err)
+	}
+
+	return nil
+}
+
+func checkSESIdentity(ctx context.Context, client *sesv2.Client, identity string) error {
+	output, err := client.GetEmailIdentity(ctx, &sesv2.GetEmailIdentityInput{
+		EmailIdentity: aws.String(identity),
+	})
+	if err != nil {
+		return err
+	}
+
+	if output.VerificationStatus != types.VerificationStatusSuccess || !output.VerifiedForSendingStatus {
+		return fmt.Errorf(
+			"ses identity %q is not verified for sending (status=%s, verified=%t)",
+			identity,
+			output.VerificationStatus,
+			output.VerifiedForSendingStatus,
+		)
+	}
+
+	return nil
+}
+
+func isSESIdentityNotFound(err error) bool {
+	var notFound *types.NotFoundException
+	return errors.As(err, &notFound)
 }

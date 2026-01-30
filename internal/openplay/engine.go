@@ -499,7 +499,7 @@ func (e *Engine) notifyOpenPlayCancellation(ctx context.Context, queries *dbgen.
 	refund := int64(100)
 	message := email.BuildCancellationEmail(email.CancellationDetails{
 		FacilityName:     facility.Name,
-		ReservationType:  email.ReservationTypeLabel("OPEN_PLAY"),
+		ReservationType:  "OPEN_PLAY",
 		Date:             date,
 		TimeRange:        timeRange,
 		Courts:           courtLabel,

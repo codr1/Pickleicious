@@ -909,7 +909,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 			refund := refundPercentage
 			message := email.BuildCancellationEmail(email.CancellationDetails{
 				FacilityName:     facility.Name,
-				ReservationType:  email.ReservationTypeLabel(reservationTypeName),
+				ReservationType:  reservationTypeName,
 				Date:             date,
 				TimeRange:        timeRange,
 				Courts:           courtLabel,
