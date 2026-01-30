@@ -13,10 +13,21 @@ type ConfirmationEmail struct {
 
 type ConfirmationDetails struct {
 	FacilityName       string
-	Date              string
+	Date               string
 	TimeRange          string
 	Courts             string
 	CancellationPolicy string
+}
+
+type CancellationDetails struct {
+	FacilityName     string
+	ReservationType  string
+	Date             string
+	TimeRange        string
+	Courts           string
+	Reason           string
+	RefundPercentage *int64
+	FeeWaived        bool
 }
 
 func FormatDateTimeRange(start, end time.Time) (string, string) {
@@ -35,6 +46,72 @@ func BuildProSessionConfirmation(details ConfirmationDetails) ConfirmationEmail 
 
 func BuildOpenPlayConfirmation(details ConfirmationDetails) ConfirmationEmail {
 	return buildConfirmationEmail("Open Play", "Open Play Signup Confirmed", details)
+}
+
+func ReservationTypeLabel(reservationType string) string {
+	switch strings.TrimSpace(reservationType) {
+	case "OPEN_PLAY":
+		return "Open Play"
+	case "PRO_SESSION":
+		return "Pro Session"
+	case "GAME":
+		return "Court Reservation"
+	}
+	return "Reservation"
+}
+
+func BuildCancellationEmail(details CancellationDetails) ConfirmationEmail {
+	facilityName := strings.TrimSpace(details.FacilityName)
+	if facilityName == "" {
+		facilityName = "your facility"
+	}
+	reservationType := strings.TrimSpace(details.ReservationType)
+	if reservationType == "" {
+		reservationType = "Reservation"
+	}
+	date := strings.TrimSpace(details.Date)
+	if date == "" {
+		date = "TBD"
+	}
+	timeRange := strings.TrimSpace(details.TimeRange)
+	if timeRange == "" {
+		timeRange = "TBD"
+	}
+	courts := strings.TrimSpace(details.Courts)
+	if courts == "" {
+		courts = "TBD"
+	}
+
+	subject := fmt.Sprintf("%s Cancelled", reservationType)
+	if facilityName != "" {
+		subject = fmt.Sprintf("%s - %s", subject, facilityName)
+	}
+
+	lines := []string{
+		fmt.Sprintf("Your %s booking has been cancelled.", reservationType),
+		"",
+		fmt.Sprintf("Facility: %s", facilityName),
+		fmt.Sprintf("Reservation type: %s", reservationType),
+		fmt.Sprintf("Date: %s", date),
+		fmt.Sprintf("Time: %s", timeRange),
+		fmt.Sprintf("Courts: %s", courts),
+	}
+
+	reason := strings.TrimSpace(details.Reason)
+	if reason != "" {
+		lines = append(lines, fmt.Sprintf("Reason: %s", reason))
+	}
+
+	if details.FeeWaived {
+		lines = append(lines, "Fee waived: Yes")
+	} else if details.RefundPercentage != nil {
+		lines = append(lines, fmt.Sprintf("Refund: %d%%", *details.RefundPercentage))
+	}
+
+	return ConfirmationEmail{
+		Subject: subject,
+		Body:    strings.Join(lines, "\n"),
+	}
 }
 
 func buildConfirmationEmail(reservationType, subjectPrefix string, details ConfirmationDetails) ConfirmationEmail {

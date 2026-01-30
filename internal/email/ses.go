@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -65,6 +66,51 @@ func (c *SESClient) Send(ctx context.Context, recipient, subject, body string) e
 			},
 		},
 		FromEmailAddress: aws.String(c.sender),
+	}
+
+	if _, err := c.client.SendEmail(ctx, input); err != nil {
+		log.Error().
+			Err(err).
+			Str("recipient", recipient).
+			Str("subject", subject).
+			Time("timestamp", time.Now().UTC()).
+			Msg("Failed to send SES email")
+		return fmt.Errorf("send ses email: %w", err)
+	}
+
+	return nil
+}
+
+// SendFrom delivers a simple email using an optional sender override.
+func (c *SESClient) SendFrom(ctx context.Context, recipient, subject, body, sender string) error {
+	if c == nil || c.client == nil {
+		return fmt.Errorf("ses client is not initialized")
+	}
+	if recipient == "" {
+		return fmt.Errorf("recipient is required")
+	}
+
+	from := strings.TrimSpace(sender)
+	if from == "" {
+		from = c.sender
+	}
+	if from == "" {
+		return fmt.Errorf("sender is required")
+	}
+
+	input := &sesv2.SendEmailInput{
+		Destination: &types.Destination{
+			ToAddresses: []string{recipient},
+		},
+		Content: &types.EmailContent{
+			Simple: &types.Message{
+				Subject: &types.Content{Data: aws.String(subject)},
+				Body: &types.Body{
+					Text: &types.Content{Data: aws.String(body)},
+				},
+			},
+		},
+		FromEmailAddress: aws.String(from),
 	}
 
 	if _, err := c.client.SendEmail(ctx, input); err != nil {

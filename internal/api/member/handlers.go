@@ -827,16 +827,21 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	confirmCancellation := requestCancellationConfirm(r)
 
 	var refundPercentage int64
+	var reservation dbgen.Reservation
+	var reservationCourts []dbgen.ListReservationCourtsRow
+	var reservationParticipants []dbgen.ListParticipantsForReservationRow
+	var reservationTypeName string
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
-		reservation, err := qtx.GetReservationByID(ctx, reservationID)
+		loadedReservation, err := qtx.GetReservationByID(ctx, reservationID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: err}
 			}
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch reservation", Err: err}
 		}
+		reservation = loadedReservation
 		if !reservation.PrimaryUserID.Valid || reservation.PrimaryUserID.Int64 != user.ID {
 			return apiutil.HandlerError{Status: http.StatusForbidden, Message: "Forbidden"}
 		}
@@ -866,7 +871,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				HoursBeforeStart: hoursBeforeStart,
 				StartTime:        reservation.StartTime,
 				EndTime:          reservation.EndTime,
-				CourtName:        reservationCourtLabel(courts),
+				CourtName:        apiutil.ReservationCourtLabel(courts),
 				FacilityName:     facility.Name,
 				ExpiresAt:        calculatedAt.Add(cancellationPenaltyWindow),
 				CalculatedAt:     calculatedAt,
@@ -925,6 +930,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
 		}
+		reservationCourts = courts
 		for _, court := range courts {
 			if err := qtx.RemoveReservationCourt(ctx, dbgen.RemoveReservationCourtParams{
 				ReservationID: reservationID,
@@ -938,6 +944,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation participants", Err: err}
 		}
+		reservationParticipants = participants
 		for _, participant := range participants {
 			if err := qtx.RemoveParticipant(ctx, dbgen.RemoveParticipantParams{
 				ReservationID: reservationID,
@@ -946,6 +953,12 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove reservation participant", Err: err}
 			}
 		}
+
+		name, err := qtx.GetReservationTypeNameByReservationID(ctx, reservationID)
+		if err != nil {
+			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation type", Err: err}
+		}
+		reservationTypeName = name
 
 		return nil
 	})
@@ -985,6 +998,44 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to cancel reservation")
 		http.Error(w, "Failed to cancel reservation", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil && reservation.ID != 0 {
+		facility, err := q.GetFacilityByID(ctx, reservation.FacilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", reservation.FacilityID).Msg("Failed to load facility for cancellation email")
+		} else {
+			facilityLoc := time.Local
+			if facility.Timezone != "" {
+				if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+					facilityLoc = loadedLoc
+				} else {
+					logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for cancellation email")
+				}
+			}
+			date, timeRange := email.FormatDateTimeRange(reservation.StartTime.In(facilityLoc), reservation.EndTime.In(facilityLoc))
+			courtLabel := apiutil.ReservationCourtLabel(reservationCourts)
+			refund := refundPercentage
+			message := email.BuildCancellationEmail(email.CancellationDetails{
+				FacilityName:     facility.Name,
+				ReservationType:  email.ReservationTypeLabel(reservationTypeName),
+				Date:             date,
+				TimeRange:        timeRange,
+				Courts:           courtLabel,
+				RefundPercentage: &refund,
+			})
+			sender := email.ResolveFromAddress(ctx, q, facility, logger)
+			recipients := make(map[int64]struct{}, len(reservationParticipants)+1)
+			for _, participant := range reservationParticipants {
+				recipients[participant.ID] = struct{}{}
+			}
+			if reservation.PrimaryUserID.Valid {
+				recipients[reservation.PrimaryUserID.Int64] = struct{}{}
+			}
+			for participantID := range recipients {
+				email.SendCancellationEmail(ctx, q, emailClient, participantID, message, sender, logger)
+			}
+		}
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
@@ -1426,17 +1477,6 @@ func requestCancellationPenaltyDetails(r *http.Request) (time.Time, int64, bool)
 		}
 	}
 	return calculatedAt, hoursBeforeStart, true
-}
-
-func reservationCourtLabel(courts []dbgen.ListReservationCourtsRow) string {
-	if len(courts) == 0 {
-		return "TBD"
-	}
-	labels := make([]string, len(courts))
-	for i, court := range courts {
-		labels[i] = fmt.Sprintf("Court %d", court.CourtNumber)
-	}
-	return strings.Join(labels, ", ")
 }
 
 func requestedFacilityID(r *http.Request) *int64 {

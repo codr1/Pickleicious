@@ -89,7 +89,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	dashboard.InitHandlers(database)
 	checkin.InitHandlers(database.Queries)
 	clinics.InitHandlers(database)
-	reservations.InitHandlers(database)
+	reservations.InitHandlers(database, emailClient)
 	member.InitHandlers(database, emailClient)
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
@@ -105,7 +105,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
 	}
 
-	openplayEngine, err := openplayengine.NewEngine(database)
+	openplayEngine, err := openplayengine.NewEngine(database, emailClient)
 	if err != nil {
 		return nil, fmt.Errorf("initialize open play engine: %w", err)
 	}
