@@ -20,6 +20,7 @@ SELECT
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    tier_booking_enabled,
     created_at,
     updated_at
 FROM facilities
@@ -39,6 +40,7 @@ func (q *Queries) GetFacilityByID(ctx context.Context, id int64) (Facility, erro
 		&i.MaxAdvanceBookingDays,
 		&i.MaxMemberReservations,
 		&i.LessonMinNoticeHours,
+		&i.TierBookingEnabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -57,6 +59,7 @@ SELECT
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    tier_booking_enabled,
     created_at,
     updated_at
 FROM facilities
@@ -83,6 +86,7 @@ func (q *Queries) ListFacilities(ctx context.Context) ([]Facility, error) {
 			&i.MaxAdvanceBookingDays,
 			&i.MaxMemberReservations,
 			&i.LessonMinNoticeHours,
+			&i.TierBookingEnabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -116,6 +120,7 @@ RETURNING
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    tier_booking_enabled,
     created_at,
     updated_at
 `
@@ -145,6 +150,7 @@ func (q *Queries) UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFac
 		&i.MaxAdvanceBookingDays,
 		&i.MaxMemberReservations,
 		&i.LessonMinNoticeHours,
+		&i.TierBookingEnabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

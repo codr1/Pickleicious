@@ -11,6 +11,7 @@ SELECT
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    tier_booking_enabled,
     created_at,
     updated_at
 FROM facilities
@@ -27,6 +28,7 @@ SELECT
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    tier_booking_enabled,
     created_at,
     updated_at
 FROM facilities
@@ -49,5 +51,6 @@ RETURNING
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    tier_booking_enabled,
     created_at,
     updated_at;
