@@ -618,6 +618,20 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 
 	// Tier booking API
+	mux.Handle("/api/v1/booking-windows", api.ChainMiddleware(
+		http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+			http.MethodGet: tierbooking.HandleGetBookingWindows,
+		})),
+		api.WithStaffAuth,
+	))
+	mux.Handle("/api/v1/booking-windows/{tier}", api.ChainMiddleware(
+		http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+			http.MethodPost:   tierbooking.HandleTierEndpoint,
+			http.MethodPut:    tierbooking.HandleTierEndpoint,
+			http.MethodDelete: tierbooking.HandleTierEndpoint,
+		})),
+		api.WithStaffAuth,
+	))
 	mux.HandleFunc("/api/v1/tier-booking/toggle", methodHandler(map[string]http.HandlerFunc{
 		http.MethodPost: tierbooking.HandleTierBookingToggle,
 	}))

@@ -28,6 +28,7 @@ const (
 	defaultMemberMaxAdvanceDays  = int64(7)
 	defaultMemberPlusAdvanceDays = int64(14)
 	maxAdvanceDaysLimit          = int64(364)
+	tierPathKey                  = "tier"
 )
 
 var (
@@ -37,6 +38,25 @@ var (
 )
 
 var tierMembershipLevels = []int64{0, 1, 2, 3}
+
+type bookingWindowsResponse struct {
+	FacilityID                    int64                      `json:"facilityId"`
+	TierBookingEnabled            bool                       `json:"tierBookingEnabled"`
+	FacilityDefaultMaxAdvanceDays int64                      `json:"facilityDefaultMaxAdvanceDays"`
+	Windows                       []tierBookingWindowSummary `json:"windows"`
+}
+
+type tierBookingWindowSummary struct {
+	MembershipLevel int64  `json:"membershipLevel"`
+	Label           string `json:"label"`
+	MaxAdvanceDays  int64  `json:"maxAdvanceDays"`
+	Note            string `json:"note"`
+}
+
+type tierBookingWindowRequest struct {
+	FacilityID     *int64 `json:"facilityId"`
+	MaxAdvanceDays *int64 `json:"maxAdvanceDays"`
+}
 
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
@@ -102,6 +122,168 @@ func HandleTierBookingPage(w http.ResponseWriter, r *http.Request) {
 	page := layouts.Base(tierbookingtempl.TierBookingLayout(pageData), activeTheme, sessionType)
 	if !apiutil.RenderHTMLComponent(r.Context(), w, page, nil, "Failed to render tier booking page", "Failed to render page") {
 		return
+	}
+}
+
+// GET /api/v1/booking-windows?facility_id=X
+func HandleGetBookingWindows(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	facilityID, err := apiutil.FacilityIDFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), tierBookingQueryTimeout)
+	defer cancel()
+
+	facility, err := q.GetFacilityByID(ctx, facilityID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Facility not found", http.StatusNotFound)
+			return
+		}
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to fetch facility")
+		http.Error(w, "Failed to load booking windows", http.StatusInternalServerError)
+		return
+	}
+
+	windows, err := q.ListTierBookingWindowsForFacility(ctx, facilityID)
+	if err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to list tier booking windows")
+		http.Error(w, "Failed to load booking windows", http.StatusInternalServerError)
+		return
+	}
+
+	response := buildBookingWindowsResponse(facility, windows)
+	if err := apiutil.WriteJSON(w, http.StatusOK, response); err != nil {
+		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to write booking windows response")
+	}
+}
+
+// POST/PUT/DELETE /api/v1/booking-windows/{tier}
+func HandleTierEndpoint(w http.ResponseWriter, r *http.Request) {
+	logger := log.Ctx(r.Context())
+
+	q := loadQueries()
+	if q == nil {
+		logger.Error().Msg("Database queries not initialized")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	tier, err := tierLevelFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost, http.MethodPut:
+		req, err := decodeTierBookingWindowRequest(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		facilityID, err := apiutil.FacilityIDFromRequest(r, req.FacilityID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+			return
+		}
+
+		if req.MaxAdvanceDays == nil {
+			http.Error(w, "maxAdvanceDays is required", http.StatusBadRequest)
+			return
+		}
+
+		maxAdvanceDays, err := validateMaxAdvanceDays(*req.MaxAdvanceDays, "maxAdvanceDays")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), tierBookingQueryTimeout)
+		defer cancel()
+
+		window, err := q.UpsertTierBookingWindow(ctx, dbgen.UpsertTierBookingWindowParams{
+			FacilityID:      facilityID,
+			MembershipLevel: tier,
+			MaxAdvanceDays:  maxAdvanceDays,
+		})
+		if err != nil {
+			if apiutil.IsSQLiteForeignKeyViolation(err) {
+				http.Error(w, "Facility not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("membership_level", tier).Msg("Failed to upsert tier booking window")
+			http.Error(w, "Failed to update booking window", http.StatusInternalServerError)
+			return
+		}
+
+		status := http.StatusOK
+		if r.Method == http.MethodPost {
+			status = http.StatusCreated
+		}
+
+		response := tierBookingWindowSummary{
+			MembershipLevel: window.MembershipLevel,
+			Label:           tierLabel(window.MembershipLevel),
+			MaxAdvanceDays:  window.MaxAdvanceDays,
+			Note:            tierNote(window.MembershipLevel),
+		}
+		if err := apiutil.WriteJSON(w, status, response); err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("membership_level", tier).Msg("Failed to write booking window response")
+		}
+	case http.MethodDelete:
+		facilityID, err := apiutil.FacilityIDFromQuery(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), tierBookingQueryTimeout)
+		defer cancel()
+
+		deleted, err := q.DeleteTierBookingWindow(ctx, dbgen.DeleteTierBookingWindowParams{
+			FacilityID:      facilityID,
+			MembershipLevel: tier,
+		})
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("membership_level", tier).Msg("Failed to delete tier booking window")
+			http.Error(w, "Failed to delete booking window", http.StatusInternalServerError)
+			return
+		}
+		if deleted == 0 {
+			http.Error(w, "Booking window not found", http.StatusNotFound)
+			return
+		}
+
+		if err := apiutil.WriteJSON(w, http.StatusOK, map[string]any{"deleted": true}); err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Int64("membership_level", tier).Msg("Failed to write booking window delete response")
+		}
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -338,6 +520,77 @@ func parseMaxAdvanceDays(value string, field string) (int64, error) {
 		return 0, fmt.Errorf("%s must be %d or less", field, maxAdvanceDaysLimit)
 	}
 	return parsed, nil
+}
+
+func validateMaxAdvanceDays(value int64, field string) (int64, error) {
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", field)
+	}
+	if value > maxAdvanceDaysLimit {
+		return 0, fmt.Errorf("%s must be %d or less", field, maxAdvanceDaysLimit)
+	}
+	return value, nil
+}
+
+func tierLevelFromRequest(r *http.Request) (int64, error) {
+	raw := strings.TrimSpace(r.PathValue(tierPathKey))
+	if raw == "" {
+		return 0, fmt.Errorf("tier is required")
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 || value > 3 {
+		return 0, fmt.Errorf("tier must be between 0 and 3")
+	}
+	return value, nil
+}
+
+func decodeTierBookingWindowRequest(r *http.Request) (tierBookingWindowRequest, error) {
+	if apiutil.IsJSONRequest(r) {
+		var req tierBookingWindowRequest
+		if err := apiutil.DecodeJSON(r, &req); err != nil {
+			return req, err
+		}
+		return req, nil
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return tierBookingWindowRequest{}, err
+	}
+
+	facilityID, err := apiutil.ParseOptionalInt64Field(apiutil.FirstNonEmpty(r.FormValue("facility_id"), r.FormValue("facilityId")), "facility_id")
+	if err != nil {
+		return tierBookingWindowRequest{}, err
+	}
+
+	maxAdvanceDays, err := parseMaxAdvanceDays(apiutil.FirstNonEmpty(r.FormValue("max_advance_days"), r.FormValue("maxAdvanceDays")), "max_advance_days")
+	if err != nil {
+		return tierBookingWindowRequest{}, err
+	}
+
+	return tierBookingWindowRequest{
+		FacilityID:     facilityID,
+		MaxAdvanceDays: &maxAdvanceDays,
+	}, nil
+}
+
+func buildBookingWindowsResponse(facility dbgen.Facility, windows []dbgen.MemberTierBookingWindow) bookingWindowsResponse {
+	pageData := newTierBookingPageData(facility, windows)
+	responseWindows := make([]tierBookingWindowSummary, 0, len(pageData.Windows))
+	for _, window := range pageData.Windows {
+		responseWindows = append(responseWindows, tierBookingWindowSummary{
+			MembershipLevel: window.MembershipLevel,
+			Label:           window.Label,
+			MaxAdvanceDays:  window.MaxAdvanceDays,
+			Note:            window.Note,
+		})
+	}
+
+	return bookingWindowsResponse{
+		FacilityID:                    pageData.FacilityID,
+		TierBookingEnabled:            pageData.TierBookingEnabled,
+		FacilityDefaultMaxAdvanceDays: pageData.FacilityDefaultMaxAdvanceDays,
+		Windows:                       responseWindows,
+	}
 }
 
 func newTierBookingPageData(facility dbgen.Facility, windows []dbgen.MemberTierBookingWindow) tierbookingtempl.TierBookingPageData {
