@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 ALTER TABLE organizations
 ADD COLUMN email_from_address TEXT;
 

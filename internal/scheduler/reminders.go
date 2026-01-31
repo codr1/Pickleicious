@@ -142,6 +142,12 @@ func sendReservationReminder(ctx context.Context, database *db.DB, emailClient *
 		Courts:          apiutil.ReservationCourtLabel(courtRows),
 	})
 	sender := email.ResolveFromAddress(ctx, database.Queries, facility, logger)
+	if sender == "" {
+		if logger != nil {
+			logger.Warn().Int64("facility_id", facility.ID).Msg("Skipping reminder emails: missing from address")
+		}
+		return nil
+	}
 
 	for userID := range recipientIDs {
 		email.SendReminderEmail(ctx, database.Queries, emailClient, userID, reminder, sender, logger)

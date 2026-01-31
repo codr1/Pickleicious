@@ -703,19 +703,6 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		if emailClient != nil {
-			rule, err = qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
-				ID:         session.OpenPlayRuleID,
-				FacilityID: facilityID,
-			})
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
-				}
-				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play rule", Err: err}
-			}
-		}
-
 		participants, err := qtx.ListOpenPlayParticipants(ctx, dbgen.ListOpenPlayParticipantsParams{
 			FacilityID:     facilityID,
 			OpenPlayRuleID: sql.NullInt64{Int64: session.OpenPlayRuleID, Valid: true},
@@ -777,6 +764,21 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && facility.ID != 0 {
+		var ruleErr error
+		rule, ruleErr = q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: facilityID,
+		})
+		if ruleErr != nil {
+			logger.Error().
+				Err(ruleErr).
+				Int64("open_play_rule_id", session.OpenPlayRuleID).
+				Int64("facility_id", facilityID).
+				Msg("Failed to load open play rule for confirmation email")
+		}
+	}
+
+	if emailClient != nil && facility.ID != 0 {
 		facilityLoc := time.Local
 		if facility.Timezone != "" {
 			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
@@ -790,7 +792,10 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 		if session.CurrentCourtCount == 1 {
 			courtsLabel = "1 court"
 		}
-		cancellationPolicy := fmt.Sprintf("Cancel at least %d minutes before start time to avoid penalties.", rule.CancellationCutoffMinutes)
+		cancellationPolicy := "Contact the facility for cancellation policy details."
+		if rule.ID != 0 {
+			cancellationPolicy = fmt.Sprintf("Cancel at least %d minutes before start time to avoid penalties.", rule.CancellationCutoffMinutes)
+		}
 		confirmation := email.BuildOpenPlayConfirmation(email.ConfirmationDetails{
 			FacilityName:       facility.Name,
 			Date:               date,

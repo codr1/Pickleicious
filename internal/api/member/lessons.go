@@ -590,6 +590,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 			Courts:             "Assigned at check-in",
 			CancellationPolicy: cancellationPolicy,
 		})
+		// Use the bounded context for the initial user lookup; async send detaches inside SendConfirmationEmail.
 		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 

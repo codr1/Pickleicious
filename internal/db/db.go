@@ -33,6 +33,10 @@ func New(dataSourceName string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening database: %w", err)
 	}
+	if err := enableSQLiteForeignKeys(sqlDB); err != nil {
+		sqlDB.Close()
+		return nil, err
+	}
 
 	// Run migrations
 	if err := runMigrations(sqlDB); err != nil {
@@ -62,6 +66,12 @@ func NewFromConfig(cfg *config.Config) (*DB, error) {
 		}
 		dataSourceName := ensureForeignKeysEnabledDSN(cfg.Database.Filename)
 		db, err = sql.Open("sqlite3", dataSourceName)
+		if err == nil {
+			if err := enableSQLiteForeignKeys(db); err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
 
 	case "turso":
 		// Example for future Turso support
@@ -97,6 +107,16 @@ func ensureForeignKeysEnabledDSN(dataSourceName string) string {
 		return dataSourceName + "&_fk=1"
 	}
 	return dataSourceName + "?_fk=1"
+}
+
+func enableSQLiteForeignKeys(db *sql.DB) error {
+	if db == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("error enabling sqlite foreign keys: %w", err)
+	}
+	return nil
 }
 
 func runMigrations(db *sql.DB) error {
