@@ -682,9 +682,13 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
-	facility, facilityErr := q.GetFacilityByID(ctx, facilityID)
-	if facilityErr != nil {
-		logger.Error().Err(facilityErr).Int64("facility_id", facilityID).Msg("Failed to load facility for confirmation email")
+	var facility dbgen.Facility
+	var facilityErr error
+	if emailClient != nil {
+		facility, facilityErr = q.GetFacilityByID(ctx, facilityID)
+		if facilityErr != nil {
+			logger.Error().Err(facilityErr).Int64("facility_id", facilityID).Msg("Failed to load facility for confirmation email")
+		}
 	}
 
 	var participant dbgen.ReservationParticipant
@@ -699,15 +703,17 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 
-		rule, err = qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
-			ID:         session.OpenPlayRuleID,
-			FacilityID: facilityID,
-		})
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
+		if emailClient != nil {
+			rule, err = qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+				ID:         session.OpenPlayRuleID,
+				FacilityID: facilityID,
+			})
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Open play rule not found", Err: err}
+				}
+				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play rule", Err: err}
 			}
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch open play rule", Err: err}
 		}
 
 		participants, err := qtx.ListOpenPlayParticipants(ctx, dbgen.ListOpenPlayParticipantsParams{
@@ -792,7 +798,9 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 			Courts:             courtsLabel,
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(context.Background(), q, emailClient, payload.UserID, confirmation, logger)
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), openPlayQueryTimeout)
+		defer emailCancel()
+		email.SendConfirmationEmail(emailCtx, q, emailClient, payload.UserID, confirmation, logger)
 	}
 
 	if htmx.IsRequest(r) {
