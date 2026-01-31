@@ -18,6 +18,7 @@ It operates as a multi-tenant SaaS platform, enabling indoor pickleball venues t
 | Migrations | golang-migrate |
 | Logging | Zerolog |
 | Auth | AWS Cognito SDK v2, bcrypt (local) |
+| Email | AWS SES v2 |
 | Scheduler | gocron v2 |
 | Interactivity | HTMX 1.9.10 |
 | Styling | Tailwind CSS 3.4 |
@@ -2673,14 +2674,94 @@ Notifications are scoped by facility:
 - Staff with `home_facility_id` see only their facility's notifications
 - Corporate-level staff (`home_facility_id = NULL`) see all notifications
 
-### Planned: Member Communications
+---
 
-Planned delivery channels: email, SMS, push notifications (mobile app)
+## Email Notifications
 
-- Reservation confirmations
-- Session cancellation notices
-- Waitlist openings
-- Upcoming reservation reminders
+Members receive email notifications for key booking events via AWS SES. Emails are sent asynchronously to avoid blocking request handling.
+
+### Configuration
+
+Email functionality requires four environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `SES_ACCESS_KEY_ID` | AWS IAM access key with SES permissions |
+| `SES_SECRET_ACCESS_KEY` | AWS IAM secret key |
+| `SES_REGION` | AWS region for SES (e.g., `us-east-1`) |
+| `SES_SENDER` | Default "from" address (must be verified in SES) |
+
+If any variable is missing, email features are disabled and a warning is logged at startup.
+
+### Email Types
+
+| Email | Trigger | Recipients |
+|-------|---------|------------|
+| Confirmation | Member books court, lesson, or open play | Booking member |
+| Cancellation | Reservation is cancelled | All participants + primary user |
+| Reminder | Scheduled job before reservation start | Primary user |
+
+### Confirmation Emails
+
+Sent immediately when a member creates a booking:
+
+- **Court Reservation**: Subject "Game Reservation Confirmed - {Facility}"
+- **Lesson Booking**: Subject "Pro Session Confirmed - {Facility}"
+- **Open Play Signup**: Subject "Open Play Signup Confirmed - {Facility}"
+
+Email body includes:
+- Reservation type and facility name
+- Date and time (in facility timezone)
+- Court assignment
+- Cancellation policy summary
+
+### Cancellation Emails
+
+Sent when a reservation is cancelled (by member or staff):
+
+- Subject: "{Reservation Type} Cancelled - {Facility}"
+- Sent to all participants and the primary user (deduplicated)
+- Includes refund percentage or "Fee waived" if applicable
+
+### Reminder Emails
+
+A scheduled job runs every 15 minutes to send upcoming reservation reminders:
+
+- Subject: "Upcoming {Reservation Type} Reminder - {Facility}"
+- Sent to the primary user of each reservation
+- Reminder timing is configurable per organization (default: 24 hours before)
+
+### Sender Address Resolution
+
+The "from" address is resolved in order:
+1. Facility-specific `email_from_address` if configured
+2. Organization-level `email_from_address` if configured
+3. System default `SES_SENDER` environment variable
+
+All sender addresses must be verified in AWS SES.
+
+### Database Schema
+
+| Column | Table | Description |
+|--------|-------|-------------|
+| email_from_address | organizations | Organization-level sender override |
+| email_from_address | facilities | Facility-level sender override |
+| reminder_hours_before | organizations | Hours before reservation to send reminder (default: 24) |
+| reminder_hours_before | facilities | Facility-level reminder timing override |
+
+### Constraints
+
+| Rule | Enforcement |
+|------|-------------|
+| Verified sender | SES identity verification checked on startup |
+| Valid email format | Recipient email validated before sending |
+| Graceful degradation | Email failures are logged but don't fail requests |
+
+### Planned Extensions
+
+- SMS notifications via SNS
+- Push notifications (mobile app)
+- Waitlist slot availability alerts
 - Membership renewal reminders
 
 ---
@@ -2712,6 +2793,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 | Cancellation Policies | Complete | Per-facility refund tiers, reservation type-specific policies, staff fee waiver, cancellation logging |
 | Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
 | Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
+| Email Notifications | Complete | SES integration, confirmation/cancellation/reminder emails |
 | Visit Pack Management | Complete | Pack type CRUD, pack sales, redemption at booking, cross-facility support |
 | Lesson Package Management | Complete | Package type CRUD, package sales, auto-redemption at lesson booking, cancellation restore |
 | League Management | Complete | League CRUD, team management, roster controls, schedule generation, match results, standings |
@@ -2730,7 +2812,7 @@ Planned delivery channels: email, SMS, push notifications (mobile app)
 
 | Feature | Notes |
 |---------|-------|
-| Member Notifications | Email/SMS delivery |
+| SMS Notifications | SNS delivery for reservation alerts |
 | Payment Processing | Stripe/Square integration |
 | Financial Reporting | Revenue tracking, payment reconciliation |
 | Mobile App | Native iOS/Android |
