@@ -632,13 +632,19 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 		})),
 		api.WithStaffAuth,
 	))
-	mux.HandleFunc("/api/v1/tier-booking/toggle", methodHandler(map[string]http.HandlerFunc{
-		http.MethodPost: tierbooking.HandleTierBookingToggle,
-	}))
-	mux.HandleFunc("/api/v1/tier-booking/windows", methodHandler(map[string]http.HandlerFunc{
-		http.MethodPost: tierbooking.HandleTierBookingSave,
-		http.MethodPut:  tierbooking.HandleTierBookingSave,
-	}))
+	mux.Handle("/api/v1/tier-booking/toggle", api.ChainMiddleware(
+		http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+			http.MethodPost: tierbooking.HandleTierBookingToggle,
+		})),
+		api.WithStaffAuth,
+	))
+	mux.Handle("/api/v1/tier-booking/windows", api.ChainMiddleware(
+		http.HandlerFunc(methodHandler(map[string]http.HandlerFunc{
+			http.MethodPost: tierbooking.HandleTierBookingSave,
+			http.MethodPut:  tierbooking.HandleTierBookingSave,
+		})),
+		api.WithStaffAuth,
+	))
 
 	// Operating hours admin page
 	mux.HandleFunc("/admin/operating-hours", operatinghours.HandleOperatingHoursPage)

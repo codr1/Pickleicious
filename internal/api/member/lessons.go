@@ -63,12 +63,12 @@ func HandleLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	maxAdvanceDays := apiutil.DefaultMaxAdvanceDays
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
-		maxAdvanceDays = apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, memberBookingDefaultMaxAdvanceDays)
+		maxAdvanceDays = apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, apiutil.DefaultMaxAdvanceDays)
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -134,12 +134,12 @@ func HandleLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	maxAdvanceDays := apiutil.DefaultMaxAdvanceDays
 	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
-		maxAdvanceDays = apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, memberBookingDefaultMaxAdvanceDays)
+		maxAdvanceDays = apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, apiutil.DefaultMaxAdvanceDays)
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -405,7 +405,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maxAdvanceDays := apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, memberBookingDefaultMaxAdvanceDays)
+	maxAdvanceDays := apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, apiutil.DefaultMaxAdvanceDays)
 	now := time.Now().In(facilityLoc)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, facilityLoc)
 	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))

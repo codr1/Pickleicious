@@ -42,7 +42,6 @@ const memberBookingTimeLayout = "2006-01-02T15:04"
 const memberBookingMinDuration = time.Hour
 const memberBookingDefaultOpensAt = "08:00"
 const memberBookingDefaultClosesAt = "21:00"
-const memberBookingDefaultMaxAdvanceDays int64 = 7
 const cancellationPenaltyWindow = 10 * time.Minute
 
 // InitHandlers must be called during server startup before handling requests.
@@ -358,7 +357,7 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, memberBookingDefaultMaxAdvanceDays)
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, apiutil.DefaultMaxAdvanceDays)
 	facilityLoaded := facility != nil
 	if err != nil {
 		message := "Failed to load facility booking config"
@@ -448,7 +447,7 @@ func HandleMemberBookingSlots(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, memberBookingDefaultMaxAdvanceDays)
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, apiutil.DefaultMaxAdvanceDays)
 	if err != nil {
 		message := "Failed to load facility booking config"
 		if facility != nil {
@@ -554,7 +553,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, memberBookingDefaultMaxAdvanceDays)
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, apiutil.DefaultMaxAdvanceDays)
 	var maxMemberReservations int64
 	facilityLoc := time.Local
 	facilityLoaded := facility != nil
@@ -1639,7 +1638,7 @@ func bookingDateFromRequest(r *http.Request, maxAdvanceDays int64) time.Time {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	if maxAdvanceDays <= 0 {
-		maxAdvanceDays = memberBookingDefaultMaxAdvanceDays
+		maxAdvanceDays = apiutil.DefaultMaxAdvanceDays
 	}
 	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
 

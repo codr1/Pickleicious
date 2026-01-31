@@ -8,6 +8,8 @@ import (
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 )
 
+const DefaultMaxAdvanceDays int64 = 7
+
 func NormalizedMaxAdvanceDays(value, defaultValue int64) int64 {
 	if value <= 0 {
 		return defaultValue

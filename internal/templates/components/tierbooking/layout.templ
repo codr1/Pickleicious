@@ -75,6 +75,7 @@ templ TierBookingLayout(data TierBookingPageData) {
 									id={fmt.Sprintf("tier_max_advance_%d", window.MembershipLevel)}
 									name={fmt.Sprintf("max_advance_days_%d", window.MembershipLevel)}
 									min="1"
+									max="364"
 									value={fmt.Sprintf("%d", window.MaxAdvanceDays)}
 									disabled?={!data.TierBookingEnabled}
 									class="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"

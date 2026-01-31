@@ -61,6 +61,7 @@ type tierBookingWindowRequest struct {
 // InitHandlers must be called during server startup before handling requests.
 func InitHandlers(database *appdb.DB) {
 	if database == nil {
+		log.Warn().Msg("tierbooking.InitHandlers called with nil database; handlers will be unavailable")
 		return
 	}
 	queriesOnce.Do(func() {
@@ -322,15 +323,8 @@ func HandleTierBookingToggle(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), tierBookingQueryTimeout)
 	defer cancel()
 
-	enabled := false
-	if values, ok := r.Form["tier_booking_enabled"]; ok {
-		for _, value := range values {
-			if apiutil.ParseBool(value) {
-				enabled = true
-				break
-			}
-		}
-	}
+	// Checkbox sends "on"/"true" when checked; absence means disabled.
+	enabled := apiutil.ParseBool(r.FormValue("tier_booking_enabled"))
 
 	var facility dbgen.Facility
 	if enabled {
@@ -513,23 +507,30 @@ func parseMaxAdvanceDays(value string, field string) (int64, error) {
 		return 0, fmt.Errorf("%s is required", field)
 	}
 	parsed, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || parsed <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", field)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid integer", field)
 	}
-	if parsed > maxAdvanceDaysLimit {
-		return 0, fmt.Errorf("%s must be %d or less", field, maxAdvanceDaysLimit)
+	if err := validateMaxAdvanceDaysValue(parsed, field); err != nil {
+		return 0, err
 	}
 	return parsed, nil
 }
 
 func validateMaxAdvanceDays(value int64, field string) (int64, error) {
-	if value <= 0 {
-		return 0, fmt.Errorf("%s must be a positive integer", field)
-	}
-	if value > maxAdvanceDaysLimit {
-		return 0, fmt.Errorf("%s must be %d or less", field, maxAdvanceDaysLimit)
+	if err := validateMaxAdvanceDaysValue(value, field); err != nil {
+		return 0, err
 	}
 	return value, nil
+}
+
+func validateMaxAdvanceDaysValue(value int64, field string) error {
+	if value <= 0 {
+		return fmt.Errorf("%s must be a positive integer", field)
+	}
+	if value > maxAdvanceDaysLimit {
+		return fmt.Errorf("%s must be %d or less", field, maxAdvanceDaysLimit)
+	}
+	return nil
 }
 
 func tierLevelFromRequest(r *http.Request) (int64, error) {
@@ -641,7 +642,7 @@ func tierLabel(level int64) string {
 	case 2:
 		return "Level 2 - Member"
 	default:
-		return "Level 3+ - Member+"
+		return "Level 3 - Member+"
 	}
 }
 
@@ -654,6 +655,6 @@ func tierNote(level int64) string {
 	case 2:
 		return "Applies to member bookings."
 	default:
-		return "Applies to level 3 and higher memberships."
+		return "Applies to premium member bookings."
 	}
 }

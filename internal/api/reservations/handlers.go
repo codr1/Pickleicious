@@ -42,7 +42,6 @@ const (
 	timeLayoutDatetimeMinute          = "2006-01-02 15:04"
 	waitlistTimeLayout                = "15:04:05"
 	defaultWaitlistOfferExpiryMinutes = int64(30)
-	reservationDefaultMaxAdvanceDays  = int64(7)
 )
 
 const (
@@ -123,6 +122,10 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !user.IsStaff {
+		if req.PrimaryUserID == nil || *req.PrimaryUserID <= 0 {
+			authUserID := user.ID
+			req.PrimaryUserID = &authUserID
+		}
 		if err := enforceMemberTierBookingWindow(ctx, q, facilityID, req.PrimaryUserID, startTime); err != nil {
 			var fieldErr apiutil.FieldError
 			if errors.As(err, &fieldErr) {
@@ -531,6 +534,10 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user != nil && !user.IsStaff {
+		if req.PrimaryUserID == nil || *req.PrimaryUserID <= 0 {
+			authUserID := user.ID
+			req.PrimaryUserID = &authUserID
+		}
 		if err := enforceMemberTierBookingWindow(ctx, q, facilityID, req.PrimaryUserID, startTime); err != nil {
 			var fieldErr apiutil.FieldError
 			if errors.As(err, &fieldErr) {
@@ -1208,7 +1215,7 @@ func enforceMemberTierBookingWindow(ctx context.Context, q *dbgen.Queries, facil
 		return err
 	}
 
-	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, facilityID, member.MembershipLevel, reservationDefaultMaxAdvanceDays)
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, facilityID, member.MembershipLevel, apiutil.DefaultMaxAdvanceDays)
 	if err != nil {
 		return err
 	}
