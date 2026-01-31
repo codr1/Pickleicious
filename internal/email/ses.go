@@ -27,9 +27,15 @@ func NewSESClient(accessKeyID, secretAccessKey, region, sender string) (*SESClie
 	if accessKeyID == "" || secretAccessKey == "" || region == "" {
 		return nil, fmt.Errorf("ses credentials and region are required")
 	}
+	sender = strings.TrimSpace(sender)
 	if sender == "" {
 		return nil, fmt.Errorf("ses sender is required")
 	}
+	addr, err := mail.ParseAddress(sender)
+	if err != nil {
+		return nil, fmt.Errorf("ses sender must be a valid email address: %w", err)
+	}
+	sender = strings.TrimSpace(addr.Address)
 
 	initCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -78,6 +78,8 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 			emailClient = client
 			log.Info().Msg("SES client initialized")
 		}
+	} else {
+		log.Warn().Msg("SES configuration incomplete; email features will be disabled")
 	}
 
 	auth.InitHandlers(database.Queries, config)

@@ -57,7 +57,7 @@ func BuildOpenPlayConfirmation(details ConfirmationDetails) ConfirmationEmail {
 }
 
 func ReservationTypeLabel(reservationType string) string {
-	switch strings.TrimSpace(reservationType) {
+	switch strings.ToUpper(strings.TrimSpace(reservationType)) {
 	case "OPEN_PLAY":
 		return "Open Play"
 	case "PRO_SESSION":
