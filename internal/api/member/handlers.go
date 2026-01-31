@@ -355,13 +355,14 @@ func HandleMemberBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
-	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
-	facilityLoaded := err == nil
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, memberBookingDefaultMaxAdvanceDays)
+	facilityLoaded := facility != nil
 	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
-	} else {
-		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		message := "Failed to load facility booking config"
+		if facilityLoaded {
+			message = "Failed to load tier booking config"
+		}
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Int64("membership_level", user.MembershipLevel).Msg(message)
 	}
 
 	courtsList, err := q.ListCourts(ctx, *user.HomeFacilityID)
@@ -444,12 +445,13 @@ func HandleMemberBookingSlots(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
-	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, memberBookingDefaultMaxAdvanceDays)
 	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
-	} else {
-		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		message := "Failed to load facility booking config"
+		if facility != nil {
+			message = "Failed to load tier booking config"
+		}
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Int64("membership_level", user.MembershipLevel).Msg(message)
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -549,16 +551,18 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), portalQueryTimeout)
 	defer cancel()
 
-	maxAdvanceDays := memberBookingDefaultMaxAdvanceDays
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, *user.HomeFacilityID, user.MembershipLevel, memberBookingDefaultMaxAdvanceDays)
 	var maxMemberReservations int64
 	facilityLoc := time.Local
-	facilityLoaded := false
-	facility, err := q.GetFacilityByID(ctx, *user.HomeFacilityID)
+	facilityLoaded := facility != nil
 	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
-	} else {
-		facilityLoaded = true
-		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		message := "Failed to load facility booking config"
+		if facilityLoaded {
+			message = "Failed to load tier booking config"
+		}
+		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Int64("membership_level", user.MembershipLevel).Msg(message)
+	}
+	if facilityLoaded {
 		maxMemberReservations = facility.MaxMemberReservations
 		if facility.Timezone != "" {
 			loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
@@ -626,7 +630,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
 	startDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, facilityLoc)
 	if startDay.After(maxDate) {
-		http.Error(w, fmt.Sprintf("start_time must be within %d days", maxAdvanceDays), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("start_time must be within %d days for your membership level. Upgrade to book further in advance.", maxAdvanceDays), http.StatusBadRequest)
 		return
 	}
 
@@ -1588,13 +1592,6 @@ func clampBookingDate(selected time.Time, min time.Time, max time.Time) time.Tim
 		return max
 	}
 	return selected
-}
-
-func normalizedMaxAdvanceBookingDays(value int64) int64 {
-	if value <= 0 {
-		return memberBookingDefaultMaxAdvanceDays
-	}
-	return value
 }
 
 func buildMemberBookingSlots(
