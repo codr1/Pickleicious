@@ -68,7 +68,7 @@ func HandleLessonBookingFormNew(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
-		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		maxAdvanceDays = apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, memberBookingDefaultMaxAdvanceDays)
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -139,7 +139,7 @@ func HandleLessonBookingSlots(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Error().Err(err).Int64("facility_id", *user.HomeFacilityID).Msg("Failed to load facility booking config")
 	} else {
-		maxAdvanceDays = normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+		maxAdvanceDays = apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, memberBookingDefaultMaxAdvanceDays)
 	}
 
 	bookingDate := bookingDateFromRequest(r, maxAdvanceDays)
@@ -405,7 +405,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maxAdvanceDays := normalizedMaxAdvanceBookingDays(facility.MaxAdvanceBookingDays)
+	maxAdvanceDays := apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, memberBookingDefaultMaxAdvanceDays)
 	now := time.Now().In(facilityLoc)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, facilityLoc)
 	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
