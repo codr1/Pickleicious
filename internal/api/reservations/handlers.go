@@ -511,6 +511,10 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	req, err := decodeReservationRequest(r)
 	if err != nil {
@@ -533,7 +537,7 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if user != nil && !user.IsStaff {
+	if !user.IsStaff {
 		if req.PrimaryUserID == nil || *req.PrimaryUserID <= 0 {
 			authUserID := user.ID
 			req.PrimaryUserID = &authUserID
