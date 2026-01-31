@@ -32,6 +32,9 @@ func GetMemberMaxAdvanceDays(
 		return maxAdvanceDays, &facility, nil
 	}
 
+	if membershipLevel > 3 {
+		membershipLevel = 3
+	}
 	window, err := q.GetTierBookingWindow(ctx, dbgen.GetTierBookingWindowParams{
 		FacilityID:      facilityID,
 		MembershipLevel: membershipLevel,
