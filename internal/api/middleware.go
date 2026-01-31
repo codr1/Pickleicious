@@ -108,6 +108,41 @@ func WithAuth(next http.Handler) http.Handler {
 	})
 }
 
+func WithStaffAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger := log.Ctx(r.Context())
+		user := authz.UserFromContext(r.Context())
+		if err := authz.RequireRole(r.Context(), "staff"); err != nil {
+			switch {
+			case errors.Is(err, authz.ErrUnauthenticated):
+				logEvent := logger.Warn()
+				if user != nil {
+					logEvent = logEvent.Int64("user_id", user.ID)
+				}
+				logEvent.Msg("Staff access denied: unauthenticated")
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			case errors.Is(err, authz.ErrForbidden):
+				logEvent := logger.Warn()
+				if user != nil {
+					logEvent = logEvent.Int64("user_id", user.ID)
+				}
+				logEvent.Msg("Staff access denied: forbidden")
+				http.Error(w, "Forbidden", http.StatusForbidden)
+			default:
+				logEvent := logger.Error().Err(err)
+				if user != nil {
+					logEvent = logEvent.Int64("user_id", user.ID)
+				}
+				logEvent.Msg("Staff access denied: error")
+				http.Error(w, "Failed to authorize request", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // responseWriter wrapper to capture status code
 type responseWriter struct {
 	http.ResponseWriter
