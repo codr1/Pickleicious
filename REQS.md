@@ -655,7 +655,9 @@ A self-service marketplace where members discover and book coaches directly, red
 | Setting | Description | Example |
 |---------|-------------|---------|
 | Booking Window | How far ahead can book | 7 days max |
+<!-- BEGIN WIP: STORY-0047 -->
 | Member Tier Windows | Premium books earlier | VIP: 14 days, Basic: 3 days |
+<!-- END WIP -->
 | Same-Day Booking | Rules for day-of reservations | After 6am only |
 
 **Quotas:**
