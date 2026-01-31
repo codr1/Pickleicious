@@ -958,9 +958,11 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 
 		name, err := qtx.GetReservationTypeNameByReservationID(ctx, reservationID)
 		if err != nil {
-			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation type", Err: err}
+			logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load reservation type for cancellation email")
+			reservationTypeName = memberReservationTypeName
+		} else {
+			reservationTypeName = name
 		}
-		reservationTypeName = name
 
 		return nil
 	})

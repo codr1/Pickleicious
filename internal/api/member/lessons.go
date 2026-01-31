@@ -575,9 +575,8 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil {
-		// emailCtx bounds the sync work and email send to avoid hanging on SES.
-		emailCtx, cancel := context.WithTimeout(context.Background(), portalQueryTimeout)
-		defer cancel()
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
 		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, reservationTypeID, startTime, now)
 		if policyErr != nil {
 			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")

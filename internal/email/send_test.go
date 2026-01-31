@@ -2,7 +2,6 @@ package email
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,7 +19,7 @@ type fakeEmailSender struct {
 	sendFromCtxErrCh chan error
 }
 
-const testTimeout = 500 * time.Millisecond
+const testTimeout = 2 * time.Second
 
 func newFakeEmailSender() *fakeEmailSender {
 	return &fakeEmailSender{
@@ -99,19 +98,17 @@ func waitForSignal(t *testing.T, ch <-chan struct{}, message string) {
 	}
 }
 
-func waitForError(t *testing.T, ch <-chan error, message string) error {
+func waitForNoError(t *testing.T, ch <-chan error, message string) {
 	t.Helper()
 
 	select {
 	case err := <-ch:
-		return err
-	case <-time.After(testTimeout):
-		t.Fatal(message)
-		return nil
+		t.Fatalf("%s: %v", message, err)
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 
-func TestSendConfirmationEmail_ContextCanceledStopsSend(t *testing.T) {
+func TestSendConfirmationEmail_ContextCanceledDoesNotStopSend(t *testing.T) {
 	database := testutil.NewTestDB(t)
 	userID := insertTestUser(t, database, "member@test.com")
 	sender := newFakeEmailSender()
@@ -125,16 +122,13 @@ func TestSendConfirmationEmail_ContextCanceledStopsSend(t *testing.T) {
 	waitForSignal(t, sender.sendStarted, "expected confirmation send to start")
 	cancel()
 
-	err := waitForError(t, sender.sendCtxErrCh, "expected confirmation send to observe cancellation")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context canceled, got %v", err)
-	}
+	waitForNoError(t, sender.sendCtxErrCh, "unexpected confirmation cancellation")
 	if atomic.LoadInt32(&sender.sendCalls) != 1 {
 		t.Fatalf("expected one send call, got %d", atomic.LoadInt32(&sender.sendCalls))
 	}
 }
 
-func TestSendReminderEmail_ContextCanceledStopsSend(t *testing.T) {
+func TestSendReminderEmail_ContextCanceledDoesNotStopSend(t *testing.T) {
 	database := testutil.NewTestDB(t)
 	userID := insertTestUser(t, database, "member@test.com")
 	sender := newFakeEmailSender()
@@ -148,16 +142,13 @@ func TestSendReminderEmail_ContextCanceledStopsSend(t *testing.T) {
 	waitForSignal(t, sender.sendFromStarted, "expected reminder send to start")
 	cancel()
 
-	err := waitForError(t, sender.sendFromCtxErrCh, "expected reminder send to observe cancellation")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context canceled, got %v", err)
-	}
+	waitForNoError(t, sender.sendFromCtxErrCh, "unexpected reminder cancellation")
 	if atomic.LoadInt32(&sender.sendFromCalls) != 1 {
 		t.Fatalf("expected one send call, got %d", atomic.LoadInt32(&sender.sendFromCalls))
 	}
 }
 
-func TestSendCancellationEmail_ContextCanceledStopsSend(t *testing.T) {
+func TestSendCancellationEmail_ContextCanceledDoesNotStopSend(t *testing.T) {
 	database := testutil.NewTestDB(t)
 	userID := insertTestUser(t, database, "member@test.com")
 	sender := newFakeEmailSender()
@@ -171,10 +162,7 @@ func TestSendCancellationEmail_ContextCanceledStopsSend(t *testing.T) {
 	waitForSignal(t, sender.sendFromStarted, "expected cancellation send to start")
 	cancel()
 
-	err := waitForError(t, sender.sendFromCtxErrCh, "expected cancellation send to observe cancellation")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context canceled, got %v", err)
-	}
+	waitForNoError(t, sender.sendFromCtxErrCh, "unexpected cancellation")
 	if atomic.LoadInt32(&sender.sendFromCalls) != 1 {
 		t.Fatalf("expected one send call, got %d", atomic.LoadInt32(&sender.sendFromCalls))
 	}

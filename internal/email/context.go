@@ -9,5 +9,7 @@ func newEmailContext(parent context.Context, timeout time.Duration) (context.Con
 	if parent == nil {
 		parent = context.Background()
 	}
+	// Detach cancellation so handler-scoped contexts don't abort async sends.
+	parent = context.WithoutCancel(parent)
 	return context.WithTimeout(parent, timeout)
 }

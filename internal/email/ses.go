@@ -113,6 +113,14 @@ func (c *SESClient) SendFrom(ctx context.Context, recipient, subject, body, send
 	if from == "" {
 		return fmt.Errorf("sender is required")
 	}
+	parsedFrom, err := mail.ParseAddress(from)
+	if err != nil {
+		return fmt.Errorf("parse sender %q: %w", from, err)
+	}
+	from = strings.TrimSpace(parsedFrom.Address)
+	if from == "" {
+		return fmt.Errorf("sender is required")
+	}
 	if from != c.sender {
 		if err := verifySESIdentity(ctx, c.client, from); err != nil {
 			return fmt.Errorf("validate ses sender %q: %w", from, err)

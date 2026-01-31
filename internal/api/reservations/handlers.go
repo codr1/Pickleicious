@@ -892,8 +892,9 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && reservation.ID != 0 {
-		emailCtx := context.Background()
-		queryCtx, queryCancel := context.WithTimeout(emailCtx, reservationQueryTimeout)
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), reservationQueryTimeout)
+		defer emailCancel()
+		queryCtx, queryCancel := context.WithTimeout(context.Background(), reservationQueryTimeout)
 		defer queryCancel()
 		facility, err := q.GetFacilityByID(queryCtx, facilityID)
 		if err != nil {

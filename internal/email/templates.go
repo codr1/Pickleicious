@@ -57,7 +57,9 @@ func BuildOpenPlayConfirmation(details ConfirmationDetails) ConfirmationEmail {
 }
 
 func ReservationTypeLabel(reservationType string) string {
-	switch strings.ToUpper(strings.TrimSpace(reservationType)) {
+	normalized := strings.ToUpper(strings.TrimSpace(reservationType))
+	normalized = strings.NewReplacer(" ", "_", "-", "_").Replace(normalized)
+	switch normalized {
 	case "OPEN_PLAY":
 		return "Open Play"
 	case "PRO_SESSION":
@@ -81,7 +83,8 @@ func ReservationTypeLabel(reservationType string) string {
 }
 
 func BuildCancellationEmail(details CancellationDetails) ConfirmationEmail {
-	facilityName := strings.TrimSpace(details.FacilityName)
+	rawFacilityName := strings.TrimSpace(details.FacilityName)
+	facilityName := rawFacilityName
 	if facilityName == "" {
 		facilityName = "your facility"
 	}
@@ -100,8 +103,8 @@ func BuildCancellationEmail(details CancellationDetails) ConfirmationEmail {
 	}
 
 	subject := fmt.Sprintf("%s Cancelled", reservationType)
-	if facilityName != "" {
-		subject = fmt.Sprintf("%s - %s", subject, facilityName)
+	if rawFacilityName != "" {
+		subject = fmt.Sprintf("%s - %s", subject, rawFacilityName)
 	}
 
 	lines := []string{
@@ -132,7 +135,8 @@ func BuildCancellationEmail(details CancellationDetails) ConfirmationEmail {
 }
 
 func BuildReminderEmail(details ReminderDetails) ConfirmationEmail {
-	facilityName := strings.TrimSpace(details.FacilityName)
+	rawFacilityName := strings.TrimSpace(details.FacilityName)
+	facilityName := rawFacilityName
 	if facilityName == "" {
 		facilityName = "your facility"
 	}
@@ -151,8 +155,8 @@ func BuildReminderEmail(details ReminderDetails) ConfirmationEmail {
 	}
 
 	subject := fmt.Sprintf("Upcoming %s Reminder", reservationType)
-	if facilityName != "" {
-		subject = fmt.Sprintf("%s - %s", subject, facilityName)
+	if rawFacilityName != "" {
+		subject = fmt.Sprintf("%s - %s", subject, rawFacilityName)
 	}
 
 	lines := []string{
@@ -172,7 +176,8 @@ func BuildReminderEmail(details ReminderDetails) ConfirmationEmail {
 }
 
 func buildConfirmationEmail(reservationType, subjectPrefix string, details ConfirmationDetails) ConfirmationEmail {
-	facilityName := strings.TrimSpace(details.FacilityName)
+	rawFacilityName := strings.TrimSpace(details.FacilityName)
+	facilityName := rawFacilityName
 	if facilityName == "" {
 		facilityName = "your facility"
 	}
@@ -194,8 +199,8 @@ func buildConfirmationEmail(reservationType, subjectPrefix string, details Confi
 	}
 
 	subject := subjectPrefix
-	if facilityName != "" {
-		subject = fmt.Sprintf("%s - %s", subjectPrefix, facilityName)
+	if rawFacilityName != "" {
+		subject = fmt.Sprintf("%s - %s", subjectPrefix, rawFacilityName)
 	}
 
 	lines := []string{
