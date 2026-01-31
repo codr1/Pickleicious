@@ -59,7 +59,7 @@ func setupOpenPlayTest(t *testing.T) (*db.DB, int64) {
 	queriesOnce = sync.Once{}
 	queries = nil
 	store = nil
-	InitHandlers(database)
+	InitHandlers(database, nil)
 
 	return database, facilityID
 }

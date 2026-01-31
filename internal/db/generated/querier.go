@@ -110,6 +110,7 @@ type Querier interface {
 	GetEligibleLessonPackageForUser(ctx context.Context, arg GetEligibleLessonPackageForUserParams) (LessonPackage, error)
 	GetEnrollmentCount(ctx context.Context, arg GetEnrollmentCountParams) (int64, error)
 	GetFacilityByID(ctx context.Context, id int64) (Facility, error)
+	GetFacilityEmailConfig(ctx context.Context, id int64) (GetFacilityEmailConfigRow, error)
 	// internal/db/queries/schedules.sql
 	GetFacilityHours(ctx context.Context, facilityID int64) ([]OperatingHour, error)
 	GetFutureProSessionsByStaffID(ctx context.Context, arg GetFutureProSessionsByStaffIDParams) ([]GetFutureProSessionsByStaffIDRow, error)
@@ -135,6 +136,8 @@ type Querier interface {
 	// internal/db/queries/organizations.sql
 	GetOrganizationBySlug(ctx context.Context, slug string) (GetOrganizationBySlugRow, error)
 	GetOrganizationCrossFacilitySetting(ctx context.Context, id int64) (bool, error)
+	GetOrganizationEmailConfig(ctx context.Context, id int64) (GetOrganizationEmailConfigRow, error)
+	GetOrganizationReminderConfig(ctx context.Context, id int64) (GetOrganizationReminderConfigRow, error)
 	GetPendingOffer(ctx context.Context, waitlistID int64) (WaitlistOffer, error)
 	GetPhoto(ctx context.Context, id int64) (GetPhotoRow, error)
 	GetProLessonSlots(ctx context.Context, arg GetProLessonSlotsParams) ([]GetProLessonSlotsRow, error)
@@ -210,6 +213,7 @@ type Querier interface {
 	ListReservationTypes(ctx context.Context) ([]ReservationType, error)
 	ListReservationsByDateRange(ctx context.Context, arg ListReservationsByDateRangeParams) ([]Reservation, error)
 	ListReservationsByUserID(ctx context.Context, userID sql.NullInt64) ([]ListReservationsByUserIDRow, error)
+	ListReservationsStartingBetween(ctx context.Context, arg ListReservationsStartingBetweenParams) ([]Reservation, error)
 	// internal/db/queries/staff.sql
 	// Queries for staff members (join staff table with users for auth/contact info)
 	ListStaff(ctx context.Context) ([]ListStaffRow, error)
@@ -243,6 +247,7 @@ type Querier interface {
 	UpdateCourtStatus(ctx context.Context, arg UpdateCourtStatusParams) (Court, error)
 	UpdateEnrollmentStatus(ctx context.Context, arg UpdateEnrollmentStatusParams) (ClinicEnrollment, error)
 	UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFacilityBookingConfigParams) (Facility, error)
+	UpdateFacilityEmailConfig(ctx context.Context, arg UpdateFacilityEmailConfigParams) (UpdateFacilityEmailConfigRow, error)
 	UpdateFacilityVisitActivity(ctx context.Context, arg UpdateFacilityVisitActivityParams) (FacilityVisit, error)
 	UpdateLeague(ctx context.Context, arg UpdateLeagueParams) (League, error)
 	UpdateLeagueTeam(ctx context.Context, arg UpdateLeagueTeamParams) (LeagueTeam, error)
@@ -253,6 +258,7 @@ type Querier interface {
 	UpdateOpenPlayRule(ctx context.Context, arg UpdateOpenPlayRuleParams) (OpenPlayRule, error)
 	UpdateOpenPlaySessionCourtCount(ctx context.Context, arg UpdateOpenPlaySessionCourtCountParams) (OpenPlaySession, error)
 	UpdateOpenPlaySessionStatus(ctx context.Context, arg UpdateOpenPlaySessionStatusParams) (OpenPlaySession, error)
+	UpdateOrganizationEmailConfig(ctx context.Context, arg UpdateOrganizationEmailConfigParams) (UpdateOrganizationEmailConfigRow, error)
 	UpdateReservation(ctx context.Context, arg UpdateReservationParams) (Reservation, error)
 	UpdateSessionAutoScaleOverride(ctx context.Context, arg UpdateSessionAutoScaleOverrideParams) (OpenPlaySession, error)
 	UpdateStaff(ctx context.Context, arg UpdateStaffParams) error

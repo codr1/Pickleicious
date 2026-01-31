@@ -21,6 +21,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/codr1/Pickleicious/internal/models"
 	membertempl "github.com/codr1/Pickleicious/internal/templates/components/member"
 	reservationstempl "github.com/codr1/Pickleicious/internal/templates/components/reservations"
@@ -32,6 +33,7 @@ var (
 	queries     *dbgen.Queries
 	store       *appdb.DB
 	queriesOnce sync.Once
+	emailClient *email.SESClient
 )
 
 const portalQueryTimeout = 5 * time.Second
@@ -44,13 +46,14 @@ const memberBookingDefaultMaxAdvanceDays int64 = 7
 const cancellationPenaltyWindow = 10 * time.Minute
 
 // InitHandlers must be called during server startup before handling requests.
-func InitHandlers(database *appdb.DB) {
+func InitHandlers(database *appdb.DB, client *email.SESClient) {
 	if database == nil {
 		return
 	}
 	queriesOnce.Do(func() {
 		queries = database.Queries
 		store = database
+		emailClient = client
 	})
 }
 
@@ -770,6 +773,25 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if emailClient != nil && facilityLoaded {
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
+		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, &reservationTypeID, startTime, now)
+		if policyErr != nil {
+			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")
+			cancellationPolicy = "Contact the facility for cancellation policy details."
+		}
+		date, timeRange := email.FormatDateTimeRange(startTime.In(facilityLoc), endTime.In(facilityLoc))
+		confirmation := email.BuildGameConfirmation(email.ConfirmationDetails{
+			FacilityName:       facility.Name,
+			Date:               date,
+			TimeRange:          timeRange,
+			Courts:             court.Name,
+			CancellationPolicy: cancellationPolicy,
+		})
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
+	}
+
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
 	if err := apiutil.WriteJSON(w, http.StatusCreated, created); err != nil {
 		logger.Error().Err(err).Int64("reservation_id", created.ID).Msg("Failed to write reservation response")
@@ -807,16 +829,21 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 	confirmCancellation := requestCancellationConfirm(r)
 
 	var refundPercentage int64
+	var reservation dbgen.Reservation
+	var reservationCourts []dbgen.ListReservationCourtsRow
+	var reservationParticipants []dbgen.ListParticipantsForReservationRow
+	var reservationTypeName string
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
-		reservation, err := qtx.GetReservationByID(ctx, reservationID)
+		loadedReservation, err := qtx.GetReservationByID(ctx, reservationID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return apiutil.HandlerError{Status: http.StatusNotFound, Message: "Reservation not found", Err: err}
 			}
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to fetch reservation", Err: err}
 		}
+		reservation = loadedReservation
 		if !reservation.PrimaryUserID.Valid || reservation.PrimaryUserID.Int64 != user.ID {
 			return apiutil.HandlerError{Status: http.StatusForbidden, Message: "Forbidden"}
 		}
@@ -846,7 +873,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 				HoursBeforeStart: hoursBeforeStart,
 				StartTime:        reservation.StartTime,
 				EndTime:          reservation.EndTime,
-				CourtName:        reservationCourtLabel(courts),
+				CourtName:        apiutil.ReservationCourtLabel(courts),
 				FacilityName:     facility.Name,
 				ExpiresAt:        calculatedAt.Add(cancellationPenaltyWindow),
 				CalculatedAt:     calculatedAt,
@@ -905,6 +932,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation courts", Err: err}
 		}
+		reservationCourts = courts
 		for _, court := range courts {
 			if err := qtx.RemoveReservationCourt(ctx, dbgen.RemoveReservationCourtParams{
 				ReservationID: reservationID,
@@ -918,6 +946,7 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to load reservation participants", Err: err}
 		}
+		reservationParticipants = participants
 		for _, participant := range participants {
 			if err := qtx.RemoveParticipant(ctx, dbgen.RemoveParticipantParams{
 				ReservationID: reservationID,
@@ -925,6 +954,14 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 			}); err != nil {
 				return apiutil.HandlerError{Status: http.StatusInternalServerError, Message: "Failed to remove reservation participant", Err: err}
 			}
+		}
+
+		name, err := qtx.GetReservationTypeNameByReservationID(ctx, reservationID)
+		if err != nil {
+			logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load reservation type for cancellation email")
+			reservationTypeName = memberReservationTypeName
+		} else {
+			reservationTypeName = name
 		}
 
 		return nil
@@ -965,6 +1002,46 @@ func HandleMemberReservationCancel(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to cancel reservation")
 		http.Error(w, "Failed to cancel reservation", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil && reservation.ID != 0 {
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
+		facility, err := q.GetFacilityByID(emailCtx, reservation.FacilityID)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", reservation.FacilityID).Msg("Failed to load facility for cancellation email")
+		} else {
+			facilityLoc := time.Local
+			if facility.Timezone != "" {
+				if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+					facilityLoc = loadedLoc
+				} else {
+					logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for cancellation email")
+				}
+			}
+			date, timeRange := email.FormatDateTimeRange(reservation.StartTime.In(facilityLoc), reservation.EndTime.In(facilityLoc))
+			courtLabel := apiutil.ReservationCourtLabel(reservationCourts)
+			refund := refundPercentage
+			message := email.BuildCancellationEmail(email.CancellationDetails{
+				FacilityName:     facility.Name,
+				ReservationType:  reservationTypeName,
+				Date:             date,
+				TimeRange:        timeRange,
+				Courts:           courtLabel,
+				RefundPercentage: &refund,
+			})
+			sender := email.ResolveFromAddress(emailCtx, q, facility, logger)
+			recipients := make(map[int64]struct{}, len(reservationParticipants)+1)
+			for _, participant := range reservationParticipants {
+				recipients[participant.ID] = struct{}{}
+			}
+			if reservation.PrimaryUserID.Valid {
+				recipients[reservation.PrimaryUserID.Int64] = struct{}{}
+			}
+			for participantID := range recipients {
+				email.SendCancellationEmail(emailCtx, q, emailClient, participantID, message, sender, logger)
+			}
+		}
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
@@ -1080,6 +1157,8 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var participant dbgen.ReservationParticipant
+	var session dbgen.GetOpenPlaySessionRow
+	var rule dbgen.OpenPlayRule
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
@@ -1096,7 +1175,7 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		session, err := qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
+		session, err = qtx.GetOpenPlaySession(ctx, dbgen.GetOpenPlaySessionParams{
 			ID:         sessionID,
 			FacilityID: *user.HomeFacilityID,
 		})
@@ -1113,7 +1192,7 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			return apiutil.HandlerError{Status: http.StatusBadRequest, Message: "Open play session must be in the future"}
 		}
 
-		rule, err := qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+		rule, err = qtx.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
 			ID:         session.OpenPlayRuleID,
 			FacilityID: *user.HomeFacilityID,
 		})
@@ -1189,6 +1268,33 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to sign up for open play")
 		http.Error(w, "Failed to sign up for open play", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil && facility.ID != 0 {
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
+		facilityLoc := time.Local
+		if facility.Timezone != "" {
+			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+				facilityLoc = loadedLoc
+			} else {
+				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for confirmation email")
+			}
+		}
+		date, timeRange := email.FormatDateTimeRange(session.StartTime.In(facilityLoc), session.EndTime.In(facilityLoc))
+		courtsLabel := fmt.Sprintf("%d courts", session.CurrentCourtCount)
+		if session.CurrentCourtCount == 1 {
+			courtsLabel = "1 court"
+		}
+		cancellationPolicy := fmt.Sprintf("Cancel at least %d minutes before start time to avoid penalties.", rule.CancellationCutoffMinutes)
+		confirmation := email.BuildOpenPlayConfirmation(email.ConfirmationDetails{
+			FacilityName:       facility.Name,
+			Date:               date,
+			TimeRange:          timeRange,
+			Courts:             courtsLabel,
+			CancellationPolicy: cancellationPolicy,
+		})
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations,refreshMemberOpenPlay")
@@ -1379,17 +1485,6 @@ func requestCancellationPenaltyDetails(r *http.Request) (time.Time, int64, bool)
 		}
 	}
 	return calculatedAt, hoursBeforeStart, true
-}
-
-func reservationCourtLabel(courts []dbgen.ListReservationCourtsRow) string {
-	if len(courts) == 0 {
-		return "TBD"
-	}
-	labels := make([]string, len(courts))
-	for i, court := range courts {
-		labels[i] = fmt.Sprintf("Court %d", court.CourtNumber)
-	}
-	return strings.Join(labels, ", ")
 }
 
 func requestedFacilityID(r *http.Request) *int64 {

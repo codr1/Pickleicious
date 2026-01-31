@@ -23,6 +23,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/htmx"
 	appdb "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/codr1/Pickleicious/internal/models"
 	openplaytempl "github.com/codr1/Pickleicious/internal/templates/components/openplay"
 	"github.com/codr1/Pickleicious/internal/templates/layouts"
@@ -32,6 +33,7 @@ var (
 	queries     *dbgen.Queries
 	store       *appdb.DB
 	queriesOnce sync.Once
+	emailClient *email.SESClient
 )
 
 const (
@@ -45,13 +47,14 @@ const (
 var errInvalidUserID = errors.New("invalid user ID")
 
 // InitHandlers must be called during server startup before handling requests.
-func InitHandlers(database *appdb.DB) {
+func InitHandlers(database *appdb.DB, client *email.SESClient) {
 	if database == nil {
 		return
 	}
 	queriesOnce.Do(func() {
 		queries = database.Queries
 		store = database
+		emailClient = client
 	})
 }
 
@@ -679,11 +682,23 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), openPlayQueryTimeout)
 	defer cancel()
 
+	var facility dbgen.Facility
+	var facilityErr error
+	if emailClient != nil {
+		facility, facilityErr = q.GetFacilityByID(ctx, facilityID)
+		if facilityErr != nil {
+			logger.Error().Err(facilityErr).Int64("facility_id", facilityID).Msg("Failed to load facility for confirmation email")
+		}
+	}
+
 	var participant dbgen.ReservationParticipant
+	var session dbgen.GetOpenPlaySessionRow
+	var rule dbgen.OpenPlayRule
 	err = database.RunInTx(ctx, func(txdb *appdb.DB) error {
 		qtx := txdb.Queries
 
-		session, reservationID, err := fetchOpenPlaySessionAndReservation(ctx, qtx, sessionID, facilityID)
+		var reservationID int64
+		session, reservationID, err = fetchOpenPlaySessionAndReservation(ctx, qtx, sessionID, facilityID)
 		if err != nil {
 			return err
 		}
@@ -746,6 +761,53 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Int64("session_id", sessionID).Msg("Failed to add open play participant")
 		http.Error(w, "Failed to add participant", http.StatusInternalServerError)
 		return
+	}
+
+	if emailClient != nil && facility.ID != 0 {
+		var ruleErr error
+		rule, ruleErr = q.GetOpenPlayRule(ctx, dbgen.GetOpenPlayRuleParams{
+			ID:         session.OpenPlayRuleID,
+			FacilityID: facilityID,
+		})
+		if ruleErr != nil {
+			logger.Error().
+				Err(ruleErr).
+				Int64("open_play_rule_id", session.OpenPlayRuleID).
+				Int64("facility_id", facilityID).
+				Msg("Failed to load open play rule for confirmation email")
+		}
+	}
+
+	if emailClient != nil && facility.ID != 0 {
+		facilityLoc := time.Local
+		if facility.Timezone != "" {
+			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+				facilityLoc = loadedLoc
+			} else {
+				logger.Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for confirmation email")
+			}
+		}
+		date, timeRange := email.FormatDateTimeRange(session.StartTime.In(facilityLoc), session.EndTime.In(facilityLoc))
+		courtsLabel := fmt.Sprintf("%d courts", session.CurrentCourtCount)
+		if session.CurrentCourtCount == 1 {
+			courtsLabel = "1 court"
+		}
+		cancellationPolicy := "Contact the facility for cancellation policy details."
+		if rule.ID != 0 {
+			cancellationPolicy = fmt.Sprintf("Cancel at least %d minutes before start time to avoid penalties.", rule.CancellationCutoffMinutes)
+		}
+		confirmation := email.BuildOpenPlayConfirmation(email.ConfirmationDetails{
+			FacilityName:       facility.Name,
+			Date:               date,
+			TimeRange:          timeRange,
+			Courts:             courtsLabel,
+			CancellationPolicy: cancellationPolicy,
+		})
+		go func() {
+			emailCtx, emailCancel := context.WithTimeout(context.Background(), openPlayQueryTimeout)
+			defer emailCancel()
+			email.SendConfirmationEmail(emailCtx, q, emailClient, payload.UserID, confirmation, logger)
+		}()
 	}
 
 	if htmx.IsRequest(r) {

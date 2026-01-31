@@ -6,6 +6,8 @@ CREATE TABLE organizations (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
+    email_from_address TEXT,
+    reminder_hours_before INTEGER NOT NULL DEFAULT 24 CHECK (reminder_hours_before > 0),
     cross_facility_visit_packs BOOLEAN NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -20,9 +22,11 @@ CREATE TABLE facilities (
     slug TEXT NOT NULL UNIQUE,
     timezone TEXT NOT NULL,
     active_theme_id INTEGER,
+    email_from_address TEXT,
     max_advance_booking_days INTEGER NOT NULL DEFAULT 7,
     max_member_reservations INTEGER NOT NULL DEFAULT 30,
     lesson_min_notice_hours INTEGER NOT NULL DEFAULT 24,
+    reminder_hours_before INTEGER NOT NULL DEFAULT 24 CHECK (reminder_hours_before > 0),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id),
@@ -583,6 +587,7 @@ CREATE INDEX idx_reservation_cancellations_reservation_id ON reservation_cancell
 CREATE INDEX idx_reservation_cancellations_cancelled_by_user_id ON reservation_cancellations(cancelled_by_user_id);
 CREATE INDEX idx_reservation_cancellations_cancelled_at ON reservation_cancellations(cancelled_at);
 CREATE INDEX idx_reservations_created_by_user_id ON reservations(created_by_user_id);
+CREATE INDEX idx_reservations_facility_id_start_time ON reservations(facility_id, start_time);
 
 ------ CANCELLATION POLICIES ------
 CREATE TABLE cancellation_policy_tiers (

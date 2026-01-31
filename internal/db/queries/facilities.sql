@@ -8,9 +8,11 @@ SELECT
     slug,
     timezone,
     active_theme_id,
+    email_from_address,
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    reminder_hours_before,
     created_at,
     updated_at
 FROM facilities
@@ -24,9 +26,11 @@ SELECT
     slug,
     timezone,
     active_theme_id,
+    email_from_address,
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    reminder_hours_before,
     created_at,
     updated_at
 FROM facilities
@@ -46,8 +50,23 @@ RETURNING
     slug,
     timezone,
     active_theme_id,
+    email_from_address,
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    reminder_hours_before,
     created_at,
     updated_at;
+
+-- name: GetFacilityEmailConfig :one
+SELECT id, email_from_address, reminder_hours_before
+FROM facilities
+WHERE id = @id;
+
+-- name: UpdateFacilityEmailConfig :one
+UPDATE facilities
+SET email_from_address = @email_from_address,
+    reminder_hours_before = @reminder_hours_before,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id
+RETURNING id, email_from_address, reminder_hours_before;

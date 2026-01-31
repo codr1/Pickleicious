@@ -10,6 +10,7 @@ import (
 
 	db "github.com/codr1/Pickleicious/internal/db"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,14 +25,23 @@ const (
 )
 
 type Engine struct {
-	db *db.DB
+	db          *db.DB
+	emailClient *email.SESClient
 }
 
-func NewEngine(database *db.DB) (*Engine, error) {
+type openPlayCancellationNotice struct {
+	session       dbgen.OpenPlaySession
+	rule          dbgen.OpenPlayRule
+	reservationID int64
+	courtCount    int64
+	reason        string
+}
+
+func NewEngine(database *db.DB, client *email.SESClient) (*Engine, error) {
 	if database == nil {
 		return nil, errors.New("open play engine requires a database")
 	}
-	return &Engine{db: database}, nil
+	return &Engine{db: database, emailClient: client}, nil
 }
 
 func (e *Engine) EvaluateSessionsApproachingCutoff(ctx context.Context, facilityID int64, comparisonTime time.Time) error {
@@ -50,6 +60,7 @@ func (e *Engine) EvaluateSessionsApproachingCutoff(ctx context.Context, facility
 		Logger()
 	logger.Info().Msg("Evaluating open play sessions approaching cutoff")
 
+	var cancellationNotices []openPlayCancellationNotice
 	err := e.db.RunInTx(ctx, func(txdb *db.DB) error {
 		sessions, err := txdb.Queries.ListOpenPlaySessionsApproachingCutoff(ctx, dbgen.ListOpenPlaySessionsApproachingCutoffParams{
 			FacilityID:     facilityID,
@@ -83,12 +94,13 @@ func (e *Engine) EvaluateSessionsApproachingCutoff(ctx context.Context, facility
 				Int64("current_court_count", session.CurrentCourtCount).
 				Msg("Evaluating open play session")
 
-			cancelled, err := e.cancelUndersubscribedSession(ctx, txdb.Queries, session, rule)
+			cancellationNotice, err := e.cancelUndersubscribedSession(ctx, txdb.Queries, session, rule)
 			if err != nil {
 				sessionLogger.Error().Err(err).Msg("Failed to evaluate cancellation")
 				return err
 			}
-			if cancelled {
+			if cancellationNotice != nil {
+				cancellationNotices = append(cancellationNotices, *cancellationNotice)
 				continue
 			}
 
@@ -105,14 +117,20 @@ func (e *Engine) EvaluateSessionsApproachingCutoff(ctx context.Context, facility
 		return err
 	}
 
+	for _, notice := range cancellationNotices {
+		if err := e.notifyOpenPlayCancellation(ctx, e.db.Queries, notice.session, notice.rule, notice.reservationID, notice.courtCount, notice.reason); err != nil {
+			logger.Error().Err(err).Int64("session_id", notice.session.ID).Msg("Failed to send open play cancellation emails")
+		}
+	}
+
 	return nil
 }
 
 func (e *Engine) CancelUndersubscribedSession(ctx context.Context, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
-	var cancelled bool
+	var cancellationNotice *openPlayCancellationNotice
 	err := e.db.RunInTx(ctx, func(txdb *db.DB) error {
 		var err error
-		cancelled, err = e.cancelUndersubscribedSession(ctx, txdb.Queries, session, rule)
+		cancellationNotice, err = e.cancelUndersubscribedSession(ctx, txdb.Queries, session, rule)
 		return err
 	})
 	if err != nil {
@@ -125,7 +143,19 @@ func (e *Engine) CancelUndersubscribedSession(ctx context.Context, session dbgen
 			Msg("Failed to evaluate cancellation in transaction")
 		return false, err
 	}
-	return cancelled, nil
+	if cancellationNotice != nil {
+		if err := e.notifyOpenPlayCancellation(ctx, e.db.Queries, cancellationNotice.session, cancellationNotice.rule, cancellationNotice.reservationID, cancellationNotice.courtCount, cancellationNotice.reason); err != nil {
+			log.Ctx(ctx).
+				Error().
+				Err(err).
+				Int64("session_id", cancellationNotice.session.ID).
+				Int64("facility_id", cancellationNotice.session.FacilityID).
+				Int64("open_play_rule_id", cancellationNotice.session.OpenPlayRuleID).
+				Msg("Failed to send open play cancellation emails")
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
@@ -148,7 +178,7 @@ func (e *Engine) ScaleSessionCourts(ctx context.Context, session dbgen.OpenPlayS
 	return scaled, nil
 }
 
-func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
+func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (*openPlayCancellationNotice, error) {
 	logger := log.Ctx(ctx).With().
 		Str("component", "openplay_engine").
 		Int64("session_id", session.ID).
@@ -161,19 +191,19 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 			Str("status", session.Status).
 			Str("decision", "skip_cancellation").
 			Msg("Skipping cancellation check for non-scheduled session")
-		return false, nil
+		return nil, nil
 	}
 
 	reservationID, err := lookupOpenPlayReservationID(ctx, queries, session)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to find open play reservation")
-		return false, err
+		return nil, err
 	}
 
 	signups, err := countReservationParticipants(ctx, queries, reservationID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to count reservation participants")
-		return false, err
+		return nil, err
 	}
 
 	if signups >= rule.MinParticipants {
@@ -182,18 +212,19 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 			Int64("min_participants", rule.MinParticipants).
 			Str("decision", "retain_session").
 			Msg("Open play session meets minimum participants")
-		return false, nil
+		return nil, nil
 	}
 
 	existingCourts, err := listReservationCourts(ctx, queries, reservationID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to list reservation courts")
-		return false, err
+		return nil, err
 	}
+	originalCourtCount := int64(len(existingCourts))
 
 	if err := removeReservationCourts(ctx, queries, reservationID, existingCourts); err != nil {
 		logger.Error().Err(err).Msg("Failed to release reservation courts")
-		return false, err
+		return nil, err
 	}
 
 	reason := fmt.Sprintf("Only %d signups (minimum: %d)", signups, rule.MinParticipants)
@@ -207,7 +238,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to cancel open play session")
-		return false, fmt.Errorf("cancel open play session %d: %w", session.ID, err)
+		return nil, fmt.Errorf("cancel open play session %d: %w", session.ID, err)
 	}
 
 	updatedCourts, err := queries.UpdateOpenPlaySessionCourtCount(ctx, dbgen.UpdateOpenPlaySessionCourtCountParams{
@@ -217,7 +248,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to reset open play court count after cancellation")
-		return false, fmt.Errorf("reset open play court count %d: %w", session.ID, err)
+		return nil, fmt.Errorf("reset open play court count %d: %w", session.ID, err)
 	}
 
 	beforeState, err := marshalAuditState(map[string]any{
@@ -228,7 +259,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to marshal cancellation audit before state")
-		return false, err
+		return nil, err
 	}
 
 	afterState, err := marshalAuditState(map[string]any{
@@ -239,7 +270,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 	})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to marshal cancellation audit state")
-		return false, err
+		return nil, err
 	}
 
 	if _, err := queries.CreateOpenPlayAuditLog(ctx, dbgen.CreateOpenPlayAuditLogParams{
@@ -250,7 +281,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 		Reason:      sql.NullString{String: reason, Valid: true},
 	}); err != nil {
 		logger.Error().Err(err).Msg("Failed to create cancellation audit log")
-		return false, fmt.Errorf("create cancel audit log for session %d: %w", session.ID, err)
+		return nil, fmt.Errorf("create cancel audit log for session %d: %w", session.ID, err)
 	}
 
 	notification := fmt.Sprintf("%s cancelled - only %d signups (minimum: %d)", rule.Name, signups, rule.MinParticipants)
@@ -261,7 +292,7 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 		RelatedSessionID: sql.NullInt64{Int64: session.ID, Valid: true},
 	}); err != nil {
 		logger.Error().Err(err).Msg("Failed to create cancellation staff notification")
-		return false, fmt.Errorf("create cancel notification for session %d: %w", session.ID, err)
+		return nil, fmt.Errorf("create cancel notification for session %d: %w", session.ID, err)
 	}
 
 	logger.Info().
@@ -271,7 +302,13 @@ func (e *Engine) cancelUndersubscribedSession(ctx context.Context, queries *dbge
 		Str("decision", "cancelled").
 		Msg("Cancelled open play session")
 
-	return true, nil
+	return &openPlayCancellationNotice{
+		session:       session,
+		rule:          rule,
+		reservationID: reservationID,
+		courtCount:    originalCourtCount,
+		reason:        reason,
+	}, nil
 }
 
 func (e *Engine) scaleSessionCourts(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule) (bool, error) {
@@ -459,6 +496,65 @@ func countReservationParticipants(ctx context.Context, queries *dbgen.Queries, r
 		return 0, fmt.Errorf("count reservation participants %d: %w", reservationID, err)
 	}
 	return count, nil
+}
+
+func (e *Engine) notifyOpenPlayCancellation(ctx context.Context, queries *dbgen.Queries, session dbgen.OpenPlaySession, rule dbgen.OpenPlayRule, reservationID int64, courtCount int64, reason string) error {
+	if e == nil || e.emailClient == nil || queries == nil {
+		return nil
+	}
+
+	facility, err := queries.GetFacilityByID(ctx, session.FacilityID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Int64("facility_id", session.FacilityID).Msg("Failed to load facility for open play cancellation email")
+		return err
+	}
+
+	facilityLoc := time.Local
+	if facility.Timezone != "" {
+		if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
+			facilityLoc = loadedLoc
+		} else {
+			log.Ctx(ctx).Error().Err(loadErr).Str("timezone", facility.Timezone).Msg("Failed to load facility timezone for open play cancellation email")
+		}
+	}
+
+	date, timeRange := email.FormatDateTimeRange(session.StartTime.In(facilityLoc), session.EndTime.In(facilityLoc))
+	courtLabel := "TBD"
+	if courtCount == 1 {
+		courtLabel = "1 court"
+	} else if courtCount > 1 {
+		courtLabel = fmt.Sprintf("%d courts", courtCount)
+	}
+
+	refund := int64(100)
+	message := email.BuildCancellationEmail(email.CancellationDetails{
+		FacilityName:     facility.Name,
+		ReservationType:  "OPEN_PLAY",
+		Date:             date,
+		TimeRange:        timeRange,
+		Courts:           courtLabel,
+		Reason:           fmt.Sprintf("%s cancelled - %s", rule.Name, reason),
+		RefundPercentage: &refund,
+	})
+
+	participants, err := queries.ListParticipantsForReservation(ctx, reservationID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Int64("reservation_id", reservationID).Msg("Failed to load open play participants for cancellation email")
+		return err
+	}
+	if len(participants) == 0 {
+		return nil
+	}
+
+	sender := email.ResolveFromAddress(ctx, queries, facility, log.Ctx(ctx))
+	if sender == "" {
+		log.Ctx(ctx).Warn().Str("facility", facility.Name).Msg("Skipping open play cancellation emails: missing from address")
+		return nil
+	}
+	for _, participant := range participants {
+		email.SendCancellationEmail(ctx, queries, e.emailClient, participant.ID, message, sender, log.Ctx(ctx))
+	}
+	return nil
 }
 
 func listReservationCourts(ctx context.Context, queries *dbgen.Queries, reservationID int64) ([]courtAssignment, error) {

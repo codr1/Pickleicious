@@ -35,6 +35,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/cognito"
 	"github.com/codr1/Pickleicious/internal/config"
 	"github.com/codr1/Pickleicious/internal/db"
+	"github.com/codr1/Pickleicious/internal/email"
 	"github.com/codr1/Pickleicious/internal/models"
 	openplayengine "github.com/codr1/Pickleicious/internal/openplay"
 	"github.com/codr1/Pickleicious/internal/request"
@@ -68,17 +69,30 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		}
 	}
 
+	var emailClient *email.SESClient
+	if config.AWS.SESAccessKeyID != "" && config.AWS.SESSecretAccessKey != "" && config.AWS.SESRegion != "" && config.AWS.SESSender != "" {
+		client, err := email.NewSESClient(config.AWS.SESAccessKeyID, config.AWS.SESSecretAccessKey, config.AWS.SESRegion, config.AWS.SESSender)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to init SES client")
+		} else {
+			emailClient = client
+			log.Info().Msg("SES client initialized")
+		}
+	} else {
+		log.Warn().Msg("SES configuration incomplete; email features will be disabled")
+	}
+
 	auth.InitHandlers(database.Queries, config)
 	members.InitHandlers(database.Queries, cognitoClient)
 	nav.InitHandlers(database.Queries)
-	openplayapi.InitHandlers(database)
+	openplayapi.InitHandlers(database, emailClient)
 	themes.InitHandlers(database.Queries)
 	courts.InitHandlers(database.Queries)
 	dashboard.InitHandlers(database)
 	checkin.InitHandlers(database.Queries)
 	clinics.InitHandlers(database)
-	reservations.InitHandlers(database)
-	member.InitHandlers(database)
+	reservations.InitHandlers(database, emailClient)
+	member.InitHandlers(database, emailClient)
 	operatinghours.InitHandlers(database.Queries)
 	notifications.InitHandlers(database.Queries)
 	cancellationpolicy.InitHandlers(database.Queries)
@@ -93,7 +107,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 		return nil, fmt.Errorf("initialize scheduler: %w", err)
 	}
 
-	openplayEngine, err := openplayengine.NewEngine(database)
+	openplayEngine, err := openplayengine.NewEngine(database, emailClient)
 	if err != nil {
 		return nil, fmt.Errorf("initialize open play engine: %w", err)
 	}
@@ -102,6 +116,9 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	}
 	if err := scheduler.RegisterWaitlistJobs(database); err != nil {
 		return nil, fmt.Errorf("register waitlist jobs: %w", err)
+	}
+	if err := scheduler.RegisterReminderJobs(database, emailClient); err != nil {
+		return nil, fmt.Errorf("register reminder jobs: %w", err)
 	}
 
 	// Register routes

@@ -632,6 +632,67 @@ func (q *Queries) ListReservationsByUserID(ctx context.Context, userID sql.NullI
 	return items, nil
 }
 
+const listReservationsStartingBetween = `-- name: ListReservationsStartingBetween :many
+SELECT id, facility_id, reservation_type_id, recurrence_rule_id,
+    primary_user_id, created_by_user_id, pro_id, open_play_rule_id, start_time, end_time,
+    is_open_event, teams_per_court, people_per_team, created_at, updated_at
+FROM reservations
+WHERE facility_id = ?1
+  AND start_time >= ?2
+  AND start_time < ?3
+  AND NOT EXISTS (
+      SELECT 1
+      FROM reservation_cancellations rcc
+      WHERE rcc.reservation_id = reservations.id
+  )
+ORDER BY start_time
+`
+
+type ListReservationsStartingBetweenParams struct {
+	FacilityID int64     `json:"facilityId"`
+	StartTime  time.Time `json:"startTime"`
+	EndTime    time.Time `json:"endTime"`
+}
+
+func (q *Queries) ListReservationsStartingBetween(ctx context.Context, arg ListReservationsStartingBetweenParams) ([]Reservation, error) {
+	rows, err := q.query(ctx, q.listReservationsStartingBetweenStmt, listReservationsStartingBetween, arg.FacilityID, arg.StartTime, arg.EndTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Reservation
+	for rows.Next() {
+		var i Reservation
+		if err := rows.Scan(
+			&i.ID,
+			&i.FacilityID,
+			&i.ReservationTypeID,
+			&i.RecurrenceRuleID,
+			&i.PrimaryUserID,
+			&i.CreatedByUserID,
+			&i.ProID,
+			&i.OpenPlayRuleID,
+			&i.StartTime,
+			&i.EndTime,
+			&i.IsOpenEvent,
+			&i.TeamsPerCourt,
+			&i.PeoplePerTeam,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeParticipant = `-- name: RemoveParticipant :exec
 DELETE FROM reservation_participants
 WHERE reservation_id = ?1

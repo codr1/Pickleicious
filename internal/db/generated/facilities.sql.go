@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getFacilityByID = `-- name: GetFacilityByID :one
@@ -17,9 +18,11 @@ SELECT
     slug,
     timezone,
     active_theme_id,
+    email_from_address,
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    reminder_hours_before,
     created_at,
     updated_at
 FROM facilities
@@ -36,12 +39,33 @@ func (q *Queries) GetFacilityByID(ctx context.Context, id int64) (Facility, erro
 		&i.Slug,
 		&i.Timezone,
 		&i.ActiveThemeID,
+		&i.EmailFromAddress,
 		&i.MaxAdvanceBookingDays,
 		&i.MaxMemberReservations,
 		&i.LessonMinNoticeHours,
+		&i.ReminderHoursBefore,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getFacilityEmailConfig = `-- name: GetFacilityEmailConfig :one
+SELECT id, email_from_address, reminder_hours_before
+FROM facilities
+WHERE id = ?1
+`
+
+type GetFacilityEmailConfigRow struct {
+	ID                  int64          `json:"id"`
+	EmailFromAddress    sql.NullString `json:"emailFromAddress"`
+	ReminderHoursBefore int64          `json:"reminderHoursBefore"`
+}
+
+func (q *Queries) GetFacilityEmailConfig(ctx context.Context, id int64) (GetFacilityEmailConfigRow, error) {
+	row := q.queryRow(ctx, q.getFacilityEmailConfigStmt, getFacilityEmailConfig, id)
+	var i GetFacilityEmailConfigRow
+	err := row.Scan(&i.ID, &i.EmailFromAddress, &i.ReminderHoursBefore)
 	return i, err
 }
 
@@ -54,9 +78,11 @@ SELECT
     slug,
     timezone,
     active_theme_id,
+    email_from_address,
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    reminder_hours_before,
     created_at,
     updated_at
 FROM facilities
@@ -80,9 +106,11 @@ func (q *Queries) ListFacilities(ctx context.Context) ([]Facility, error) {
 			&i.Slug,
 			&i.Timezone,
 			&i.ActiveThemeID,
+			&i.EmailFromAddress,
 			&i.MaxAdvanceBookingDays,
 			&i.MaxMemberReservations,
 			&i.LessonMinNoticeHours,
+			&i.ReminderHoursBefore,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -113,9 +141,11 @@ RETURNING
     slug,
     timezone,
     active_theme_id,
+    email_from_address,
     max_advance_booking_days,
     max_member_reservations,
     lesson_min_notice_hours,
+    reminder_hours_before,
     created_at,
     updated_at
 `
@@ -142,11 +172,41 @@ func (q *Queries) UpdateFacilityBookingConfig(ctx context.Context, arg UpdateFac
 		&i.Slug,
 		&i.Timezone,
 		&i.ActiveThemeID,
+		&i.EmailFromAddress,
 		&i.MaxAdvanceBookingDays,
 		&i.MaxMemberReservations,
 		&i.LessonMinNoticeHours,
+		&i.ReminderHoursBefore,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const updateFacilityEmailConfig = `-- name: UpdateFacilityEmailConfig :one
+UPDATE facilities
+SET email_from_address = ?1,
+    reminder_hours_before = ?2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?3
+RETURNING id, email_from_address, reminder_hours_before
+`
+
+type UpdateFacilityEmailConfigParams struct {
+	EmailFromAddress    sql.NullString `json:"emailFromAddress"`
+	ReminderHoursBefore int64          `json:"reminderHoursBefore"`
+	ID                  int64          `json:"id"`
+}
+
+type UpdateFacilityEmailConfigRow struct {
+	ID                  int64          `json:"id"`
+	EmailFromAddress    sql.NullString `json:"emailFromAddress"`
+	ReminderHoursBefore int64          `json:"reminderHoursBefore"`
+}
+
+func (q *Queries) UpdateFacilityEmailConfig(ctx context.Context, arg UpdateFacilityEmailConfigParams) (UpdateFacilityEmailConfigRow, error) {
+	row := q.queryRow(ctx, q.updateFacilityEmailConfigStmt, updateFacilityEmailConfig, arg.EmailFromAddress, arg.ReminderHoursBefore, arg.ID)
+	var i UpdateFacilityEmailConfigRow
+	err := row.Scan(&i.ID, &i.EmailFromAddress, &i.ReminderHoursBefore)
 	return i, err
 }

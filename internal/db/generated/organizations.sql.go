@@ -7,22 +7,24 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, name, slug, status, created_at, updated_at
+SELECT id, name, slug, email_from_address, status, created_at, updated_at
 FROM organizations
 WHERE id = ?1
 `
 
 type GetOrganizationByIDRow struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID               int64          `json:"id"`
+	Name             string         `json:"name"`
+	Slug             string         `json:"slug"`
+	EmailFromAddress sql.NullString `json:"emailFromAddress"`
+	Status           string         `json:"status"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
 func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (GetOrganizationByIDRow, error) {
@@ -32,6 +34,7 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (GetOrganiz
 		&i.ID,
 		&i.Name,
 		&i.Slug,
+		&i.EmailFromAddress,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -41,18 +44,19 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int64) (GetOrganiz
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
 
-SELECT id, name, slug, status, created_at, updated_at
+SELECT id, name, slug, email_from_address, status, created_at, updated_at
 FROM organizations
 WHERE slug = ?1 AND status = 'active'
 `
 
 type GetOrganizationBySlugRow struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID               int64          `json:"id"`
+	Name             string         `json:"name"`
+	Slug             string         `json:"slug"`
+	EmailFromAddress sql.NullString `json:"emailFromAddress"`
+	Status           string         `json:"status"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
 // internal/db/queries/organizations.sql
@@ -63,6 +67,7 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (GetOr
 		&i.ID,
 		&i.Name,
 		&i.Slug,
+		&i.EmailFromAddress,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -83,20 +88,57 @@ func (q *Queries) GetOrganizationCrossFacilitySetting(ctx context.Context, id in
 	return cross_facility_visit_packs, err
 }
 
+const getOrganizationEmailConfig = `-- name: GetOrganizationEmailConfig :one
+SELECT id, email_from_address
+FROM organizations
+WHERE id = ?1
+`
+
+type GetOrganizationEmailConfigRow struct {
+	ID               int64          `json:"id"`
+	EmailFromAddress sql.NullString `json:"emailFromAddress"`
+}
+
+func (q *Queries) GetOrganizationEmailConfig(ctx context.Context, id int64) (GetOrganizationEmailConfigRow, error) {
+	row := q.queryRow(ctx, q.getOrganizationEmailConfigStmt, getOrganizationEmailConfig, id)
+	var i GetOrganizationEmailConfigRow
+	err := row.Scan(&i.ID, &i.EmailFromAddress)
+	return i, err
+}
+
+const getOrganizationReminderConfig = `-- name: GetOrganizationReminderConfig :one
+SELECT id, reminder_hours_before
+FROM organizations
+WHERE id = ?1
+`
+
+type GetOrganizationReminderConfigRow struct {
+	ID                  int64 `json:"id"`
+	ReminderHoursBefore int64 `json:"reminderHoursBefore"`
+}
+
+func (q *Queries) GetOrganizationReminderConfig(ctx context.Context, id int64) (GetOrganizationReminderConfigRow, error) {
+	row := q.queryRow(ctx, q.getOrganizationReminderConfigStmt, getOrganizationReminderConfig, id)
+	var i GetOrganizationReminderConfigRow
+	err := row.Scan(&i.ID, &i.ReminderHoursBefore)
+	return i, err
+}
+
 const listOrganizations = `-- name: ListOrganizations :many
-SELECT id, name, slug, status, created_at, updated_at
+SELECT id, name, slug, email_from_address, status, created_at, updated_at
 FROM organizations
 WHERE status = 'active'
 ORDER BY name
 `
 
 type ListOrganizationsRow struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID               int64          `json:"id"`
+	Name             string         `json:"name"`
+	Slug             string         `json:"slug"`
+	EmailFromAddress sql.NullString `json:"emailFromAddress"`
+	Status           string         `json:"status"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
 func (q *Queries) ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error) {
@@ -112,6 +154,7 @@ func (q *Queries) ListOrganizations(ctx context.Context) ([]ListOrganizationsRow
 			&i.ID,
 			&i.Name,
 			&i.Slug,
+			&i.EmailFromAddress,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -127,4 +170,29 @@ func (q *Queries) ListOrganizations(ctx context.Context) ([]ListOrganizationsRow
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateOrganizationEmailConfig = `-- name: UpdateOrganizationEmailConfig :one
+UPDATE organizations
+SET email_from_address = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2
+RETURNING id, email_from_address
+`
+
+type UpdateOrganizationEmailConfigParams struct {
+	EmailFromAddress sql.NullString `json:"emailFromAddress"`
+	ID               int64          `json:"id"`
+}
+
+type UpdateOrganizationEmailConfigRow struct {
+	ID               int64          `json:"id"`
+	EmailFromAddress sql.NullString `json:"emailFromAddress"`
+}
+
+func (q *Queries) UpdateOrganizationEmailConfig(ctx context.Context, arg UpdateOrganizationEmailConfigParams) (UpdateOrganizationEmailConfigRow, error) {
+	row := q.queryRow(ctx, q.updateOrganizationEmailConfigStmt, updateOrganizationEmailConfig, arg.EmailFromAddress, arg.ID)
+	var i UpdateOrganizationEmailConfigRow
+	err := row.Scan(&i.ID, &i.EmailFromAddress)
+	return i, err
 }
