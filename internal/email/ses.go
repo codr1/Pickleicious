@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/singleflight"
 )
 
 // SESClient wraps AWS SESv2 sending.
@@ -21,6 +23,21 @@ type SESClient struct {
 	client *sesv2.Client
 	sender string
 }
+
+const (
+	sesIdentityCacheTTL      = 10 * time.Minute
+	sesIdentityVerifyTimeout = 10 * time.Second
+)
+
+type sesIdentityCache struct {
+	mu      sync.Mutex
+	entries map[string]time.Time
+}
+
+var verifiedSESIdentities = &sesIdentityCache{
+	entries: make(map[string]time.Time),
+}
+var verifiedSESIdentityGroup singleflight.Group
 
 // NewSESClient initializes an SES client using static credentials and region.
 func NewSESClient(accessKeyID, secretAccessKey, region, sender string) (*SESClient, error) {
@@ -89,7 +106,6 @@ func (c *SESClient) Send(ctx context.Context, recipient, subject, body string) e
 			Err(err).
 			Str("recipient_masked", maskEmail(recipient)).
 			Int("subject_len", len(subject)).
-			Time("timestamp", time.Now().UTC()).
 			Msg("Failed to send SES email")
 		return fmt.Errorf("send ses email: %w", err)
 	}
@@ -147,7 +163,6 @@ func (c *SESClient) SendFrom(ctx context.Context, recipient, subject, body, send
 			Err(err).
 			Str("recipient_masked", maskEmail(recipient)).
 			Int("subject_len", len(subject)).
-			Time("timestamp", time.Now().UTC()).
 			Msg("Failed to send SES email")
 		return fmt.Errorf("send ses email: %w", err)
 	}
@@ -180,26 +195,77 @@ func verifySESIdentity(ctx context.Context, client *sesv2.Client, sender string)
 		}
 	}
 
-	if err := checkSESIdentity(ctx, client, identity); err == nil {
+	now := time.Now()
+	if verifiedSESIdentities.isFresh(identity, now) {
 		return nil
-	} else if !isSESIdentityNotFound(err) {
-		return fmt.Errorf("validate ses identity %q: %w", identity, err)
 	}
 
-	at := strings.LastIndex(identity, "@")
-	if at <= 0 || at == len(identity)-1 {
-		return fmt.Errorf("ses sender %q is not a verified identity", sender)
-	}
-
-	domain := identity[at+1:]
-	if err := checkSESIdentity(ctx, client, domain); err != nil {
-		if isSESIdentityNotFound(err) {
-			return fmt.Errorf("ses sender %q is not a verified identity", sender)
+	result := verifiedSESIdentityGroup.DoChan(identity, func() (any, error) {
+		now := time.Now()
+		if verifiedSESIdentities.isFresh(identity, now) {
+			return nil, nil
 		}
-		return fmt.Errorf("validate ses identity %q: %w", domain, err)
+
+		verifyCtx, cancel := context.WithTimeout(context.Background(), sesIdentityVerifyTimeout)
+		defer cancel()
+
+		if err := checkSESIdentity(verifyCtx, client, identity); err == nil {
+			verifiedSESIdentities.mark(identity, now)
+			return nil, nil
+		} else if !isSESIdentityNotFound(err) {
+			return nil, fmt.Errorf("validate ses identity %q: %w", identity, err)
+		}
+
+		at := strings.LastIndex(identity, "@")
+		if at <= 0 || at == len(identity)-1 {
+			return nil, fmt.Errorf("ses sender %q is not a verified identity", sender)
+		}
+
+		domain := identity[at+1:]
+		if err := checkSESIdentity(verifyCtx, client, domain); err != nil {
+			if isSESIdentityNotFound(err) {
+				return nil, fmt.Errorf("ses sender %q is not a verified identity", sender)
+			}
+			return nil, fmt.Errorf("validate ses identity %q: %w", domain, err)
+		}
+
+		verifiedSESIdentities.mark(identity, now)
+		return nil, nil
+	})
+
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case res := <-result:
+			return res.Err
+		}
 	}
 
-	return nil
+	res := <-result
+	return res.Err
+}
+
+func (c *sesIdentityCache) isFresh(identity string, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	expiresAt, ok := c.entries[identity]
+	if !ok {
+		return false
+	}
+	if now.Before(expiresAt) {
+		return true
+	}
+	delete(c.entries, identity)
+	return false
+}
+
+func (c *sesIdentityCache) mark(identity string, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.entries[identity] = now.Add(sesIdentityCacheTTL)
 }
 
 func checkSESIdentity(ctx context.Context, client *sesv2.Client, identity string) error {

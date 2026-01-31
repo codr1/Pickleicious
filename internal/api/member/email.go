@@ -7,15 +7,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
 )
 
-func cancellationPolicySummary(ctx context.Context, q *dbgen.Queries, facilityID int64, reservationTypeID int64, startTime time.Time, now time.Time) (string, error) {
+func cancellationPolicySummary(ctx context.Context, q *dbgen.Queries, facilityID int64, reservationTypeID *int64, startTime time.Time, now time.Time) (string, error) {
 	hoursUntil := hoursUntilReservationStart(startTime, now)
 	tier, err := q.GetApplicableCancellationTier(ctx, dbgen.GetApplicableCancellationTierParams{
 		FacilityID:            facilityID,
 		HoursUntilReservation: hoursUntil,
-		ReservationTypeID:     sql.NullInt64{Int64: reservationTypeID, Valid: true},
+		ReservationTypeID:     apiutil.ToNullInt64(reservationTypeID),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

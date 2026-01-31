@@ -21,6 +21,7 @@ func SendConfirmationEmail(ctx context.Context, q *dbgen.Queries, client EmailSe
 		return
 	}
 
+	// ctx is only for the user lookup; async send uses a detached timeout context.
 	user, err := q.GetUserByID(ctx, userID)
 	if err != nil {
 		if logger != nil {

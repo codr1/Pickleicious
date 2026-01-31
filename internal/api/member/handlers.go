@@ -776,7 +776,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 	if emailClient != nil && facilityLoaded {
 		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
 		defer emailCancel()
-		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, reservationTypeID, startTime, now)
+		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, &reservationTypeID, startTime, now)
 		if policyErr != nil {
 			logger.Error().Err(policyErr).Int64("facility_id", facility.ID).Msg("Failed to load cancellation policy for confirmation email")
 			cancellationPolicy = "Contact the facility for cancellation policy details."
@@ -789,7 +789,7 @@ func HandleMemberBookingCreate(w http.ResponseWriter, r *http.Request) {
 			Courts:             court.Name,
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(context.Background(), q, emailClient, user.ID, confirmation, logger)
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")
@@ -1271,6 +1271,8 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && facility.ID != 0 {
+		emailCtx, emailCancel := context.WithTimeout(context.Background(), portalQueryTimeout)
+		defer emailCancel()
 		facilityLoc := time.Local
 		if facility.Timezone != "" {
 			if loadedLoc, loadErr := time.LoadLocation(facility.Timezone); loadErr == nil {
@@ -1292,7 +1294,7 @@ func HandleMemberOpenPlaySignup(w http.ResponseWriter, r *http.Request) {
 			Courts:             courtsLabel,
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(context.Background(), q, emailClient, user.ID, confirmation, logger)
+		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations,refreshMemberOpenPlay")

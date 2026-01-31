@@ -45,7 +45,7 @@ func FormatDateTimeRange(start, end time.Time) (string, string) {
 }
 
 func BuildGameConfirmation(details ConfirmationDetails) ConfirmationEmail {
-	return buildConfirmationEmail("Game", "Game Reservation Confirmed", details)
+	return buildConfirmationEmail(ReservationTypeLabel("GAME"), "Game Reservation Confirmed", details)
 }
 
 func BuildProSessionConfirmation(details ConfirmationDetails) ConfirmationEmail {
