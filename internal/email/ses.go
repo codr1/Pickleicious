@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -157,6 +158,12 @@ func verifySESIdentity(ctx context.Context, client *sesv2.Client, sender string)
 	identity := strings.TrimSpace(sender)
 	if identity == "" {
 		return fmt.Errorf("ses sender is required")
+	}
+	if addr, err := mail.ParseAddress(identity); err == nil {
+		identity = strings.TrimSpace(addr.Address)
+		if identity == "" {
+			return fmt.Errorf("ses sender is required")
+		}
 	}
 
 	if err := checkSESIdentity(ctx, client, identity); err == nil {

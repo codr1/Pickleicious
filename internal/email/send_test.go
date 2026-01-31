@@ -20,6 +20,8 @@ type fakeEmailSender struct {
 	sendFromCtxErrCh chan error
 }
 
+const testTimeout = 500 * time.Millisecond
+
 func newFakeEmailSender() *fakeEmailSender {
 	return &fakeEmailSender{
 		sendStarted:      make(chan struct{}, 1),
@@ -43,7 +45,7 @@ func (f *fakeEmailSender) Send(ctx context.Context, recipient, subject, body str
 		default:
 		}
 		return err
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(testTimeout):
 		return nil
 	}
 }
@@ -62,7 +64,7 @@ func (f *fakeEmailSender) SendFrom(ctx context.Context, recipient, subject, body
 		default:
 		}
 		return err
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(testTimeout):
 		return nil
 	}
 }
@@ -92,7 +94,7 @@ func waitForSignal(t *testing.T, ch <-chan struct{}, message string) {
 
 	select {
 	case <-ch:
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(testTimeout):
 		t.Fatal(message)
 	}
 }
@@ -103,7 +105,7 @@ func waitForError(t *testing.T, ch <-chan error, message string) error {
 	select {
 	case err := <-ch:
 		return err
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(testTimeout):
 		t.Fatal(message)
 		return nil
 	}

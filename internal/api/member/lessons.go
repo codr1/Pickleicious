@@ -575,6 +575,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil {
+		// emailCtx is used for synchronous operations; SendConfirmationEmail uses a detached context for async send.
 		emailCtx, cancel := context.WithTimeout(context.Background(), portalQueryTimeout)
 		defer cancel()
 		cancellationPolicy, policyErr := cancellationPolicySummary(emailCtx, q, facility.ID, reservationTypeID, startTime, now)
@@ -590,7 +591,7 @@ func HandleLessonBookingCreate(w http.ResponseWriter, r *http.Request) {
 			Courts:             "Assigned at check-in",
 			CancellationPolicy: cancellationPolicy,
 		})
-		email.SendConfirmationEmail(emailCtx, q, emailClient, user.ID, confirmation, logger)
+		email.SendConfirmationEmail(context.Background(), q, emailClient, user.ID, confirmation, logger)
 	}
 
 	w.Header().Set("HX-Trigger", "refreshMemberReservations")

@@ -892,9 +892,10 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailClient != nil && reservation.ID != 0 {
-		emailCtx, emailCancel := context.WithTimeout(context.Background(), reservationQueryTimeout)
-		defer emailCancel()
-		facility, err := q.GetFacilityByID(emailCtx, facilityID)
+		emailCtx := context.Background()
+		queryCtx, queryCancel := context.WithTimeout(emailCtx, reservationQueryTimeout)
+		defer queryCancel()
+		facility, err := q.GetFacilityByID(queryCtx, facilityID)
 		if err != nil {
 			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load facility for cancellation email")
 		} else {
@@ -918,7 +919,7 @@ func HandleReservationDelete(w http.ResponseWriter, r *http.Request) {
 				RefundPercentage: &refund,
 				FeeWaived:        feeWaived,
 			})
-			sender := email.ResolveFromAddress(emailCtx, q, facility, logger)
+			sender := email.ResolveFromAddress(queryCtx, q, facility, logger)
 			recipients := make(map[int64]struct{}, len(reservationParticipants)+1)
 			for _, participant := range reservationParticipants {
 				recipients[participant.ID] = struct{}{}
