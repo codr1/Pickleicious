@@ -547,6 +547,10 @@ func (e *Engine) notifyOpenPlayCancellation(ctx context.Context, queries *dbgen.
 	}
 
 	sender := email.ResolveFromAddress(ctx, queries, facility, log.Ctx(ctx))
+	if sender == "" {
+		log.Ctx(ctx).Warn().Str("facility", facility.Name).Msg("Skipping open play cancellation emails: missing from address")
+		return nil
+	}
 	for _, participant := range participants {
 		email.SendCancellationEmail(ctx, queries, e.emailClient, participant.ID, message, sender, log.Ctx(ctx))
 	}

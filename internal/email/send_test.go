@@ -104,7 +104,7 @@ func waitForNoError(t *testing.T, ch <-chan error, message string) {
 	select {
 	case err := <-ch:
 		t.Fatalf("%s: %v", message, err)
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(testTimeout):
 	}
 }
 

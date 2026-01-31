@@ -50,8 +50,12 @@ func SendCancellationEmail(ctx context.Context, q *dbgen.Queries, client EmailSe
 		if sendCtx.Err() != nil {
 			return
 		}
-		if err := client.SendFrom(sendCtx, recipient, message.Subject, message.Body, sender); err != nil && logger != nil {
-			logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send cancellation email")
+		if err := client.SendFrom(sendCtx, recipient, message.Subject, message.Body, sender); err != nil {
+			if logger != nil {
+				logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send cancellation email")
+			}
+		} else if logger != nil {
+			logger.Info().Int64("user_id", userID).Msg("Cancellation email sent")
 		}
 	}()
 }

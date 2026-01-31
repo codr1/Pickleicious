@@ -17,6 +17,12 @@ func SendReminderEmail(ctx context.Context, q *dbgen.Queries, client EmailSender
 	if client == nil || q == nil {
 		return
 	}
+	if userID <= 0 {
+		if logger != nil {
+			logger.Warn().Int64("user_id", userID).Msg("Skipping reminder email with invalid user ID")
+		}
+		return
+	}
 	if message.Subject == "" || message.Body == "" {
 		return
 	}

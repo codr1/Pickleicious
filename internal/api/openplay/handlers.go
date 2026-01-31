@@ -798,9 +798,11 @@ func HandleAddParticipant(w http.ResponseWriter, r *http.Request) {
 			Courts:             courtsLabel,
 			CancellationPolicy: cancellationPolicy,
 		})
-		emailCtx, emailCancel := context.WithTimeout(context.Background(), openPlayQueryTimeout)
-		defer emailCancel()
-		email.SendConfirmationEmail(emailCtx, q, emailClient, payload.UserID, confirmation, logger)
+		go func() {
+			emailCtx, emailCancel := context.WithTimeout(context.Background(), openPlayQueryTimeout)
+			defer emailCancel()
+			email.SendConfirmationEmail(emailCtx, q, emailClient, payload.UserID, confirmation, logger)
+		}()
 	}
 
 	if htmx.IsRequest(r) {
