@@ -30,6 +30,7 @@ import (
 	"github.com/codr1/Pickleicious/internal/api/reservations"
 	"github.com/codr1/Pickleicious/internal/api/staff"
 	"github.com/codr1/Pickleicious/internal/api/themes"
+	"github.com/codr1/Pickleicious/internal/api/tierbooking"
 	"github.com/codr1/Pickleicious/internal/api/visitpacks"
 	"github.com/codr1/Pickleicious/internal/api/waitlist"
 	"github.com/codr1/Pickleicious/internal/cognito"
@@ -99,6 +100,7 @@ func newServer(config *config.Config, database *db.DB) (*http.Server, error) {
 	lessonpacks.InitHandlers(database.Queries)
 	visitpacks.InitHandlers(database.Queries)
 	waitlist.InitHandlers(database)
+	tierbooking.InitHandlers(database)
 
 	staff.InitHandlers(database)
 	leagues.InitHandlers(database)
@@ -580,6 +582,9 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	// Lesson package admin page
 	mux.HandleFunc("/admin/lesson-packages", lessonpacks.HandleLessonPackageTypesPage)
 
+	// Tier booking admin page
+	mux.HandleFunc("/admin/booking-windows", tierbooking.HandleTierBookingPage)
+
 	// Visit pack API
 	mux.HandleFunc("/api/v1/visit-pack-types", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet:  visitpacks.HandleVisitPackTypesList,
@@ -610,6 +615,15 @@ func registerRoutes(mux *http.ServeMux, database *db.DB) {
 	}))
 	mux.HandleFunc("/api/v1/users/{id}/lesson-packages", methodHandler(map[string]http.HandlerFunc{
 		http.MethodGet: lessonpacks.HandleListUserLessonPackages,
+	}))
+
+	// Tier booking API
+	mux.HandleFunc("/api/v1/tier-booking/toggle", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: tierbooking.HandleTierBookingToggle,
+	}))
+	mux.HandleFunc("/api/v1/tier-booking/windows", methodHandler(map[string]http.HandlerFunc{
+		http.MethodPost: tierbooking.HandleTierBookingSave,
+		http.MethodPut:  tierbooking.HandleTierBookingSave,
 	}))
 
 	// Operating hours admin page
