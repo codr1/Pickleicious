@@ -64,6 +64,18 @@ func ReservationTypeLabel(reservationType string) string {
 		return "Pro Session"
 	case "GAME":
 		return "Court Reservation"
+	case "EVENT":
+		return "Event"
+	case "MAINTENANCE":
+		return "Maintenance"
+	case "LEAGUE":
+		return "League"
+	case "LESSON":
+		return "Lesson"
+	case "TOURNAMENT":
+		return "Tournament"
+	case "CLINIC":
+		return "Clinic"
 	}
 	return "Reservation"
 }

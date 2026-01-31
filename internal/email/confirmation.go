@@ -42,8 +42,12 @@ func SendConfirmationEmail(ctx context.Context, q *dbgen.Queries, client EmailSe
 		if sendCtx.Err() != nil {
 			return
 		}
-		if err := client.Send(sendCtx, recipient, confirmation.Subject, confirmation.Body); err != nil && logger != nil {
-			logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send confirmation email")
+		if err := client.Send(sendCtx, recipient, confirmation.Subject, confirmation.Body); err != nil {
+			if logger != nil {
+				logger.Error().Err(err).Int64("user_id", userID).Msg("Failed to send confirmation email")
+			}
+		} else if logger != nil {
+			logger.Info().Int64("user_id", userID).Msg("Confirmation email sent")
 		}
 	}()
 }

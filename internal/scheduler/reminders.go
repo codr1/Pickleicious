@@ -143,8 +143,9 @@ func sendReservationReminder(ctx context.Context, database *db.DB, emailClient *
 	})
 	sender := email.ResolveFromAddress(ctx, database.Queries, facility, logger)
 
+	sendCtx := context.WithoutCancel(ctx)
 	for userID := range recipientIDs {
-		email.SendReminderEmail(ctx, database.Queries, emailClient, userID, reminder, sender, logger)
+		email.SendReminderEmail(sendCtx, database.Queries, emailClient, userID, reminder, sender, logger)
 	}
 
 	return nil
