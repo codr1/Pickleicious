@@ -237,6 +237,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteThemeStmt, err = db.PrepareContext(ctx, deleteTheme); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteTheme: %w", err)
 	}
+	if q.deleteTierBookingWindowStmt, err = db.PrepareContext(ctx, deleteTierBookingWindow); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteTierBookingWindow: %w", err)
+	}
 	if q.deleteWaitlistEntryStmt, err = db.PrepareContext(ctx, deleteWaitlistEntry); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteWaitlistEntry: %w", err)
 	}
@@ -296,6 +299,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getFacilityHoursStmt, err = db.PrepareContext(ctx, getFacilityHours); err != nil {
 		return nil, fmt.Errorf("error preparing query GetFacilityHours: %w", err)
+	}
+	if q.getFacilityTierBookingEnabledStmt, err = db.PrepareContext(ctx, getFacilityTierBookingEnabled); err != nil {
+		return nil, fmt.Errorf("error preparing query GetFacilityTierBookingEnabled: %w", err)
 	}
 	if q.getFutureProSessionsByStaffIDStmt, err = db.PrepareContext(ctx, getFutureProSessionsByStaffID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetFutureProSessionsByStaffID: %w", err)
@@ -416,6 +422,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getThemeStmt, err = db.PrepareContext(ctx, getTheme); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTheme: %w", err)
+	}
+	if q.getTierBookingWindowStmt, err = db.PrepareContext(ctx, getTierBookingWindow); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTierBookingWindow: %w", err)
 	}
 	if q.getUpdatedMemberStmt, err = db.PrepareContext(ctx, getUpdatedMember); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUpdatedMember: %w", err)
@@ -600,6 +609,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listTeamMembersStmt, err = db.PrepareContext(ctx, listTeamMembers); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTeamMembers: %w", err)
 	}
+	if q.listTierBookingWindowsForFacilityStmt, err = db.PrepareContext(ctx, listTierBookingWindowsForFacility); err != nil {
+		return nil, fmt.Errorf("error preparing query ListTierBookingWindowsForFacility: %w", err)
+	}
 	if q.listTodayVisitsByFacilityStmt, err = db.PrepareContext(ctx, listTodayVisitsByFacility); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTodayVisitsByFacility: %w", err)
 	}
@@ -746,6 +758,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.upsertPhotoStmt, err = db.PrepareContext(ctx, upsertPhoto); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertPhoto: %w", err)
+	}
+	if q.upsertTierBookingWindowStmt, err = db.PrepareContext(ctx, upsertTierBookingWindow); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertTierBookingWindow: %w", err)
 	}
 	if q.upsertWaitlistConfigStmt, err = db.PrepareContext(ctx, upsertWaitlistConfig); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertWaitlistConfig: %w", err)
@@ -1110,6 +1125,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteThemeStmt: %w", cerr)
 		}
 	}
+	if q.deleteTierBookingWindowStmt != nil {
+		if cerr := q.deleteTierBookingWindowStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteTierBookingWindowStmt: %w", cerr)
+		}
+	}
 	if q.deleteWaitlistEntryStmt != nil {
 		if cerr := q.deleteWaitlistEntryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteWaitlistEntryStmt: %w", cerr)
@@ -1208,6 +1228,11 @@ func (q *Queries) Close() error {
 	if q.getFacilityHoursStmt != nil {
 		if cerr := q.getFacilityHoursStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getFacilityHoursStmt: %w", cerr)
+		}
+	}
+	if q.getFacilityTierBookingEnabledStmt != nil {
+		if cerr := q.getFacilityTierBookingEnabledStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getFacilityTierBookingEnabledStmt: %w", cerr)
 		}
 	}
 	if q.getFutureProSessionsByStaffIDStmt != nil {
@@ -1408,6 +1433,11 @@ func (q *Queries) Close() error {
 	if q.getThemeStmt != nil {
 		if cerr := q.getThemeStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getThemeStmt: %w", cerr)
+		}
+	}
+	if q.getTierBookingWindowStmt != nil {
+		if cerr := q.getTierBookingWindowStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTierBookingWindowStmt: %w", cerr)
 		}
 	}
 	if q.getUpdatedMemberStmt != nil {
@@ -1715,6 +1745,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listTeamMembersStmt: %w", cerr)
 		}
 	}
+	if q.listTierBookingWindowsForFacilityStmt != nil {
+		if cerr := q.listTierBookingWindowsForFacilityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listTierBookingWindowsForFacilityStmt: %w", cerr)
+		}
+	}
 	if q.listTodayVisitsByFacilityStmt != nil {
 		if cerr := q.listTodayVisitsByFacilityStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listTodayVisitsByFacilityStmt: %w", cerr)
@@ -1960,6 +1995,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing upsertPhotoStmt: %w", cerr)
 		}
 	}
+	if q.upsertTierBookingWindowStmt != nil {
+		if cerr := q.upsertTierBookingWindowStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertTierBookingWindowStmt: %w", cerr)
+		}
+	}
 	if q.upsertWaitlistConfigStmt != nil {
 		if cerr := q.upsertWaitlistConfigStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertWaitlistConfigStmt: %w", cerr)
@@ -2075,6 +2115,7 @@ type Queries struct {
 	deleteReservationParticipantsByReservationIDStmt  *sql.Stmt
 	deleteStaffStmt                                   *sql.Stmt
 	deleteThemeStmt                                   *sql.Stmt
+	deleteTierBookingWindowStmt                       *sql.Stmt
 	deleteWaitlistEntryStmt                           *sql.Stmt
 	expireOfferStmt                                   *sql.Stmt
 	facilityExistsStmt                                *sql.Stmt
@@ -2095,6 +2136,7 @@ type Queries struct {
 	getFacilityByIDStmt                               *sql.Stmt
 	getFacilityEmailConfigStmt                        *sql.Stmt
 	getFacilityHoursStmt                              *sql.Stmt
+	getFacilityTierBookingEnabledStmt                 *sql.Stmt
 	getFutureProSessionsByStaffIDStmt                 *sql.Stmt
 	getLatestCancellationByReservationIDStmt          *sql.Stmt
 	getLeagueStmt                                     *sql.Stmt
@@ -2135,6 +2177,7 @@ type Queries struct {
 	getStaffByUserIDStmt                              *sql.Stmt
 	getStaffNotificationByIDStmt                      *sql.Stmt
 	getThemeStmt                                      *sql.Stmt
+	getTierBookingWindowStmt                          *sql.Stmt
 	getUpdatedMemberStmt                              *sql.Stmt
 	getUserByEmailStmt                                *sql.Stmt
 	getUserByIDStmt                                   *sql.Stmt
@@ -2196,6 +2239,7 @@ type Queries struct {
 	listStaffNotificationsForStaffStmt                *sql.Stmt
 	listSystemThemesStmt                              *sql.Stmt
 	listTeamMembersStmt                               *sql.Stmt
+	listTierBookingWindowsForFacilityStmt             *sql.Stmt
 	listTodayVisitsByFacilityStmt                     *sql.Stmt
 	listVisitPackTypesStmt                            *sql.Stmt
 	listWaitlistsByFacilityStmt                       *sql.Stmt
@@ -2245,6 +2289,7 @@ type Queries struct {
 	upsertActiveThemeIDStmt                           *sql.Stmt
 	upsertOperatingHoursStmt                          *sql.Stmt
 	upsertPhotoStmt                                   *sql.Stmt
+	upsertTierBookingWindowStmt                       *sql.Stmt
 	upsertWaitlistConfigStmt                          *sql.Stmt
 }
 
@@ -2323,6 +2368,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteReservationParticipantsByReservationIDStmt:  q.deleteReservationParticipantsByReservationIDStmt,
 		deleteStaffStmt:                                   q.deleteStaffStmt,
 		deleteThemeStmt:                                   q.deleteThemeStmt,
+		deleteTierBookingWindowStmt:                       q.deleteTierBookingWindowStmt,
 		deleteWaitlistEntryStmt:                           q.deleteWaitlistEntryStmt,
 		expireOfferStmt:                                   q.expireOfferStmt,
 		facilityExistsStmt:                                q.facilityExistsStmt,
@@ -2343,6 +2389,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getFacilityByIDStmt:                               q.getFacilityByIDStmt,
 		getFacilityEmailConfigStmt:                        q.getFacilityEmailConfigStmt,
 		getFacilityHoursStmt:                              q.getFacilityHoursStmt,
+		getFacilityTierBookingEnabledStmt:                 q.getFacilityTierBookingEnabledStmt,
 		getFutureProSessionsByStaffIDStmt:                 q.getFutureProSessionsByStaffIDStmt,
 		getLatestCancellationByReservationIDStmt:          q.getLatestCancellationByReservationIDStmt,
 		getLeagueStmt:                                     q.getLeagueStmt,
@@ -2383,6 +2430,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getStaffByUserIDStmt:                              q.getStaffByUserIDStmt,
 		getStaffNotificationByIDStmt:                      q.getStaffNotificationByIDStmt,
 		getThemeStmt:                                      q.getThemeStmt,
+		getTierBookingWindowStmt:                          q.getTierBookingWindowStmt,
 		getUpdatedMemberStmt:                              q.getUpdatedMemberStmt,
 		getUserByEmailStmt:                                q.getUserByEmailStmt,
 		getUserByIDStmt:                                   q.getUserByIDStmt,
@@ -2444,6 +2492,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listStaffNotificationsForStaffStmt:                q.listStaffNotificationsForStaffStmt,
 		listSystemThemesStmt:                              q.listSystemThemesStmt,
 		listTeamMembersStmt:                               q.listTeamMembersStmt,
+		listTierBookingWindowsForFacilityStmt:             q.listTierBookingWindowsForFacilityStmt,
 		listTodayVisitsByFacilityStmt:                     q.listTodayVisitsByFacilityStmt,
 		listVisitPackTypesStmt:                            q.listVisitPackTypesStmt,
 		listWaitlistsByFacilityStmt:                       q.listWaitlistsByFacilityStmt,
@@ -2493,6 +2542,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		upsertActiveThemeIDStmt:                           q.upsertActiveThemeIDStmt,
 		upsertOperatingHoursStmt:                          q.upsertOperatingHoursStmt,
 		upsertPhotoStmt:                                   q.upsertPhotoStmt,
+		upsertTierBookingWindowStmt:                       q.upsertTierBookingWindowStmt,
 		upsertWaitlistConfigStmt:                          q.upsertWaitlistConfigStmt,
 	}
 }

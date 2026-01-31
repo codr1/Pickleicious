@@ -88,6 +88,7 @@ type Querier interface {
 	DeleteReservationParticipantsByReservationID(ctx context.Context, reservationID int64) error
 	DeleteStaff(ctx context.Context, id int64) error
 	DeleteTheme(ctx context.Context, id int64) (int64, error)
+	DeleteTierBookingWindow(ctx context.Context, arg DeleteTierBookingWindowParams) (int64, error)
 	DeleteWaitlistEntry(ctx context.Context, arg DeleteWaitlistEntryParams) (int64, error)
 	ExpireOffer(ctx context.Context, arg ExpireOfferParams) (WaitlistOffer, error)
 	FacilityExists(ctx context.Context, facilityID int64) (int64, error)
@@ -113,6 +114,7 @@ type Querier interface {
 	GetFacilityEmailConfig(ctx context.Context, id int64) (GetFacilityEmailConfigRow, error)
 	// internal/db/queries/schedules.sql
 	GetFacilityHours(ctx context.Context, facilityID int64) ([]OperatingHour, error)
+	GetFacilityTierBookingEnabled(ctx context.Context, id int64) (bool, error)
 	GetFutureProSessionsByStaffID(ctx context.Context, arg GetFutureProSessionsByStaffIDParams) ([]GetFutureProSessionsByStaffIDRow, error)
 	GetLatestCancellationByReservationID(ctx context.Context, reservationID int64) (ReservationCancellation, error)
 	GetLeague(ctx context.Context, id int64) (League, error)
@@ -155,6 +157,8 @@ type Querier interface {
 	GetStaffNotificationByID(ctx context.Context, id int64) (StaffNotification, error)
 	// internal/db/queries/themes.sql
 	GetTheme(ctx context.Context, id int64) (Theme, error)
+	// internal/db/queries/tier_booking_window.sql
+	GetTierBookingWindow(ctx context.Context, arg GetTierBookingWindowParams) (MemberTierBookingWindow, error)
 	GetUpdatedMember(ctx context.Context, id int64) (GetUpdatedMemberRow, error)
 	// internal/db/queries/users.sql
 	GetUserByEmail(ctx context.Context, email sql.NullString) (User, error)
@@ -224,6 +228,7 @@ type Querier interface {
 	ListStaffNotificationsForStaff(ctx context.Context, arg ListStaffNotificationsForStaffParams) ([]StaffNotification, error)
 	ListSystemThemes(ctx context.Context) ([]Theme, error)
 	ListTeamMembers(ctx context.Context, leagueTeamID int64) ([]LeagueTeamMember, error)
+	ListTierBookingWindowsForFacility(ctx context.Context, facilityID int64) ([]MemberTierBookingWindow, error)
 	ListTodayVisitsByFacility(ctx context.Context, arg ListTodayVisitsByFacilityParams) ([]FacilityVisit, error)
 	ListVisitPackTypes(ctx context.Context, facilityID int64) ([]VisitPackType, error)
 	ListWaitlistsByFacility(ctx context.Context, facilityID int64) ([]Waitlist, error)
@@ -273,6 +278,7 @@ type Querier interface {
 	UpsertActiveThemeID(ctx context.Context, arg UpsertActiveThemeIDParams) (int64, error)
 	UpsertOperatingHours(ctx context.Context, arg UpsertOperatingHoursParams) (OperatingHour, error)
 	UpsertPhoto(ctx context.Context, arg UpsertPhotoParams) (UserPhoto, error)
+	UpsertTierBookingWindow(ctx context.Context, arg UpsertTierBookingWindowParams) (MemberTierBookingWindow, error)
 	UpsertWaitlistConfig(ctx context.Context, arg UpsertWaitlistConfigParams) (WaitlistConfig, error)
 }
 
