@@ -89,20 +89,9 @@ type Facility struct {
 	MaxMemberReservations int64          `json:"maxMemberReservations"`
 	LessonMinNoticeHours  int64          `json:"lessonMinNoticeHours"`
 	ReminderHoursBefore   int64          `json:"reminderHoursBefore"`
+	TierBookingEnabled    bool           `json:"tierBookingEnabled"`
 	CreatedAt             time.Time      `json:"createdAt"`
 	UpdatedAt             time.Time      `json:"updatedAt"`
-	ID                    int64         `json:"id"`
-	OrganizationID        int64         `json:"organizationId"`
-	Name                  string        `json:"name"`
-	Slug                  string        `json:"slug"`
-	Timezone              string        `json:"timezone"`
-	ActiveThemeID         sql.NullInt64 `json:"activeThemeId"`
-	MaxAdvanceBookingDays int64         `json:"maxAdvanceBookingDays"`
-	MaxMemberReservations int64         `json:"maxMemberReservations"`
-	LessonMinNoticeHours  int64         `json:"lessonMinNoticeHours"`
-	TierBookingEnabled    bool          `json:"tierBookingEnabled"`
-	CreatedAt             time.Time     `json:"createdAt"`
-	UpdatedAt             time.Time     `json:"updatedAt"`
 }
 
 type FacilityVisit struct {
