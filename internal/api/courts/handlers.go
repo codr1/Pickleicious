@@ -60,6 +60,7 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	isStaff := authz.IsStaff(user)
 	calendarData := courts.CalendarData{DisplayDate: displayDate, IsStaff: isStaff, ActiveView: activeView}
 	weekCalendarData := courts.WeekCalendarData{DisplayDate: displayDate, WeekStart: startOfWeek(displayDate), IsStaff: isStaff, ActiveView: activeView}
+	monthCalendarData := courts.MonthCalendarData{DisplayDate: displayDate, IsStaff: isStaff, ActiveView: activeView}
 	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 			return
@@ -84,6 +85,14 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 				log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load week calendar reservations")
 				weekCalendarData = courts.WeekCalendarData{DisplayDate: displayDate, WeekStart: startOfWeek(displayDate), FacilityID: facilityID, IsStaff: isStaff, ActiveView: activeView}
 			}
+		} else if activeView == "month" {
+			monthCalendarData, err = buildMonthCalendarData(ctx, q, facilityID, displayDate)
+			monthCalendarData.IsStaff = isStaff
+			monthCalendarData.ActiveView = activeView
+			if err != nil {
+				log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load month calendar reservations")
+				monthCalendarData = courts.MonthCalendarData{DisplayDate: displayDate, FacilityID: facilityID, IsStaff: isStaff, ActiveView: activeView}
+			}
 		} else {
 			calendarData, err = buildCalendarData(ctx, q, facilityID, displayDate)
 			calendarData.IsStaff = isStaff
@@ -98,6 +107,8 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	var calendar templ.Component
 	if activeView == "week" {
 		calendar = courts.WeekCalendar(weekCalendarData)
+	} else if activeView == "month" {
+		calendar = courts.MonthCalendar(monthCalendarData)
 	} else {
 		calendar = courts.Calendar(calendarData)
 	}
@@ -145,6 +156,16 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 		weekCalendarData.IsStaff = isStaff
 		weekCalendarData.ActiveView = activeView
 		component = courts.WeekCalendar(weekCalendarData)
+	} else if activeView == "month" {
+		monthCalendarData, err := buildMonthCalendarData(ctx, q, facilityID, displayDate)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load month calendar reservations")
+			http.Error(w, "Failed to load calendar reservations", http.StatusInternalServerError)
+			return
+		}
+		monthCalendarData.IsStaff = isStaff
+		monthCalendarData.ActiveView = activeView
+		component = courts.MonthCalendar(monthCalendarData)
 	} else {
 		calendarData, err := buildCalendarData(ctx, q, facilityID, displayDate)
 		if err != nil {
@@ -385,6 +406,49 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 			})
 		}
 	}
+
+	return calendarData, nil
+}
+
+func buildMonthCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, displayDate time.Time) (courts.MonthCalendarData, error) {
+	calendarData := courts.MonthCalendarData{DisplayDate: displayDate, FacilityID: facilityID, ActiveView: "month"}
+
+	monthStart := time.Date(displayDate.Year(), displayDate.Month(), 1, 0, 0, 0, 0, displayDate.Location())
+	monthEnd := monthStart.AddDate(0, 1, 0)
+
+	reservations, err := q.ListReservationsByDateRange(ctx, dbgen.ListReservationsByDateRangeParams{
+		FacilityID: facilityID,
+		StartTime:  monthStart,
+		EndTime:    monthEnd,
+	})
+	if err != nil {
+		return calendarData, err
+	}
+
+	reservationCourts, err := q.ListReservationCourtsByDateRange(ctx, dbgen.ListReservationCourtsByDateRangeParams{
+		FacilityID: facilityID,
+		StartTime:  monthStart,
+		EndTime:    monthEnd,
+	})
+	if err != nil {
+		return calendarData, err
+	}
+
+	startByReservationID := make(map[int64]time.Time, len(reservations))
+	for _, reservation := range reservations {
+		startByReservationID[reservation.ID] = reservation.StartTime
+	}
+
+	dayCounts := make(map[string]int)
+	for _, courtRow := range reservationCourts {
+		startTime, ok := startByReservationID[courtRow.ReservationID]
+		if !ok {
+			continue
+		}
+		key := startTime.Format("2006-01-02")
+		dayCounts[key]++
+	}
+	calendarData.DayCounts = dayCounts
 
 	return calendarData, nil
 }

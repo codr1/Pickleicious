@@ -15,6 +15,8 @@ const (
 	defaultResvColorHex = "#6B7280"
 	clinicResvColorHex  = "#8D6E63"
 	clinicTypeName      = "CLINIC"
+	monthLowThreshold   = 3
+	monthMidThreshold   = 6
 )
 
 type CalendarData struct {
@@ -35,6 +37,14 @@ type WeekCalendarData struct {
 	SelectedCourtNumber int64
 	IsStaff             bool
 	ActiveView          string
+}
+
+type MonthCalendarData struct {
+	DisplayDate time.Time
+	FacilityID  int64
+	DayCounts   map[string]int
+	IsStaff     bool
+	ActiveView  string
 }
 
 type CalendarCourt struct {
@@ -311,6 +321,91 @@ templ WeekCalendar(data WeekCalendarData) {
 	</script>
 }
 
+templ MonthCalendar(data MonthCalendarData) {
+	<div class="bg-background shadow-sm border border-border rounded-lg">
+		<div class="p-3 border-b border-border bg-muted flex items-center justify-between">
+			<div class="flex items-center space-x-3">
+				<button
+					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
+					hx-get={ calendarURL(data.FacilityID, calendarNavDate(data.DisplayDate, data.ActiveView, -1), data.ActiveView, 0) }
+					hx-target="#calendar-content">
+					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+						<path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
+					</svg>
+				</button>
+				<h2 class="text-lg font-semibold text-foreground">{ formatMonthYear(data.DisplayDate) }</h2>
+				<button
+					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
+					hx-get={ calendarURL(data.FacilityID, calendarNavDate(data.DisplayDate, data.ActiveView, 1), data.ActiveView, 0) }
+					hx-target="#calendar-content">
+					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+						<path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
+					</svg>
+				</button>
+			</div>
+			<div class="flex space-x-2">
+				if data.IsStaff {
+					<button
+						class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+						hx-get={ fmt.Sprintf("/api/v1/staff/lessons/booking/new?facility_id=%d", data.FacilityID) }
+						hx-target="#modal">
+						Book Lesson
+					</button>
+				}
+				<button
+					class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground"
+					hx-get={ calendarURL(data.FacilityID, time.Now(), data.ActiveView, 0) }
+					hx-target="#calendar-content">
+					Today
+				</button>
+				<select
+					class="text-sm border border-border rounded bg-background px-2 py-1.5 text-foreground"
+					name="view"
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) }
+					hx-trigger="change"
+					hx-target="#calendar-content">
+					<option value="day" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "day") || strings.TrimSpace(data.ActiveView) == ""}>Day</option>
+					<option value="week" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "week")}>Week</option>
+					<option value="month" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "month")}>Month</option>
+				</select>
+			</div>
+		</div>
+
+		<div id="calendar-content" class="overflow-x-auto" hx-get={ calendarURL(data.FacilityID, data.DisplayDate, data.ActiveView, 0) } hx-trigger="refreshCourtsCalendar from:body">
+			<div class="min-w-full">
+				<div class="grid grid-cols-7">
+					for _, label := range monthWeekdayLabels() {
+						<div class="border-b border-border bg-muted py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+							{ label }
+						</div>
+					}
+					for _, day := range monthGridDates(data.DisplayDate) {
+						<div class="border border-border p-2">
+							<button
+								class={ fmt.Sprintf("flex h-full w-full flex-col gap-2 rounded p-2 text-left hover:bg-muted/70 %s", monthDayClass(day, data.DisplayDate)) }
+								hx-get={ calendarURL(data.FacilityID, day, "day", 0) }
+								hx-target="#calendar-content">
+								<span class={ fmt.Sprintf("text-sm font-semibold %s", monthDayTextClass(day, data.DisplayDate)) }>
+									{ day.Day() }
+								</span>
+								if dayCount := monthDayCount(data.DayCounts, day); dayCount > 0 {
+									<span class={ fmt.Sprintf("inline-flex items-center gap-2 rounded-full px-2 py-1 text-xs font-semibold %s", monthDensityClass(dayCount)) }>
+										if dayCount == 1 {
+											{ fmt.Sprintf("%d reservation", dayCount) }
+										} else {
+											{ fmt.Sprintf("%d reservations", dayCount) }
+										}
+									</span>
+								}
+							</button>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
 templ timeSlots() {
 	for i := calendarStartHour; i < calendarEndHour; i++ {
 		<div class="relative h-12 -mt-2.5">
@@ -338,6 +433,10 @@ func formatWeekRange(weekStart time.Time) string {
 		return fmt.Sprintf("%s %d - %s %d, %d", weekStart.Format("Jan"), weekStart.Day(), weekEnd.Format("Jan"), weekEnd.Day(), weekEnd.Year())
 	}
 	return fmt.Sprintf("%s %d, %d - %s %d, %d", weekStart.Format("Jan"), weekStart.Day(), weekStart.Year(), weekEnd.Format("Jan"), weekEnd.Day(), weekEnd.Year())
+}
+
+func formatMonthYear(displayDate time.Time) string {
+	return displayDate.Format("January 2006")
 }
 
 func formatWeekDay(day time.Time) string {
@@ -434,6 +533,69 @@ func weekDates(weekStart time.Time) []time.Time {
 		days = append(days, weekStart.AddDate(0, 0, i))
 	}
 	return days
+}
+
+func monthWeekdayLabels() []string {
+	return []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+}
+
+func monthGridDates(displayDate time.Time) []time.Time {
+	monthStart := time.Date(displayDate.Year(), displayDate.Month(), 1, 0, 0, 0, 0, displayDate.Location())
+	weekday := int(monthStart.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	offset := weekday - 1
+	daysInMonth := daysInMonth(monthStart)
+	totalCells := 35
+	if daysInMonth+offset > 35 {
+		totalCells = 42
+	}
+	gridStart := monthStart.AddDate(0, 0, -offset)
+	dates := make([]time.Time, 0, totalCells)
+	for i := 0; i < totalCells; i++ {
+		dates = append(dates, gridStart.AddDate(0, 0, i))
+	}
+	return dates
+}
+
+func daysInMonth(monthStart time.Time) int {
+	nextMonth := monthStart.AddDate(0, 1, 0)
+	return int(nextMonth.Sub(monthStart).Hours() / 24)
+}
+
+func monthDayCount(counts map[string]int, day time.Time) int {
+	if counts == nil {
+		return 0
+	}
+	return counts[formatDateParam(day)]
+}
+
+func monthDayClass(day time.Time, displayDate time.Time) string {
+	if day.Month() != displayDate.Month() || day.Year() != displayDate.Year() {
+		return "bg-muted/40 text-muted-foreground"
+	}
+	return "bg-background text-foreground"
+}
+
+func monthDayTextClass(day time.Time, displayDate time.Time) string {
+	if day.Month() != displayDate.Month() || day.Year() != displayDate.Year() {
+		return "text-muted-foreground"
+	}
+	return "text-foreground"
+}
+
+func monthDensityClass(count int) string {
+	switch {
+	case count <= 0:
+		return "bg-muted text-muted-foreground"
+	case count <= monthLowThreshold:
+		return "bg-emerald-100 text-emerald-900"
+	case count <= monthMidThreshold:
+		return "bg-amber-100 text-amber-900"
+	default:
+		return "bg-rose-100 text-rose-900"
+	}
 }
 
 func calendarNavDate(displayDate time.Time, activeView string, direction int) time.Time {
