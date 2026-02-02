@@ -1359,6 +1359,30 @@ Each facility can have its own visual identity. The member check-in screen at Do
 +-------------------+
 ```
 
+### System Themes
+
+System themes are pre-defined color schemes available to all facilities. They are embedded in the application binary and seeded to the database via migration.
+
+**Definition File:** `assets/themes`
+
+The themes file uses a simple line-based format:
+```
+Theme Name
+#HEXCOLOR  (primary)
+#HEXCOLOR  (secondary)
+#HEXCOLOR  (tertiary)
+#HEXCOLOR  (accent)
+#HEXCOLOR  (highlight)
+```
+
+One theme can be marked as default by appending ` DEFAULT` to its name (e.g., `Simple DEFAULT`). The default theme is used when a facility has no active theme selected.
+
+**Seeding:** Migration `000045_seed_system_themes.up.sql` inserts all system themes with `facility_id = NULL` and `is_system = 1`. Uses `ON CONFLICT` to make re-running idempotent - existing themes are updated, not duplicated.
+
+**Parser:** `internal/db/themes_parser.go` reads the embedded file, validates each theme against the model validation rules, and exposes `DefaultSystemThemeName()` for runtime access.
+
+**Current themes:** 34 pre-defined themes including Simple (default), Metal, Vintage, Cool, Cosmic, Artsy, Elegance, Futuristic, Innovative, Dynamic, and others.
+
 ### Theme Application Flow
 
 ```
@@ -2843,7 +2867,7 @@ All sender addresses must be verified in AWS SES.
 | Member CRUD | Complete | Create, list, search, edit, soft delete, restore |
 | Member Photos | Complete | Base64 upload, BLOB storage, MediaDevices API |
 | Member Search | Complete | Name, email, phone - instant results |
-| Theme Management | Complete | Create, edit, clone, delete, set active |
+| Theme Management | Complete | Create, edit, clone, delete, set active, 34 system themes seeded |
 | Theme Accessibility | Complete | WCAG AA contrast validation (3.0 ratio) |
 | Open Play Rules | Complete | Full CRUD with constraint validation |
 | Open Play Sessions | Partial | Session tracking, participant management |
