@@ -39,7 +39,7 @@ INSERT INTO themes (
     (NULL, 'Hipster Energy', 1, '#FBE8A6', '#F4976C', '#303C6C', '#B4DFE5', '#D2FDFF'),
     (NULL, 'Nantucket', 1, '#F78888', '#F3D250', '#ECECEC', '#90CCF4', '#5DA2D5'),
     (NULL, 'Minimal Pickle', 1, '#19181A', '#479761', '#CEBC81', '#A16E83', '#B19F9E'),
-    (NULL, 'Flat Style - DEFAULT 3', 1, '#00887A', '#FFCCBC', '#FFFFFF', '#D3E3FC', '#77A6F7'),
+    (NULL, 'Flat Style - 3', 1, '#00887A', '#FFCCBC', '#FFFFFF', '#D3E3FC', '#77A6F7'),
     (NULL, 'Electric peace', 1, '#844D36', '#474853', '#86B3D1', '#AAA0A0', '#8E8268'),
     (NULL, 'Classic Swatch', 1, '#5F6366', '#4D6D9A', '#86B3D1', '#99CED3', '#EDB5BF'),
     (NULL, 'Purple Dream', 1, '#802BB1', '#2D283E', '#564F6F', '#46495D', '#D1D7E0'),
