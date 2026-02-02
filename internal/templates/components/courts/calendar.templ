@@ -26,6 +26,17 @@ type CalendarData struct {
 	ActiveView   string
 }
 
+type WeekCalendarData struct {
+	DisplayDate         time.Time
+	WeekStart           time.Time
+	FacilityID          int64
+	Courts              []CalendarCourt
+	Reservations        []CalendarReservation
+	SelectedCourtNumber int64
+	IsStaff             bool
+	ActiveView          string
+}
+
 type CalendarCourt struct {
 	ID          int64
 	CourtNumber int64
@@ -49,7 +60,7 @@ templ Calendar(data CalendarData) {
 			<div class="flex items-center space-x-3">
 				<button
 					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
-					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, -1)), data.ActiveView) }
+					hx-get={ calendarURL(data.FacilityID, calendarNavDate(data.DisplayDate, data.ActiveView, -1), data.ActiveView, 0) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
@@ -58,7 +69,7 @@ templ Calendar(data CalendarData) {
 				<h2 class="text-lg font-semibold text-foreground">{ formatDate(data.DisplayDate) }</h2>
 				<button
 					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
-					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, 1)), data.ActiveView) }
+					hx-get={ calendarURL(data.FacilityID, calendarNavDate(data.DisplayDate, data.ActiveView, 1), data.ActiveView, 0) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
@@ -76,7 +87,7 @@ templ Calendar(data CalendarData) {
 				}
 				<button
 					class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground"
-					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(time.Now()), data.ActiveView) }
+					hx-get={ calendarURL(data.FacilityID, time.Now(), data.ActiveView, 0) }
 					hx-target="#calendar-content">
 					Today
 				</button>
@@ -157,6 +168,149 @@ templ Calendar(data CalendarData) {
 	</div>
 }
 
+templ WeekCalendar(data WeekCalendarData) {
+	<div class="bg-background shadow-sm border border-border rounded-lg">
+		<div class="p-3 border-b border-border bg-muted flex items-center justify-between">
+			<div class="flex items-center space-x-3">
+				<button
+					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
+					hx-get={ calendarURL(data.FacilityID, data.DisplayDate.AddDate(0, 0, -7), data.ActiveView, data.SelectedCourtNumber) }
+					hx-target="#calendar-content">
+					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+						<path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
+					</svg>
+				</button>
+				<h2 class="text-lg font-semibold text-foreground">{ formatWeekRange(data.WeekStart) }</h2>
+				<button
+					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
+					hx-get={ calendarURL(data.FacilityID, data.DisplayDate.AddDate(0, 0, 7), data.ActiveView, data.SelectedCourtNumber) }
+					hx-target="#calendar-content">
+					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+						<path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
+					</svg>
+				</button>
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				if data.IsStaff {
+					<button
+						class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+						hx-get={ fmt.Sprintf("/api/v1/staff/lessons/booking/new?facility_id=%d", data.FacilityID) }
+						hx-target="#modal">
+						Book Lesson
+					</button>
+				}
+				<button
+					class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground"
+					hx-get={ calendarURL(data.FacilityID, time.Now(), data.ActiveView, data.SelectedCourtNumber) }
+					hx-target="#calendar-content">
+					Today
+				</button>
+				if len(data.Courts) > 0 {
+					<select
+						id="week-court-select"
+						class="text-sm border border-border rounded bg-background px-2 py-1.5 text-foreground"
+						name="court"
+						hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(data.DisplayDate), data.ActiveView) }
+						hx-trigger="change"
+						hx-target="#calendar-content">
+						for _, court := range data.Courts {
+							<option value={ fmt.Sprintf("%d", court.CourtNumber) } selected?={ court.CourtNumber == data.SelectedCourtNumber }>
+								{ courtDisplayName(court) }
+							</option>
+						}
+					</select>
+				}
+				<select
+					class="text-sm border border-border rounded bg-background px-2 py-1.5 text-foreground"
+					name="view"
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&court=%d", data.FacilityID, formatDateParam(data.DisplayDate), data.SelectedCourtNumber) }
+					hx-trigger="change"
+					hx-target="#calendar-content">
+					<option value="day" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "day") || strings.TrimSpace(data.ActiveView) == ""}>Day</option>
+					<option value="week" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "week")}>Week</option>
+					<option value="month" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "month")}>Month</option>
+				</select>
+			</div>
+		</div>
+
+		<div id="calendar-content" class="overflow-x-auto" hx-get={ calendarURL(data.FacilityID, data.DisplayDate, data.ActiveView, data.SelectedCourtNumber) } hx-trigger="refreshCourtsCalendar from:body">
+			<div class="flex min-w-full">
+				<div class="w-16 flex-none bg-muted border-r border-border">
+					<div class="h-12"></div>
+					@timeSlots()
+				</div>
+
+				<div class="flex-1">
+					if len(data.Courts) == 0 {
+						<div class="p-6 text-sm text-muted-foreground">
+							No courts configured for this facility.
+						</div>
+					} else {
+						<div class="grid" style={ fmt.Sprintf("grid-template-columns: repeat(%d, minmax(0, 1fr));", len(weekDates(data.WeekStart))) }>
+							for _, day := range weekDates(data.WeekStart) {
+								<div class="h-12 flex items-center justify-center border-b border-border bg-muted font-medium text-sm text-foreground">
+									{ formatWeekDay(day) }
+								</div>
+							}
+						</div>
+						<div class="grid" style={ fmt.Sprintf("grid-template-columns: repeat(%d, minmax(0, 1fr));", len(weekDates(data.WeekStart))) }>
+							for _, day := range weekDates(data.WeekStart) {
+								<div class="relative">
+									for hour := calendarStartHour; hour < calendarEndHour; hour++ {
+										<div class="group relative h-12">
+											<div class="absolute inset-0 border-b border-r border-border"></div>
+											if hour % 2 == 0 {
+												<div class="absolute inset-0 border-t border-border"></div>
+											}
+											<div
+												class="relative h-12 hover:bg-blue-50 cursor-pointer transition-colors"
+												hx-get={ fmt.Sprintf("/api/v1/courts/booking/new?facility_id=%d&court=%d&hour=%d&date=%s", data.FacilityID, data.SelectedCourtNumber, hour, formatDateParam(day)) }
+												hx-target="#modal">
+											</div>
+										</div>
+									}
+									for _, reservation := range reservationsForCourtAndDay(data.Reservations, data.SelectedCourtNumber, day) {
+										<div
+											class="absolute left-1 right-1 rounded text-xs font-medium text-white px-2 py-1 shadow z-10 cursor-pointer"
+											style={ fmt.Sprintf("%s background-color: %s;", reservationBlockStyle(reservation, day), reservationColorFor(reservation)) }
+											hx-get={ fmt.Sprintf("/api/v1/reservations/%d/edit", reservation.ID) }
+											hx-target="#modal">
+											<span class="inline-flex items-center gap-1">
+												<span>{ reservation.TypeName }</span>
+												if reservation.CreatedByStaff {
+													<span class="rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Staff</span>
+												}
+											</span>
+										</div>
+									}
+								</div>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		(() => {
+			const select = document.getElementById('week-court-select');
+			if (!select) {
+				return;
+			}
+			const storageKey = 'weekCalendarCourtNumber';
+			const storedValue = localStorage.getItem(storageKey);
+			const hasStoredOption = storedValue && Array.from(select.options).some((option) => option.value === storedValue);
+			if (hasStoredOption && select.value !== storedValue) {
+				select.value = storedValue;
+			}
+			select.addEventListener('change', () => {
+				localStorage.setItem(storageKey, select.value);
+			});
+		})();
+	</script>
+}
+
 templ timeSlots() {
 	for i := calendarStartHour; i < calendarEndHour; i++ {
 		<div class="relative h-12 -mt-2.5">
@@ -175,10 +329,45 @@ func formatDateParam(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+func formatWeekRange(weekStart time.Time) string {
+	weekEnd := weekStart.AddDate(0, 0, 6)
+	if weekStart.Year() == weekEnd.Year() && weekStart.Month() == weekEnd.Month() {
+		return fmt.Sprintf("%s %d-%d, %d", weekStart.Format("Jan"), weekStart.Day(), weekEnd.Day(), weekEnd.Year())
+	}
+	if weekStart.Year() == weekEnd.Year() {
+		return fmt.Sprintf("%s %d - %s %d, %d", weekStart.Format("Jan"), weekStart.Day(), weekEnd.Format("Jan"), weekEnd.Day(), weekEnd.Year())
+	}
+	return fmt.Sprintf("%s %d, %d - %s %d, %d", weekStart.Format("Jan"), weekStart.Day(), weekStart.Year(), weekEnd.Format("Jan"), weekEnd.Day(), weekEnd.Year())
+}
+
+func formatWeekDay(day time.Time) string {
+	return day.Format("Mon 1/2")
+}
+
 func reservationsForCourt(reservations []CalendarReservation, courtNumber int64) []CalendarReservation {
 	filtered := make([]CalendarReservation, 0, len(reservations))
 	for _, reservation := range reservations {
 		if reservation.CourtNumber != courtNumber {
+			continue
+		}
+		filtered = append(filtered, reservation)
+	}
+	return filtered
+}
+
+func reservationsForCourtAndDay(reservations []CalendarReservation, courtNumber int64, day time.Time) []CalendarReservation {
+	if courtNumber == 0 {
+		return nil
+	}
+	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+	dayEnd := dayStart.AddDate(0, 0, 1)
+
+	filtered := make([]CalendarReservation, 0, len(reservations))
+	for _, reservation := range reservations {
+		if reservation.CourtNumber != courtNumber {
+			continue
+		}
+		if !reservation.EndTime.After(dayStart) || !reservation.StartTime.Before(dayEnd) {
 			continue
 		}
 		filtered = append(filtered, reservation)
@@ -237,4 +426,31 @@ func reservationColorFor(reservation CalendarReservation) string {
 		return clinicResvColorHex
 	}
 	return color
+}
+
+func weekDates(weekStart time.Time) []time.Time {
+	days := make([]time.Time, 0, 7)
+	for i := 0; i < 7; i++ {
+		days = append(days, weekStart.AddDate(0, 0, i))
+	}
+	return days
+}
+
+func calendarNavDate(displayDate time.Time, activeView string, direction int) time.Time {
+	switch strings.ToLower(strings.TrimSpace(activeView)) {
+	case "week":
+		return displayDate.AddDate(0, 0, 7*direction)
+	case "month":
+		return displayDate.AddDate(0, direction, 0)
+	default:
+		return displayDate.AddDate(0, 0, direction)
+	}
+}
+
+func calendarURL(facilityID int64, date time.Time, view string, courtNumber int64) string {
+	base := fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", facilityID, formatDateParam(date), strings.TrimSpace(view))
+	if strings.EqualFold(strings.TrimSpace(view), "week") && courtNumber > 0 {
+		return fmt.Sprintf("%s&court=%d", base, courtNumber)
+	}
+	return base
 }

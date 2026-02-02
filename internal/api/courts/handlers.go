@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/codr1/Pickleicious/internal/api/apiutil"
 	"github.com/codr1/Pickleicious/internal/api/authz"
 	dbgen "github.com/codr1/Pickleicious/internal/db/generated"
@@ -58,6 +59,7 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 	user := authz.UserFromContext(r.Context())
 	isStaff := authz.IsStaff(user)
 	calendarData := courts.CalendarData{DisplayDate: displayDate, IsStaff: isStaff, ActiveView: activeView}
+	weekCalendarData := courts.WeekCalendarData{DisplayDate: displayDate, WeekStart: startOfWeek(displayDate), IsStaff: isStaff, ActiveView: activeView}
 	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 			return
@@ -73,16 +75,32 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 			activeTheme = nil
 		}
 
-		calendarData, err = buildCalendarData(ctx, q, facilityID, displayDate)
-		calendarData.IsStaff = isStaff
-		calendarData.ActiveView = activeView
-		if err != nil {
-			log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
-			calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID, IsStaff: isStaff, ActiveView: activeView}
+		if activeView == "week" {
+			selectedCourtNumber := calendarCourtNumberFromRequest(r)
+			weekCalendarData, err = buildWeekCalendarData(ctx, q, facilityID, displayDate, selectedCourtNumber)
+			weekCalendarData.IsStaff = isStaff
+			weekCalendarData.ActiveView = activeView
+			if err != nil {
+				log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load week calendar reservations")
+				weekCalendarData = courts.WeekCalendarData{DisplayDate: displayDate, WeekStart: startOfWeek(displayDate), FacilityID: facilityID, IsStaff: isStaff, ActiveView: activeView}
+			}
+		} else {
+			calendarData, err = buildCalendarData(ctx, q, facilityID, displayDate)
+			calendarData.IsStaff = isStaff
+			calendarData.ActiveView = activeView
+			if err != nil {
+				log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
+				calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID, IsStaff: isStaff, ActiveView: activeView}
+			}
 		}
 	}
 
-	calendar := courts.Calendar(calendarData)
+	var calendar templ.Component
+	if activeView == "week" {
+		calendar = courts.WeekCalendar(weekCalendarData)
+	} else {
+		calendar = courts.Calendar(calendarData)
+	}
 	sessionType := authz.SessionTypeFromContext(r.Context())
 	page := layouts.Base(calendar, activeTheme, sessionType)
 	page.Render(r.Context(), w)
@@ -113,17 +131,31 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), courtsQueryTimeout)
 	defer cancel()
 
-	calendarData, err := buildCalendarData(ctx, q, facilityID, displayDate)
-	if err != nil {
-		logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
-		http.Error(w, "Failed to load calendar reservations", http.StatusInternalServerError)
-		return
-	}
 	user := authz.UserFromContext(r.Context())
-	calendarData.IsStaff = authz.IsStaff(user)
-	calendarData.ActiveView = activeView
-
-	component := courts.Calendar(calendarData)
+	isStaff := authz.IsStaff(user)
+	var component templ.Component
+	if activeView == "week" {
+		selectedCourtNumber := calendarCourtNumberFromRequest(r)
+		weekCalendarData, err := buildWeekCalendarData(ctx, q, facilityID, displayDate, selectedCourtNumber)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load week calendar reservations")
+			http.Error(w, "Failed to load calendar reservations", http.StatusInternalServerError)
+			return
+		}
+		weekCalendarData.IsStaff = isStaff
+		weekCalendarData.ActiveView = activeView
+		component = courts.WeekCalendar(weekCalendarData)
+	} else {
+		calendarData, err := buildCalendarData(ctx, q, facilityID, displayDate)
+		if err != nil {
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
+			http.Error(w, "Failed to load calendar reservations", http.StatusInternalServerError)
+			return
+		}
+		calendarData.IsStaff = isStaff
+		calendarData.ActiveView = activeView
+		component = courts.Calendar(calendarData)
+	}
 	component.Render(r.Context(), w)
 }
 
@@ -258,6 +290,14 @@ func calendarViewFromRequest(r *http.Request) string {
 	}
 }
 
+func calendarCourtNumberFromRequest(r *http.Request) int64 {
+	courtNumber, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("court")), 10, 64)
+	if err != nil || courtNumber <= 0 {
+		return 0
+	}
+	return courtNumber
+}
+
 func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, displayDate time.Time) (courts.CalendarData, error) {
 	calendarData := courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID}
 
@@ -347,4 +387,125 @@ func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, 
 	}
 
 	return calendarData, nil
+}
+
+func buildWeekCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, displayDate time.Time, selectedCourtNumber int64) (courts.WeekCalendarData, error) {
+	calendarData := courts.WeekCalendarData{DisplayDate: displayDate, FacilityID: facilityID, ActiveView: "week"}
+
+	courtsList, err := q.ListCourts(ctx, facilityID)
+	if err != nil {
+		return calendarData, err
+	}
+	calendarData.Courts = make([]courts.CalendarCourt, 0, len(courtsList))
+	for _, court := range courtsList {
+		calendarData.Courts = append(calendarData.Courts, courts.CalendarCourt{
+			ID:          court.ID,
+			CourtNumber: court.CourtNumber,
+			Name:        court.Name,
+		})
+	}
+
+	calendarData.SelectedCourtNumber = selectedCourtNumber
+	if calendarData.SelectedCourtNumber == 0 && len(calendarData.Courts) > 0 {
+		calendarData.SelectedCourtNumber = calendarData.Courts[0].CourtNumber
+	}
+	if calendarData.SelectedCourtNumber != 0 {
+		found := false
+		for _, court := range calendarData.Courts {
+			if court.CourtNumber == calendarData.SelectedCourtNumber {
+				found = true
+				break
+			}
+		}
+		if !found && len(calendarData.Courts) > 0 {
+			calendarData.SelectedCourtNumber = calendarData.Courts[0].CourtNumber
+		}
+	}
+
+	weekStart := startOfWeek(displayDate)
+	calendarData.WeekStart = weekStart
+	weekEnd := weekStart.AddDate(0, 0, 7)
+
+	reservations, err := q.ListReservationsByDateRange(ctx, dbgen.ListReservationsByDateRangeParams{
+		FacilityID: facilityID,
+		StartTime:  weekStart,
+		EndTime:    weekEnd,
+	})
+	if err != nil {
+		return calendarData, err
+	}
+
+	reservationCourts, err := q.ListReservationCourtsByDateRange(ctx, dbgen.ListReservationCourtsByDateRangeParams{
+		FacilityID: facilityID,
+		StartTime:  weekStart,
+		EndTime:    weekEnd,
+	})
+	if err != nil {
+		return calendarData, err
+	}
+
+	reservationTypes, err := q.ListReservationTypes(ctx)
+	if err != nil {
+		return calendarData, err
+	}
+
+	staffRows, err := q.ListStaff(ctx)
+	if err != nil {
+		log.Ctx(ctx).Warn().Err(err).Msg("Failed to load staff list for week calendar")
+		staffRows = nil
+	}
+	staffByUserID := make(map[int64]struct{}, len(staffRows))
+	for _, staff := range staffRows {
+		staffByUserID[staff.UserID] = struct{}{}
+	}
+
+	typeByID := make(map[int64]dbgen.ReservationType, len(reservationTypes))
+	for _, resType := range reservationTypes {
+		typeByID[resType.ID] = resType
+	}
+
+	courtsByReservation := make(map[int64][]int64, len(reservationCourts))
+	for _, row := range reservationCourts {
+		courtsByReservation[row.ReservationID] = append(courtsByReservation[row.ReservationID], row.CourtNumber)
+	}
+
+	for _, reservation := range reservations {
+		resType := typeByID[reservation.ReservationTypeID]
+		typeName := strings.TrimSpace(resType.Name)
+		if typeName == "" {
+			typeName = "Reservation"
+		}
+
+		typeColor := ""
+		if resType.Color.Valid {
+			typeColor = strings.TrimSpace(resType.Color.String)
+		}
+
+		_, createdByStaff := staffByUserID[reservation.CreatedByUserID]
+		for _, courtNumber := range courtsByReservation[reservation.ID] {
+			if calendarData.SelectedCourtNumber != 0 && courtNumber != calendarData.SelectedCourtNumber {
+				continue
+			}
+			calendarData.Reservations = append(calendarData.Reservations, courts.CalendarReservation{
+				ID:             reservation.ID,
+				CourtNumber:    courtNumber,
+				StartTime:      reservation.StartTime,
+				EndTime:        reservation.EndTime,
+				TypeName:       typeName,
+				TypeColor:      typeColor,
+				CreatedByStaff: createdByStaff,
+			})
+		}
+	}
+
+	return calendarData, nil
+}
+
+func startOfWeek(displayDate time.Time) time.Time {
+	weekday := int(displayDate.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	weekStart := time.Date(displayDate.Year(), displayDate.Month(), displayDate.Day(), 0, 0, 0, 0, displayDate.Location())
+	return weekStart.AddDate(0, 0, -(weekday - 1))
 }
