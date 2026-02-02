@@ -121,6 +121,24 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if !user.IsStaff {
+		authUserID := user.ID
+		if req.PrimaryUserID != nil && *req.PrimaryUserID > 0 && *req.PrimaryUserID != authUserID {
+			http.Error(w, "primary_user_id must match authenticated user", http.StatusForbidden)
+			return
+		}
+		req.PrimaryUserID = &authUserID
+		if err := enforceMemberTierBookingWindow(ctx, q, facilityID, req.PrimaryUserID, startTime); err != nil {
+			var fieldErr apiutil.FieldError
+			if errors.As(err, &fieldErr) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to validate member booking window")
+			http.Error(w, "Failed to validate booking window", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	req.CourtIDs = normalizeCourtIDs(req.CourtIDs)
 	if req.ParticipantIDsSet {
@@ -494,6 +512,11 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 	if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 		return
 	}
+	user := authz.UserFromContext(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	req, err := decodeReservationRequest(r)
 	if err != nil {
@@ -515,6 +538,24 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := validateReservationInput(req, startTime, endTime); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if !user.IsStaff {
+		authUserID := user.ID
+		if req.PrimaryUserID != nil && *req.PrimaryUserID > 0 && *req.PrimaryUserID != authUserID {
+			http.Error(w, "primary_user_id must match authenticated user", http.StatusForbidden)
+			return
+		}
+		req.PrimaryUserID = &authUserID
+		if err := enforceMemberTierBookingWindow(ctx, q, facilityID, req.PrimaryUserID, startTime); err != nil {
+			var fieldErr apiutil.FieldError
+			if errors.As(err, &fieldErr) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			logger.Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to validate member booking window")
+			http.Error(w, "Failed to validate booking window", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	req.CourtIDs = normalizeCourtIDs(req.CourtIDs)
@@ -1164,6 +1205,44 @@ func validateReservationInput(req reservationRequest, startTime, endTime time.Ti
 		if value != nil && *value <= 0 {
 			return apiutil.FieldError{Field: name, Reason: "must be a positive integer"}
 		}
+	}
+
+	return nil
+}
+
+func enforceMemberTierBookingWindow(ctx context.Context, q *dbgen.Queries, facilityID int64, primaryUserID *int64, startTime time.Time) error {
+	if primaryUserID == nil || *primaryUserID <= 0 {
+		return nil
+	}
+
+	member, err := q.GetMemberByID(ctx, *primaryUserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return apiutil.FieldError{Field: "primary_user_id", Reason: "must be a valid member"}
+		}
+		return err
+	}
+
+	maxAdvanceDays, facility, err := apiutil.GetMemberMaxAdvanceDays(ctx, q, facilityID, member.MembershipLevel, apiutil.DefaultMaxAdvanceDays)
+	if err != nil {
+		return err
+	}
+
+	loc := startTime.Location()
+	if facility != nil && facility.Timezone != "" {
+		loadedLoc, loadErr := time.LoadLocation(facility.Timezone)
+		if loadErr == nil {
+			loc = loadedLoc
+		}
+	}
+
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	maxDate := today.AddDate(0, 0, int(maxAdvanceDays))
+	startTimeInLoc := startTime.In(loc)
+	startDay := time.Date(startTimeInLoc.Year(), startTimeInLoc.Month(), startTimeInLoc.Day(), 0, 0, 0, 0, loc)
+	if startDay.After(maxDate) {
+		return apiutil.FieldError{Field: "start_time", Reason: fmt.Sprintf("must be within %d days for the member's booking window", maxAdvanceDays)}
 	}
 
 	return nil

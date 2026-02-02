@@ -118,3 +118,26 @@ func RequireFacilityAccess(ctx context.Context, requestedFacilityID int64) error
 
 	return nil
 }
+
+func RequireRole(ctx context.Context, role string) error {
+	user := UserFromContext(ctx)
+	if user == nil {
+		return ErrUnauthenticated
+	}
+
+	role = strings.ToLower(strings.TrimSpace(role))
+	switch role {
+	case "":
+		return nil
+	case "staff":
+		if user.IsStaff {
+			return nil
+		}
+		return ErrForbidden
+	case "member":
+		// Any authenticated user, including staff.
+		return nil
+	default:
+		return ErrForbidden
+	}
+}

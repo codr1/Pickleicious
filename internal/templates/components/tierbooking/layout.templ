@@ -1,0 +1,99 @@
+// internal/templates/components/tierbooking/layout.templ
+package tierbooking
+
+import "fmt"
+
+templ TierBookingLayout(data TierBookingPageData) {
+	<div class="space-y-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<div>
+				<h2 class="text-2xl font-semibold text-foreground">Tier Booking Windows</h2>
+				<p class="mt-1 text-sm text-muted-foreground">Configure how far in advance each membership tier can book.</p>
+			</div>
+			<span class="text-xs text-muted-foreground">Facility ID {fmt.Sprintf("%d", data.FacilityID)}</span>
+		</div>
+		<div id="tier-booking-feedback" class="text-sm"></div>
+
+		<section class="rounded-lg border border-border bg-background shadow-sm">
+			<div class="border-b border-border px-4 py-3">
+				<h3 class="text-lg font-semibold text-foreground">Tier booking status</h3>
+				<p class="text-sm text-muted-foreground">Enable tier-specific booking windows for this facility.</p>
+			</div>
+			<form
+				class="flex flex-wrap items-center justify-between gap-4 px-4 py-4"
+				hx-post="/api/v1/tier-booking/toggle"
+				hx-target="#tier-booking-feedback"
+				hx-swap="innerHTML"
+				hx-trigger="change">
+				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)} />
+				<input type="hidden" name="tier_booking_enabled" value="false" />
+				<label class="flex items-center gap-3 text-sm font-medium text-foreground">
+					<input
+						type="checkbox"
+						name="tier_booking_enabled"
+						value="true"
+						checked?={data.TierBookingEnabled}
+						class="h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
+						hx-on:change="const enabled=this.checked; const status=document.getElementById('tier-booking-status'); if(status){status.textContent=enabled?'Enabled':'Disabled';} const config=document.getElementById('tier-booking-config'); if(config){config.querySelectorAll('input,select,button').forEach((el)=>{if(el.name==='tier_booking_enabled'){return;} el.disabled=!enabled;});}"
+					/>
+					<span>Tier booking windows</span>
+				</label>
+				<div class="text-sm text-muted-foreground">Status: <span id="tier-booking-status" class="font-medium text-foreground">{func() string {
+					if data.TierBookingEnabled {
+						return "Enabled"
+					}
+					return "Disabled"
+				}()}</span></div>
+			</form>
+		</section>
+
+		<section class="rounded-lg border border-border bg-background shadow-sm">
+			<div class="border-b border-border px-4 py-3">
+				<h3 class="text-lg font-semibold text-foreground">Booking windows by tier</h3>
+				<p class="text-sm text-muted-foreground">Facility default max advance days: {fmt.Sprintf("%d", data.FacilityDefaultMaxAdvanceDays)}.</p>
+			</div>
+			<form
+				id="tier-booking-config"
+				class="space-y-4 px-4 py-4"
+				hx-post="/api/v1/tier-booking/windows"
+				hx-target="#tier-booking-feedback"
+				hx-swap="innerHTML">
+				<input type="hidden" name="facility_id" value={fmt.Sprintf("%d", data.FacilityID)} />
+				<div class="hidden grid-cols-[220px_200px_minmax(200px,1fr)] gap-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+					<div>Tier</div>
+					<div>Max advance days</div>
+					<div>Notes</div>
+				</div>
+				<div class="space-y-3">
+					for _, window := range data.Windows {
+						<div class="grid items-center gap-4 rounded-md border border-border px-3 py-3 md:grid-cols-[220px_200px_minmax(200px,1fr)]">
+							<div class="text-sm font-medium text-foreground">{window.Label}</div>
+							<div>
+								<label class="sr-only" for={fmt.Sprintf("tier_max_advance_%d", window.MembershipLevel)}>Max advance days</label>
+								<input
+									type="number"
+									id={fmt.Sprintf("tier_max_advance_%d", window.MembershipLevel)}
+									name={fmt.Sprintf("max_advance_days_%d", window.MembershipLevel)}
+									min="1"
+									max="364"
+									value={fmt.Sprintf("%d", window.MaxAdvanceDays)}
+									disabled?={!data.TierBookingEnabled}
+									class="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+								/>
+							</div>
+							<div class="text-sm text-muted-foreground">{window.Note}</div>
+						</div>
+					}
+				</div>
+				<div class="flex justify-end">
+					<button
+						type="submit"
+						disabled?={!data.TierBookingEnabled}
+						class="rounded-md border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+						Save booking windows
+					</button>
+				</div>
+			</form>
+		</section>
+	</div>
+}

@@ -13,6 +13,7 @@ SELECT
     max_member_reservations,
     lesson_min_notice_hours,
     reminder_hours_before,
+    tier_booking_enabled,
     created_at,
     updated_at
 FROM facilities
@@ -31,6 +32,7 @@ SELECT
     max_member_reservations,
     lesson_min_notice_hours,
     reminder_hours_before,
+    tier_booking_enabled,
     created_at,
     updated_at
 FROM facilities
@@ -55,6 +57,7 @@ RETURNING
     max_member_reservations,
     lesson_min_notice_hours,
     reminder_hours_before,
+    tier_booking_enabled,
     created_at,
     updated_at;
 

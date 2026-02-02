@@ -89,6 +89,7 @@ type Facility struct {
 	MaxMemberReservations int64          `json:"maxMemberReservations"`
 	LessonMinNoticeHours  int64          `json:"lessonMinNoticeHours"`
 	ReminderHoursBefore   int64          `json:"reminderHoursBefore"`
+	TierBookingEnabled    bool           `json:"tierBookingEnabled"`
 	CreatedAt             time.Time      `json:"createdAt"`
 	UpdatedAt             time.Time      `json:"updatedAt"`
 }
@@ -185,6 +186,12 @@ type LessonPackageType struct {
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type MemberTierBookingWindow struct {
+	FacilityID      int64 `json:"facilityId"`
+	MembershipLevel int64 `json:"membershipLevel"`
+	MaxAdvanceDays  int64 `json:"maxAdvanceDays"`
 }
 
 type OpenPlayAuditLog struct {
