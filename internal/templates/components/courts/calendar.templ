@@ -23,6 +23,7 @@ type CalendarData struct {
 	Courts       []CalendarCourt
 	Reservations []CalendarReservation
 	IsStaff      bool
+	ActiveView   string
 }
 
 type CalendarCourt struct {
@@ -48,7 +49,7 @@ templ Calendar(data CalendarData) {
 			<div class="flex items-center space-x-3">
 				<button
 					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
-					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, -1))) }
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, -1)), data.ActiveView) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/>
@@ -57,7 +58,7 @@ templ Calendar(data CalendarData) {
 				<h2 class="text-lg font-semibold text-foreground">{ formatDate(data.DisplayDate) }</h2>
 				<button
 					class="p-1.5 hover:bg-background rounded text-muted-foreground hover:text-foreground border border-transparent hover:border-border"
-					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, 1))) }
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(data.DisplayDate.AddDate(0, 0, 1)), data.ActiveView) }
 					hx-target="#calendar-content">
 					<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 						<path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/>
@@ -73,18 +74,26 @@ templ Calendar(data CalendarData) {
 						Book Lesson
 					</button>
 				}
-				<button class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground">
+				<button
+					class="px-3 py-1.5 text-sm bg-background border border-border rounded hover:bg-muted text-foreground"
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(time.Now()), data.ActiveView) }
+					hx-target="#calendar-content">
 					Today
 				</button>
-				<select class="text-sm border border-border rounded bg-background px-2 py-1.5 text-foreground">
-					<option>Work Week</option>
-					<option>Week</option>
-					<option>Month</option>
+				<select
+					class="text-sm border border-border rounded bg-background px-2 py-1.5 text-foreground"
+					name="view"
+					hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) }
+					hx-trigger="change"
+					hx-target="#calendar-content">
+					<option value="day" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "day") || strings.TrimSpace(data.ActiveView) == ""}>Day</option>
+					<option value="week" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "week")}>Week</option>
+					<option value="month" selected?={strings.EqualFold(strings.TrimSpace(data.ActiveView), "month")}>Month</option>
 				</select>
 			</div>
 		</div>
 
-		<div id="calendar-content" class="overflow-x-auto" hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s", data.FacilityID, formatDateParam(data.DisplayDate)) } hx-trigger="refreshCourtsCalendar from:body">
+		<div id="calendar-content" class="overflow-x-auto" hx-get={ fmt.Sprintf("/api/v1/courts/calendar?facility_id=%d&date=%s&view=%s", data.FacilityID, formatDateParam(data.DisplayDate), data.ActiveView) } hx-trigger="refreshCourtsCalendar from:body">
 			<div class="flex min-w-full">
 				<!-- Time slots column -->
 				<div class="w-16 flex-none bg-muted border-r border-border">

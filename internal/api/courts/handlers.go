@@ -54,9 +54,10 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 
 	var activeTheme *models.Theme
 	displayDate := calendarDateFromRequest(r)
+	activeView := calendarViewFromRequest(r)
 	user := authz.UserFromContext(r.Context())
 	isStaff := authz.IsStaff(user)
-	calendarData := courts.CalendarData{DisplayDate: displayDate, IsStaff: isStaff}
+	calendarData := courts.CalendarData{DisplayDate: displayDate, IsStaff: isStaff, ActiveView: activeView}
 	if facilityID, ok := request.ParseFacilityID(r.URL.Query().Get("facility_id")); ok {
 		if !apiutil.RequireFacilityAccess(w, r, facilityID) {
 			return
@@ -74,9 +75,10 @@ func HandleCourtsPage(w http.ResponseWriter, r *http.Request) {
 
 		calendarData, err = buildCalendarData(ctx, q, facilityID, displayDate)
 		calendarData.IsStaff = isStaff
+		calendarData.ActiveView = activeView
 		if err != nil {
 			log.Ctx(r.Context()).Error().Err(err).Int64("facility_id", facilityID).Msg("Failed to load calendar reservations")
-			calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID, IsStaff: isStaff}
+			calendarData = courts.CalendarData{DisplayDate: displayDate, FacilityID: facilityID, IsStaff: isStaff, ActiveView: activeView}
 		}
 	}
 
@@ -107,6 +109,7 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	displayDate := calendarDateFromRequest(r)
+	activeView := calendarViewFromRequest(r)
 	ctx, cancel := context.WithTimeout(r.Context(), courtsQueryTimeout)
 	defer cancel()
 
@@ -118,6 +121,7 @@ func HandleCalendarView(w http.ResponseWriter, r *http.Request) {
 	}
 	user := authz.UserFromContext(r.Context())
 	calendarData.IsStaff = authz.IsStaff(user)
+	calendarData.ActiveView = activeView
 
 	component := courts.Calendar(calendarData)
 	component.Render(r.Context(), w)
@@ -242,6 +246,16 @@ func calendarDateFromRequest(r *http.Request) time.Time {
 	}
 
 	return parsed
+}
+
+func calendarViewFromRequest(r *http.Request) string {
+	viewParam := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
+	switch viewParam {
+	case "day", "week", "month":
+		return viewParam
+	default:
+		return "day"
+	}
 }
 
 func buildCalendarData(ctx context.Context, q *dbgen.Queries, facilityID int64, displayDate time.Time) (courts.CalendarData, error) {
