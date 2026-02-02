@@ -70,6 +70,9 @@ func ParseThemesFile() ([]models.Theme, error) {
 		themes = append(themes, theme)
 	}
 
+	if defaultName == "" {
+		return nil, fmt.Errorf("no DEFAULT theme found in themes file")
+	}
 	defaultSystemThemeName = defaultName
 	return themes, nil
 }
