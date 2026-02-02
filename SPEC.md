@@ -1531,6 +1531,74 @@ Settings save via POST to `/api/v1/facility-settings`. All values must be positi
 
 ---
 
+## Tier Booking Windows
+
+Facilities can configure different advance booking windows based on membership level, allowing premium members to book courts further in advance than standard members.
+
+### Configuration
+
+Tier booking is disabled by default. When enabled via the toggle on `/admin/booking-windows`, each membership tier can have its own `max_advance_days` setting.
+
+| Field | Description |
+|-------|-------------|
+| tier_booking_enabled | Facility-level toggle to enable tier-based booking windows |
+| membership_level | Tier level (0=Unverified Guest, 1=Verified Guest, 2=Member, 3=Member+) |
+| max_advance_days | Maximum days in advance this tier can book (1-364) |
+
+### Behavior
+
+When tier booking is enabled:
+1. System looks up the member's membership_level
+2. Finds matching tier_booking_window for facility + membership_level
+3. Uses that tier's max_advance_days for booking validation
+4. Falls back to facility's default max_advance_booking_days if no tier window defined
+
+When tier booking is disabled, all members use the facility's default max_advance_booking_days regardless of membership level.
+
+### Admin Interface
+
+Staff access the booking windows page at `/admin/booking-windows?facility_id=X`. The interface displays:
+
+- Toggle to enable/disable tier booking for the facility
+- Grid showing all four tiers (0-3) with their current advance booking days
+- Each tier shows label, current setting, and default indicator
+- Inline editing with auto-save
+
+### Database Schema
+
+| Table | Description |
+|-------|-------------|
+| member_tier_booking_windows | Per-tier booking window settings |
+
+| Column | Table | Description |
+|--------|-------|-------------|
+| tier_booking_enabled | facilities | Toggle for tier-based booking windows |
+| membership_level | member_tier_booking_windows | Tier level (0-3) |
+| max_advance_days | member_tier_booking_windows | Days in advance this tier can book |
+
+### Constraints
+
+| Constraint | Rule |
+|------------|------|
+| Facility scope | Windows are scoped to individual facilities |
+| Tier range | membership_level must be 0-3 |
+| Days range | max_advance_days must be 1-364 |
+| Unique per facility | One window per facility + membership_level combination |
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/booking-windows` | Booking windows admin page |
+| GET | `/api/v1/booking-windows` | List booking windows for facility |
+| POST | `/api/v1/booking-windows/{tier}` | Create tier window |
+| PUT | `/api/v1/booking-windows/{tier}` | Update tier window |
+| DELETE | `/api/v1/booking-windows/{tier}` | Delete tier window |
+| POST | `/api/v1/tier-booking/toggle` | Enable/disable tier booking |
+| POST | `/api/v1/tier-booking/windows` | Bulk save tier windows |
+
+---
+
 ## Authentication and Access
 
 ### Session Management
@@ -2794,6 +2862,7 @@ All sender addresses must be verified in AWS SES.
 | Waitlist Management | Complete | Join/leave waitlist, slot notifications on cancellation, configurable notification modes |
 | Lesson Cancellation Notifications | Complete | Pros notified when members cancel lessons |
 | Email Notifications | Complete | SES integration, confirmation/cancellation/reminder emails |
+| Tier Booking Windows | Complete | Per-tier advance booking days, admin UI, membership-based enforcement |
 | Visit Pack Management | Complete | Pack type CRUD, pack sales, redemption at booking, cross-facility support |
 | Lesson Package Management | Complete | Package type CRUD, package sales, auto-redemption at lesson booking, cancellation restore |
 | League Management | Complete | League CRUD, team management, roster controls, schedule generation, match results, standings |
