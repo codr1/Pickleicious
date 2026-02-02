@@ -1432,7 +1432,9 @@ Issues 3-8 are duplicates of issues 9-16 (same content, created twice).
 
 ### 14.1 Near-Term (Based on TODOs + Bugs)
 1. ~~Fix member search (#31)~~ ✅ Done
+<!-- BEGIN WIP: STORY-0048 -->
 4. Implement global search
+<!-- END WIP -->
 5. Add transactions/billing tables
 
 ### 14.2 Medium-Term (Based on GitHub Issues)
