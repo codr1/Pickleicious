@@ -246,6 +246,7 @@ These calendar interactions are designed but not yet implemented:
 > **GitHub Issue #19 [TH2.0]:** Simple Theme (Default) Implementation
 > **GitHub Issue #20 [TH2.1]:** Core Theme Palette Definitions
 
+<!-- BEGIN WIP: STORY-0049 -->
 | Theme | Primary | Character |
 |-------|---------|-----------|
 | Simple (Default) | #0B0C10 | Minimal, cyan accents |
@@ -263,6 +264,7 @@ These calendar interactions are designed but not yet implemented:
 | Desert Pickle | #026670 | Teal/cream |
 | Modern Pickle | #25274D | Navy/cyan |
 | Flat Style | #00887A | Teal/white |
+<!-- END WIP -->
 
 **Simple Theme Acceptance Criteria (from #19):**
 - [ ] Color palette implemented according to specification
