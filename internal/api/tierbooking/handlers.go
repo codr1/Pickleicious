@@ -382,6 +382,9 @@ func HandleTierBookingToggle(w http.ResponseWriter, r *http.Request) {
 
 	if enabled {
 		defaultAdvanceDays := apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, defaultMemberMaxAdvanceDays)
+		if defaultAdvanceDays > maxAdvanceDaysLimit {
+			defaultAdvanceDays = maxAdvanceDaysLimit
+		}
 		qtx := dbgen.New(tx)
 		defaults := tierBookingDefaultMap(defaultAdvanceDays)
 		for _, level := range tierMembershipLevels {
@@ -596,6 +599,9 @@ func buildBookingWindowsResponse(facility dbgen.Facility, windows []dbgen.Member
 
 func newTierBookingPageData(facility dbgen.Facility, windows []dbgen.MemberTierBookingWindow) tierbookingtempl.TierBookingPageData {
 	defaultAdvanceDays := apiutil.NormalizedMaxAdvanceDays(facility.MaxAdvanceBookingDays, defaultMemberMaxAdvanceDays)
+	if defaultAdvanceDays > maxAdvanceDaysLimit {
+		defaultAdvanceDays = maxAdvanceDaysLimit
+	}
 	windowMap := make(map[int64]dbgen.MemberTierBookingWindow, len(windows))
 	for _, window := range windows {
 		windowMap[window.MembershipLevel] = window

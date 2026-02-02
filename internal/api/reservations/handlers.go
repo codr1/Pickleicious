@@ -122,10 +122,12 @@ func HandleReservationCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !user.IsStaff {
-		if req.PrimaryUserID == nil || *req.PrimaryUserID <= 0 {
-			authUserID := user.ID
-			req.PrimaryUserID = &authUserID
+		authUserID := user.ID
+		if req.PrimaryUserID != nil && *req.PrimaryUserID > 0 && *req.PrimaryUserID != authUserID {
+			http.Error(w, "primary_user_id must match authenticated user", http.StatusForbidden)
+			return
 		}
+		req.PrimaryUserID = &authUserID
 		if err := enforceMemberTierBookingWindow(ctx, q, facilityID, req.PrimaryUserID, startTime); err != nil {
 			var fieldErr apiutil.FieldError
 			if errors.As(err, &fieldErr) {
@@ -538,10 +540,12 @@ func HandleReservationUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !user.IsStaff {
-		if req.PrimaryUserID == nil || *req.PrimaryUserID <= 0 {
-			authUserID := user.ID
-			req.PrimaryUserID = &authUserID
+		authUserID := user.ID
+		if req.PrimaryUserID != nil && *req.PrimaryUserID > 0 && *req.PrimaryUserID != authUserID {
+			http.Error(w, "primary_user_id must match authenticated user", http.StatusForbidden)
+			return
 		}
+		req.PrimaryUserID = &authUserID
 		if err := enforceMemberTierBookingWindow(ctx, q, facilityID, req.PrimaryUserID, startTime); err != nil {
 			var fieldErr apiutil.FieldError
 			if errors.As(err, &fieldErr) {
