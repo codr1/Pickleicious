@@ -165,7 +165,9 @@ Stored as iCalendar RRULE compatible format.
 - 8-court grid display
 - Hours: 6:00 AM to 10:00 PM (16 slots)
 - Date navigation: Previous/Next/Today
+<!-- BEGIN WIP: STORY-0050 -->
 - View modes: Work Week, Week, Month (selector ready)
+<!-- END WIP -->
 
 **Visual Grid:**
 ```
@@ -182,8 +184,10 @@ Stored as iCalendar RRULE compatible format.
 These calendar interactions are designed but not yet implemented:
 
 **Views:**
+<!-- BEGIN WIP: STORY-0050 -->
 - Week View: One court across a week for spotting patterns
 - Month View: Overview of all reservations
+<!-- END WIP -->
 - Agenda View: Chronological list of upcoming reservations
 
 
