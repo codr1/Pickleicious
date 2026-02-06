@@ -17,7 +17,9 @@
 2. **Visual court scheduling** with drag-and-click booking
 3. **Multi-facility operations** under a single organizational umbrella
 4. **White-label theming** for brand consistency per facility
+<!-- BEGIN WIP: STORY-0051 -->
 5. **Future-ready internationalization** for global expansion
+<!-- END WIP -->
 
 ---
 
@@ -298,6 +300,7 @@ These calendar interactions are designed but not yet implemented:
 
 > **GitHub Issue #23 [L1]:** Localization Core Infrastructure Setup
 
+<!-- BEGIN WIP: STORY-0051 -->
 **Technology Stack:**
 - **Package:** `github.com/nicksnyder/go-i18n/v2`
 - **Format:** TOML message files
@@ -310,11 +313,13 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Fall-through to English working
 - [ ] Message loading and caching system
 - [ ] Hot reload in development
+<!-- END WIP -->
 
 ### 7.2 Message Extraction
 
 > **GitHub Issue #24 [L2]:** Message Extraction and Bundle Management
 
+<!-- BEGIN WIP: STORY-0051 -->
 **Directory Structure:**
 ```
 /locales
@@ -322,6 +327,7 @@ These calendar interactions are designed but not yet implemented:
 ├── active/             # Active translations
 └── archive/            # Obsolete translations
 ```
+<!-- END WIP -->
 
 **Acceptance Criteria (from #24):**
 - [ ] Message extraction command working
@@ -335,6 +341,7 @@ These calendar interactions are designed but not yet implemented:
 
 > **GitHub Issue #25 [L3]:** Locale Detection and Switching
 
+<!-- BEGIN WIP: STORY-0051 -->
 **Detection Priority:**
 1. URL parameter (`?lang=es`)
 2. User preference (logged-in users)
@@ -348,6 +355,7 @@ These calendar interactions are designed but not yet implemented:
 - [ ] Locale middleware
 - [ ] URL-based switching
 - [ ] Tests for detection logic
+<!-- END WIP -->
 
 ### 7.4 Formatting Support
 
